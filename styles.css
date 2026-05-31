@@ -1,0 +1,391 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #f4f6f8;
+  color: #1a1a2e;
+  line-height: 1.5;
+  padding: 2rem 1rem;
+}
+
+.container {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+header {
+  margin-bottom: 1.5rem;
+  text-align: center;
+}
+
+header h1 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: #16213e;
+}
+
+.subtitle {
+  color: #5a6270;
+  margin-top: 0.25rem;
+}
+
+.reset-btn {
+  margin-top: 1rem;
+  background: #fff;
+  color: #5a6270;
+  border: 1px solid #d0d5dd;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.reset-btn:hover {
+  background: #f4f6f8;
+  color: #16213e;
+}
+
+.summary-cards {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+@media (min-width: 640px) {
+  .summary-cards {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+.summary-card {
+  background: #fff;
+  border-radius: 10px;
+  padding: 1rem 1.25rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  border-top: 3px solid #4361ee;
+}
+
+.summary-card.summary-valid {
+  border-top-color: #1e7e34;
+}
+
+.summary-card.summary-due-soon {
+  border-top-color: #856404;
+}
+
+.summary-card.summary-expired {
+  border-top-color: #c0392b;
+}
+
+.summary-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #5a6270;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.summary-number {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: #16213e;
+  margin-top: 0.25rem;
+}
+
+.card {
+  background: #fff;
+  border-radius: 10px;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.card h2 {
+  font-size: 1.1rem;
+  margin-bottom: 1rem;
+  color: #16213e;
+}
+
+.form-row {
+  margin-bottom: 1rem;
+}
+
+label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 600;
+  margin-bottom: 0.35rem;
+  color: #333;
+}
+
+input[type="text"],
+input[type="date"],
+select {
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid #d0d5dd;
+  border-radius: 6px;
+  font-size: 1rem;
+}
+
+input:focus,
+select:focus {
+  outline: 2px solid #4361ee;
+  border-color: #4361ee;
+}
+
+button[type="submit"] {
+  background: #4361ee;
+  color: #fff;
+  border: none;
+  padding: 0.65rem 1.25rem;
+  border-radius: 6px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+button[type="submit"]:hover {
+  background: #3651d4;
+}
+
+.form-actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.cancel-btn {
+  background: #fff;
+  color: #5a6270;
+  border: 1px solid #d0d5dd;
+  padding: 0.65rem 1.25rem;
+  border-radius: 6px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.cancel-btn:hover {
+  background: #f4f6f8;
+}
+
+.table-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.table-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.export-btn {
+  background: #fff;
+  color: #1e7e34;
+  border: 1px solid #a3d9a5;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.export-btn:hover {
+  background: #e6f4ea;
+}
+
+.import-btn {
+  background: #fff;
+  color: #4361ee;
+  border: 1px solid #c7d2fe;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.import-btn:hover {
+  background: #eef1ff;
+}
+
+.import-message {
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+}
+
+.app-message,
+.form-message {
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.app-message {
+  margin-bottom: 1.5rem;
+}
+
+.form-message {
+  margin-top: 1rem;
+}
+
+.message-success {
+  background: #e6f4ea;
+  color: #1e7e34;
+}
+
+.message-error {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.badge {
+  background: #eef1ff;
+  color: #4361ee;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0.25rem 0.65rem;
+  border-radius: 999px;
+}
+
+.filter-controls {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+@media (min-width: 640px) {
+  .filter-controls {
+    grid-template-columns: 2fr 1fr 1fr 1fr;
+  }
+}
+
+@media (min-width: 900px) {
+  .filter-controls {
+    grid-template-columns: 2fr 1fr 1fr 1fr 1fr;
+  }
+}
+
+.filter-row label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 600;
+  margin-bottom: 0.35rem;
+  color: #333;
+}
+
+.table-wrapper {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 0.75rem;
+  border-bottom: 1px solid #e8eaed;
+}
+
+th {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #5a6270;
+  background: #fafbfc;
+}
+
+tr:last-child td {
+  border-bottom: none;
+}
+
+.status {
+  display: inline-block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+}
+
+.status-valid {
+  background: #e6f4ea;
+  color: #1e7e34;
+}
+
+.status-due-soon {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.status-expired {
+  background: #fde8e8;
+  color: #c0392b;
+}
+
+.delete-btn {
+  background: #fff;
+  color: #c0392b;
+  border: 1px solid #f5c6cb;
+  padding: 0.35rem 0.65rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.edit-btn {
+  background: #fff;
+  color: #4361ee;
+  border: 1px solid #c7d2fe;
+  padding: 0.35rem 0.65rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.edit-btn:hover {
+  background: #eef1ff;
+}
+
+.delete-btn:hover {
+  background: #fde8e8;
+}
+
+.empty-message {
+  text-align: center;
+  color: #5a6270;
+  padding: 1.5rem 0 0.5rem;
+}
+
+.hidden {
+  display: none;
+}

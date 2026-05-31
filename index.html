@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Compliance Reminder System</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Compliance Reminder System</h1>
+      <p class="subtitle">Track DBS expiry dates for your team</p>
+      <button type="button" id="reset-sample-btn" class="reset-btn">Reset sample data</button>
+    </header>
+
+    <p id="app-message" class="app-message hidden"></p>
+
+    <section class="summary-cards">
+      <div class="summary-card">
+        <p class="summary-label">Total People</p>
+        <p id="summary-total" class="summary-number">0</p>
+      </div>
+      <div class="summary-card summary-valid">
+        <p class="summary-label">Valid</p>
+        <p id="summary-valid" class="summary-number">0</p>
+      </div>
+      <div class="summary-card summary-due-soon">
+        <p class="summary-label">Due Soon</p>
+        <p id="summary-due-soon" class="summary-number">0</p>
+      </div>
+      <div class="summary-card summary-expired">
+        <p class="summary-label">Expired</p>
+        <p id="summary-expired" class="summary-number">0</p>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Add a Person</h2>
+      <form id="add-person-form">
+        <div class="form-row">
+          <label for="name">Full Name</label>
+          <input type="text" id="name" name="name" placeholder="e.g. Jane Smith" required>
+        </div>
+        <div class="form-row">
+          <label for="role">Role</label>
+          <input type="text" id="role" name="role" placeholder="e.g. Support Worker" required>
+        </div>
+        <div class="form-row">
+          <label for="dbs-expiry">DBS Expiry Date</label>
+          <input type="date" id="dbs-expiry" name="dbs-expiry" required>
+        </div>
+        <button type="submit">Add Person</button>
+      </form>
+      <p id="add-form-message" class="form-message hidden"></p>
+    </section>
+
+    <section class="card hidden" id="edit-person-section">
+      <h2>Edit Person</h2>
+      <form id="edit-person-form">
+        <input type="hidden" id="edit-id">
+        <div class="form-row">
+          <label for="edit-name">Full Name</label>
+          <input type="text" id="edit-name" name="edit-name" required>
+        </div>
+        <div class="form-row">
+          <label for="edit-role">Role</label>
+          <input type="text" id="edit-role" name="edit-role" required>
+        </div>
+        <div class="form-row">
+          <label for="edit-dbs-expiry">DBS Expiry Date</label>
+          <input type="date" id="edit-dbs-expiry" name="edit-dbs-expiry" required>
+        </div>
+        <div class="form-actions">
+          <button type="submit">Save Changes</button>
+          <button type="button" id="cancel-edit-btn" class="cancel-btn">Cancel</button>
+        </div>
+      </form>
+      <p id="edit-form-message" class="form-message hidden"></p>
+    </section>
+
+    <section class="card">
+      <div class="table-header">
+        <h2>People</h2>
+        <div class="table-header-actions">
+          <input type="file" id="csv-file-input" accept=".csv,text/csv" class="hidden">
+          <button type="button" id="import-csv-btn" class="import-btn">Import CSV</button>
+          <button type="button" id="export-csv-btn" class="export-btn">Export CSV</button>
+          <span id="person-count" class="badge">0 people</span>
+        </div>
+      </div>
+      <p id="import-message" class="import-message hidden"></p>
+      <div class="filter-controls">
+        <div class="filter-row">
+          <label for="search-input">Search</label>
+          <input type="text" id="search-input" placeholder="Search by name or role...">
+        </div>
+        <div class="filter-row">
+          <label for="status-filter">Status</label>
+          <select id="status-filter">
+            <option value="all">All</option>
+            <option value="valid">Valid</option>
+            <option value="dueSoon">Due Soon</option>
+            <option value="expired">Expired</option>
+          </select>
+        </div>
+        <div class="filter-row">
+          <label for="sort-by">Sort by</label>
+          <select id="sort-by">
+            <option value="name">Name</option>
+            <option value="dbsExpiry">DBS Expiry Date</option>
+            <option value="status">Status</option>
+          </select>
+        </div>
+        <div class="filter-row">
+          <label for="sort-order">Order</label>
+          <select id="sort-order">
+            <option value="asc">Ascending</option>
+            <option value="desc">Descending</option>
+          </select>
+        </div>
+      </div>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Role</th>
+              <th>DBS Expiry Date</th>
+              <th>Status</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="people-table-body">
+            <!-- Rows are added by JavaScript -->
+          </tbody>
+        </table>
+      </div>
+      <p id="empty-message" class="empty-message hidden">No people added yet.</p>
+      <p id="no-results-message" class="empty-message hidden">No people match your search or filter.</p>
+    </section>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

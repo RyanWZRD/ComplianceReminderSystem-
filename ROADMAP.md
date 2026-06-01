@@ -2,7 +2,7 @@
 
 ## Current Version
 
-v1-working-prototype
+v1.2 — Multiple Records
 
 ### Completed
 
@@ -11,13 +11,18 @@ v1-working-prototype
 * Delete person
 * Local storage persistence
 * Search
-* Filter
-* Sort
+* Status filter and sort
 * CSV import
 * CSV export
 * Validation and error handling
 * Summary dashboard
 * Compliance dashboard (30 / 60 / 90 day expiry windows)
+* Reminder engine
+* Reminder settings
+* Notes (per compliance record)
+* Compliance types
+* Compliance type filtering
+* Multiple compliance records per person
 * GitHub repository
 * GitHub Pages deployment
 

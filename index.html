@@ -3,13 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Compliance Reminder System</title>
-  <link rel="stylesheet" href="styles.css">
+  <title>Compliance Reminder System v1.1</title>
+  <link rel="stylesheet" href="styles.css?v=1.1">
 </head>
 <body>
   <div class="container">
     <header>
       <h1>Compliance Reminder System</h1>
+      <p class="version-badge">Version 1.1 — Reminder Engine</p>
       <p class="subtitle">Track DBS expiry dates for your team</p>
       <button type="button" id="reset-sample-btn" class="reset-btn">Reset sample data</button>
     </header>
@@ -35,6 +36,33 @@
       </button>
     </section>
 
+    <section class="card reminder-engine-card" id="reminders-section">
+      <h2>Reminder Engine</h2>
+      <p class="reminders-hint">Reminders appear on the day someone hits 30, 14, or 7 days before their DBS expiry.</p>
+
+      <button type="button" class="action-required-banner" id="action-required-card">
+        <span class="action-required-label">Action Required Today</span>
+        <span id="dashboard-action-count" class="action-required-count">0</span>
+      </button>
+
+      <h3 class="reminders-subheading">Reminders Due Today</h3>
+      <p id="reminders-empty" class="empty-message">No reminders due today.</p>
+      <div class="table-wrapper">
+        <table class="reminders-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>DBS Expiry Date</th>
+              <th>Reminder Type</th>
+            </tr>
+          </thead>
+          <tbody id="reminders-table-body">
+            <!-- Rows are added by JavaScript -->
+          </tbody>
+        </table>
+      </div>
+    </section>
+
     <section class="card" id="compliance-dashboard">
       <h2>Compliance Dashboard</h2>
       <p class="dashboard-hint">Click a card to filter the table by expiry window.</p>
@@ -52,6 +80,7 @@
           <p id="dashboard-90-count" class="dashboard-number">0</p>
         </button>
       </div>
+
       <div class="quick-actions">
         <h3>Quick Actions</h3>
         <div class="quick-actions-buttons">
@@ -171,6 +200,6 @@
     </section>
   </div>
 
-  <script src="app.js"></script>
+  <script src="app.js?v=1.1"></script>
 </body>
 </html>

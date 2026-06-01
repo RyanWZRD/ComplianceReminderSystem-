@@ -1,3 +1,6 @@
+// Compliance Reminder System v1.1
+console.log("Compliance Reminder System v1.1 — app.js loaded");
+
 // Fake sample data — used only on the very first visit
 const samplePeople = [
   { id: 1, name: "Jane Smith", role: "Team Leader", dbsExpiry: "2026-09-15" },
@@ -30,6 +33,12 @@ let people = [];
 let nextId = 21;
 
 const DUE_SOON_DAYS = 90;
+const REMINDER_DAYS = [30, 14, 7];
+const REMINDER_LABELS = {
+  30: "30 Day Reminder",
+  14: "14 Day Reminder",
+  7: "7 Day Reminder",
+};
 
 const form = document.getElementById("add-person-form");
 const tableBody = document.getElementById("people-table-body");
@@ -68,13 +77,35 @@ let expiryWindowFilter = null;
 const dashboard30Count = document.getElementById("dashboard-30-count");
 const dashboard60Count = document.getElementById("dashboard-60-count");
 const dashboard90Count = document.getElementById("dashboard-90-count");
-const dashboardCards = document.querySelectorAll(".dashboard-card");
+const dashboardActionCount = document.getElementById("dashboard-action-count");
+const dashboardCards = document.querySelectorAll(".dashboard-card[data-days]");
+const actionRequiredCard = document.getElementById("action-required-card");
+const remindersTableBody = document.getElementById("reminders-table-body");
+const remindersEmpty = document.getElementById("reminders-empty");
+const remindersSection = document.getElementById("reminders-section");
 const peopleSection = document.getElementById("people-section");
 const addPersonSection = document.getElementById("add-person-section");
 
 // Copy the 20 sample people into the working people list
+function getDateDaysFromToday(daysFromToday) {
+  const date = getTodayAtMidnight();
+  date.setDate(date.getDate() + daysFromToday);
+
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
 function applySampleData() {
   people = samplePeople.map((person) => ({ ...person }));
+
+  // Demo: Jane Smith always has a 30-day reminder due today
+  if (people.length > 0) {
+    people[0].dbsExpiry = getDateDaysFromToday(30);
+  }
+
   nextId = 21;
 }
 
@@ -325,6 +356,37 @@ function countExpiringWithinDays(days) {
   }).length;
 }
 
+// Build list of reminder actions due today (30, 14, or 7 days before expiry)
+function getRemindersDueToday() {
+  const reminders = [];
+
+  people.forEach((person) => {
+    const daysRemaining = getDaysUntilExpiry(person.dbsExpiry);
+
+    if (Number.isNaN(daysRemaining) || daysRemaining < 0) {
+      return;
+    }
+
+    REMINDER_DAYS.forEach((daysBefore) => {
+      if (daysRemaining === daysBefore) {
+        reminders.push({
+          id: person.id,
+          name: person.name,
+          dbsExpiry: person.dbsExpiry,
+          reminderType: REMINDER_LABELS[daysBefore],
+          daysBefore: daysBefore,
+        });
+      }
+    });
+  });
+
+  reminders.sort((a, b) => {
+    return a.daysBefore - b.daysBefore || a.name.localeCompare(b.name);
+  });
+
+  return reminders;
+}
+
 // Return only the people that match the current search and status filter
 function getFilteredPeople() {
   const searchTerm = searchInput.value.trim().toLowerCase();
@@ -408,7 +470,39 @@ function renderDashboard() {
   dashboard30Count.textContent = countExpiringWithinDays(30);
   dashboard60Count.textContent = countExpiringWithinDays(60);
   dashboard90Count.textContent = countExpiringWithinDays(90);
+  renderReminders();
   updateFilterActiveState();
+}
+
+// Update the Action Required card and Reminders Due Today table
+function renderReminders() {
+  if (!dashboardActionCount || !remindersTableBody || !remindersEmpty) {
+    return;
+  }
+
+  const reminders = getRemindersDueToday();
+
+  dashboardActionCount.textContent = reminders.length;
+  remindersTableBody.innerHTML = "";
+
+  if (reminders.length === 0) {
+    remindersEmpty.classList.remove("hidden");
+    return;
+  }
+
+  remindersEmpty.classList.add("hidden");
+
+  reminders.forEach((reminder) => {
+    const row = document.createElement("tr");
+
+    row.innerHTML = `
+      <td>${reminder.name}</td>
+      <td>${formatDate(reminder.dbsExpiry)}</td>
+      <td><span class="reminder-badge reminder-${reminder.daysBefore}">${reminder.reminderType}</span></td>
+    `;
+
+    remindersTableBody.appendChild(row);
+  });
 }
 
 // Highlight the active summary card
@@ -906,6 +1000,12 @@ dashboardCards.forEach((card) => {
     filterByExpiryWindow(Number(card.dataset.days));
   });
 });
+
+if (actionRequiredCard && remindersSection) {
+  actionRequiredCard.addEventListener("click", () => {
+    remindersSection.scrollIntoView({ behavior: "smooth" });
+  });
+}
 
 summaryCards.forEach((card) => {
   card.addEventListener("click", () => {

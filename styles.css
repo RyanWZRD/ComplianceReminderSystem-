@@ -30,12 +30,21 @@ header h1 {
 
 .subtitle {
   color: #5a6270;
-  margin-top: 0.25rem;
+  margin-top: 0.5rem;
+}
+
+.header-badges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
 }
 
 .version-badge {
   display: inline-block;
-  margin-top: 0.5rem;
+  margin-top: 0;
   padding: 0.25rem 0.65rem;
   background: #f3e8ff;
   color: #9b59b6;
@@ -47,13 +56,13 @@ header h1 {
 
 .data-backend-badge {
   display: inline-block;
-  margin-top: 0.35rem;
-  padding: 0.2rem 0.55rem;
+  margin-top: 0;
+  padding: 0.25rem 0.65rem;
   background: #eef1ff;
   color: #4361ee;
-  border: 1px solid #c7d2fe;
+  border: 1px solid #4361ee;
   border-radius: 999px;
-  font-size: 0.72rem;
+  font-size: 0.8rem;
   font-weight: 600;
 }
 

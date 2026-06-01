@@ -15,6 +15,19 @@ A local-first safeguarding compliance tracker. All data is stored in the browser
 
 ---
 
+# Recent Releases
+
+## v2.3.0 (Released)
+
+- Compliance Record Workspace
+- Detail View Architecture
+- Simplified Main Table
+- Evidence Management moved into workspace
+- Action Management moved into workspace
+- Improved usability and scalability
+
+---
+
 # Next Planned Release
 
 ## v2.4.0

@@ -65,10 +65,39 @@ header h1 {
 
 .summary-card {
   background: #fff;
+  border: 2px solid #e8eaed;
   border-radius: 10px;
   padding: 1rem 1.25rem;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
   border-top: 3px solid #4361ee;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+}
+
+.summary-card:hover {
+  border-color: #4361ee;
+  box-shadow: 0 2px 8px rgba(67, 97, 238, 0.12);
+}
+
+.summary-card.active {
+  border-color: #4361ee;
+  background: #eef1ff;
+}
+
+.summary-card.summary-valid.active {
+  border-color: #1e7e34;
+  background: #e6f4ea;
+}
+
+.summary-card.summary-due-soon.active {
+  border-color: #856404;
+  background: #fff3cd;
+}
+
+.summary-card.summary-expired.active {
+  border-color: #c0392b;
+  background: #fde8e8;
 }
 
 .summary-card.summary-valid {
@@ -408,6 +437,15 @@ th {
   letter-spacing: 0.03em;
   color: #5a6270;
   background: #fafbfc;
+}
+
+td.days-remaining {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+td.days-remaining.expired-text {
+  color: #c0392b;
 }
 
 tr:last-child td {

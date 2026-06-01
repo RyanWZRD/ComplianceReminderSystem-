@@ -55,6 +55,7 @@ const summaryTotal = document.getElementById("summary-total");
 const summaryValid = document.getElementById("summary-valid");
 const summaryDueSoon = document.getElementById("summary-due-soon");
 const summaryExpired = document.getElementById("summary-expired");
+const summaryCards = document.querySelectorAll(".summary-card");
 const resetSampleBtn = document.getElementById("reset-sample-btn");
 const editSection = document.getElementById("edit-person-section");
 const editForm = document.getElementById("edit-person-form");
@@ -182,7 +183,10 @@ function loadPeople() {
       throw new Error("Stored data is invalid");
     }
 
-    people = data.people;
+    people = data.people.map((person) => ({
+      ...person,
+      dbsExpiry: normalizeExpiryDate(person.dbsExpiry),
+    }));
     nextId = data.nextId;
   } catch (error) {
     applySampleData();
@@ -213,7 +217,11 @@ function resetSampleData() {
 
 // Format a date string (YYYY-MM-DD) for display
 function formatDate(dateString) {
-  const date = new Date(dateString + "T00:00:00");
+  const date = parseDateAtMidnight(dateString);
+  if (Number.isNaN(date.getTime())) {
+    return "Invalid date";
+  }
+
   return date.toLocaleDateString("en-GB", {
     day: "numeric",
     month: "short",
@@ -221,13 +229,74 @@ function formatDate(dateString) {
   });
 }
 
-// Calculate how many days until a DBS expiry date
-function getDaysUntilExpiry(expiryDate) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+// Get today's date at midnight (local time)
+function getTodayAtMidnight() {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+}
 
-  const expiry = new Date(expiryDate + "T00:00:00");
-  return Math.ceil((expiry - today) / (1000 * 60 * 60 * 24));
+// Turn a stored date into YYYY-MM-DD (handles extra time text from imports)
+function normalizeExpiryDate(dateString) {
+  if (!dateString) {
+    return "";
+  }
+
+  const text = String(dateString).trim();
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) {
+    return text;
+  }
+
+  if (text.length >= 10 && /^\d{4}-\d{2}-\d{2}/.test(text)) {
+    return text.slice(0, 10);
+  }
+
+  return text;
+}
+
+// Parse a YYYY-MM-DD string as a local date at midnight
+function parseDateAtMidnight(dateString) {
+  const normalized = normalizeExpiryDate(dateString);
+  const parts = normalized.split("-").map(Number);
+
+  if (parts.length !== 3 || parts.some((part) => Number.isNaN(part))) {
+    return new Date(NaN);
+  }
+
+  const [year, month, day] = parts;
+  return new Date(year, month - 1, day);
+}
+
+// Calculate whole days from today (midnight) until expiry (midnight)
+function getDaysUntilExpiry(expiryDate) {
+  const today = getTodayAtMidnight();
+  const expiry = parseDateAtMidnight(expiryDate);
+
+  if (Number.isNaN(expiry.getTime())) {
+    return NaN;
+  }
+
+  const diffMs = expiry.getTime() - today.getTime();
+  return Math.round(diffMs / (1000 * 60 * 60 * 24));
+}
+
+// Show days remaining in the table (or Expired)
+function formatDaysRemaining(expiryDate) {
+  const daysRemaining = getDaysUntilExpiry(expiryDate);
+
+  if (Number.isNaN(daysRemaining)) {
+    return "—";
+  }
+
+  if (daysRemaining < 0) {
+    return "Expired";
+  }
+
+  if (daysRemaining === 0) {
+    return "0 (today)";
+  }
+
+  return String(daysRemaining);
 }
 
 // Work out if a DBS is valid, due soon, or expired
@@ -243,11 +312,16 @@ function getStatus(expiryDate) {
   return { label: "Valid", className: "status-valid", key: "valid" };
 }
 
-// Count people whose DBS expires within a number of days (not yet expired)
+// Count people whose DBS expires within a number of days (today through N days)
 function countExpiringWithinDays(days) {
   return people.filter((person) => {
-    const daysUntilExpiry = getDaysUntilExpiry(person.dbsExpiry);
-    return daysUntilExpiry >= 0 && daysUntilExpiry <= days;
+    const daysRemaining = getDaysUntilExpiry(person.dbsExpiry);
+
+    if (Number.isNaN(daysRemaining)) {
+      return false;
+    }
+
+    return daysRemaining >= 0 && daysRemaining <= days;
   }).length;
 }
 
@@ -325,6 +399,8 @@ function renderSummary() {
   summaryValid.textContent = counts.valid;
   summaryDueSoon.textContent = counts.dueSoon;
   summaryExpired.textContent = counts.expired;
+
+  updateSummaryActiveState();
 }
 
 // Update the compliance dashboard counts
@@ -332,7 +408,17 @@ function renderDashboard() {
   dashboard30Count.textContent = countExpiringWithinDays(30);
   dashboard60Count.textContent = countExpiringWithinDays(60);
   dashboard90Count.textContent = countExpiringWithinDays(90);
-  updateDashboardActiveState();
+  updateFilterActiveState();
+}
+
+// Highlight the active summary card
+function updateSummaryActiveState() {
+  summaryCards.forEach((card) => {
+    const cardStatus = card.dataset.status;
+    const isActive =
+      expiryWindowFilter === null && statusFilter.value === cardStatus;
+    card.classList.toggle("active", isActive);
+  });
 }
 
 // Highlight the active dashboard card
@@ -344,12 +430,25 @@ function updateDashboardActiveState() {
   });
 }
 
+// Update highlights on summary and dashboard cards
+function updateFilterActiveState() {
+  updateSummaryActiveState();
+  updateDashboardActiveState();
+}
+
 // Clear search, status, and expiry window filters
 function clearAllFilters() {
   searchInput.value = "";
   statusFilter.value = "all";
   expiryWindowFilter = null;
-  updateDashboardActiveState();
+  updateFilterActiveState();
+}
+
+// Show everyone in the table (clears all filters)
+function showAllPeople() {
+  clearAllFilters();
+  renderTable();
+  peopleSection.scrollIntoView({ behavior: "smooth" });
 }
 
 // Filter the table to people expiring within a set number of days
@@ -359,17 +458,17 @@ function filterByExpiryWindow(days) {
   statusFilter.value = "all";
   sortBySelect.value = "dbsExpiry";
   sortOrderSelect.value = "asc";
-  updateDashboardActiveState();
+  updateFilterActiveState();
   renderTable();
   peopleSection.scrollIntoView({ behavior: "smooth" });
 }
 
-// Filter the table by status (used by quick actions)
+// Filter the table by status (used by summary cards and quick actions)
 function filterByStatus(statusKey) {
   expiryWindowFilter = null;
   searchInput.value = "";
   statusFilter.value = statusKey;
-  updateDashboardActiveState();
+  updateFilterActiveState();
   renderTable();
   peopleSection.scrollIntoView({ behavior: "smooth" });
 }
@@ -410,7 +509,7 @@ function updatePerson(id, name, role, dbsExpiry) {
 
   person.name = validation.name;
   person.role = validation.role;
-  person.dbsExpiry = validation.dbsExpiry;
+  person.dbsExpiry = normalizeExpiryDate(validation.dbsExpiry);
 
   savePeople();
   hideEditForm();
@@ -444,12 +543,18 @@ function renderTable() {
 
   displayedPeople.forEach((person) => {
     const status = getStatus(person.dbsExpiry);
+    const daysRemaining = getDaysUntilExpiry(person.dbsExpiry);
+    const daysClass =
+      !Number.isNaN(daysRemaining) && daysRemaining < 0
+        ? "days-remaining expired-text"
+        : "days-remaining";
     const row = document.createElement("tr");
 
     row.innerHTML = `
       <td>${person.name}</td>
       <td>${person.role}</td>
       <td>${formatDate(person.dbsExpiry)}</td>
+      <td class="${daysClass}">${formatDaysRemaining(person.dbsExpiry)}</td>
       <td><span class="status ${status.className}">${status.label}</span></td>
       <td>
         <div class="action-buttons">
@@ -658,7 +763,7 @@ function importPeopleFromCsv(csvText) {
       id: nextId,
       name: name,
       role: role,
-      dbsExpiry: dbsExpiry,
+      dbsExpiry: normalizeExpiryDate(dbsExpiry),
     });
 
     nextId += 1;
@@ -782,7 +887,7 @@ form.addEventListener("submit", (event) => {
     id: nextId,
     name: validation.name,
     role: validation.role,
-    dbsExpiry: validation.dbsExpiry,
+    dbsExpiry: normalizeExpiryDate(validation.dbsExpiry),
   };
 
   people.push(newPerson);
@@ -802,11 +907,19 @@ dashboardCards.forEach((card) => {
   });
 });
 
-document.getElementById("action-show-all").addEventListener("click", () => {
-  clearAllFilters();
-  renderTable();
-  peopleSection.scrollIntoView({ behavior: "smooth" });
+summaryCards.forEach((card) => {
+  card.addEventListener("click", () => {
+    const status = card.dataset.status;
+
+    if (status === "all") {
+      showAllPeople();
+    } else {
+      filterByStatus(status);
+    }
+  });
 });
+
+document.getElementById("action-show-all").addEventListener("click", showAllPeople);
 
 document.getElementById("action-show-expired").addEventListener("click", () => {
   filterByStatus("expired");
@@ -825,13 +938,13 @@ document.getElementById("action-export-csv").addEventListener("click", exportToC
 
 searchInput.addEventListener("input", () => {
   expiryWindowFilter = null;
-  updateDashboardActiveState();
+  updateFilterActiveState();
   renderTable();
 });
 
 statusFilter.addEventListener("change", () => {
   expiryWindowFilter = null;
-  updateDashboardActiveState();
+  updateFilterActiveState();
   renderTable();
 });
 sortBySelect.addEventListener("change", renderTable);

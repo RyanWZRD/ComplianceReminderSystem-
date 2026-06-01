@@ -17,22 +17,22 @@
     <p id="app-message" class="app-message hidden"></p>
 
     <section class="summary-cards">
-      <div class="summary-card">
+      <button type="button" class="summary-card" data-status="all">
         <p class="summary-label">Total People</p>
         <p id="summary-total" class="summary-number">0</p>
-      </div>
-      <div class="summary-card summary-valid">
+      </button>
+      <button type="button" class="summary-card summary-valid" data-status="valid">
         <p class="summary-label">Valid</p>
         <p id="summary-valid" class="summary-number">0</p>
-      </div>
-      <div class="summary-card summary-due-soon">
+      </button>
+      <button type="button" class="summary-card summary-due-soon" data-status="dueSoon">
         <p class="summary-label">Due Soon</p>
         <p id="summary-due-soon" class="summary-number">0</p>
-      </div>
-      <div class="summary-card summary-expired">
+      </button>
+      <button type="button" class="summary-card summary-expired" data-status="expired">
         <p class="summary-label">Expired</p>
         <p id="summary-expired" class="summary-number">0</p>
-      </div>
+      </button>
     </section>
 
     <section class="card" id="compliance-dashboard">
@@ -109,6 +109,8 @@
     </section>
 
     <section class="card" id="people-section">
+      <div class="table-header">
+        <h2>People</h2>
         <div class="table-header-actions">
           <input type="file" id="csv-file-input" accept=".csv,text/csv" class="hidden">
           <button type="button" id="import-csv-btn" class="import-btn">Import CSV</button>
@@ -154,6 +156,7 @@
               <th>Name</th>
               <th>Role</th>
               <th>DBS Expiry Date</th>
+              <th>Days Remaining</th>
               <th>Status</th>
               <th></th>
             </tr>

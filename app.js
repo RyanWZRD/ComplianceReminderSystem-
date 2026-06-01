@@ -1,5 +1,5 @@
-// Compliance Reminder System v1.2
-console.log("Compliance Reminder System v1.2 — app.js loaded");
+// Compliance Reminder System v1.4 — Compliance Analytics
+console.log("Compliance Reminder System v1.4 — app.js loaded");
 
 // Fake sample data — used only on the very first visit
 const samplePeople = [
@@ -114,6 +114,13 @@ const reminderDays7 = document.getElementById("reminder-days-7");
 const hideSentRemindersCheckbox = document.getElementById("hide-sent-reminders");
 const peopleSection = document.getElementById("people-section");
 const addPersonSection = document.getElementById("add-person-section");
+const analyticsHealthScore = document.getElementById("analytics-health-score");
+const analyticsTotal = document.getElementById("analytics-total");
+const analyticsCompliant = document.getElementById("analytics-compliant");
+const analyticsExpiring30 = document.getElementById("analytics-expiring-30");
+const analyticsExpiring60 = document.getElementById("analytics-expiring-60");
+const analyticsExpiring90 = document.getElementById("analytics-expiring-90");
+const analyticsExpired = document.getElementById("analytics-expired");
 
 // Copy the 20 sample people into the working people list
 function getDateDaysFromToday(daysFromToday) {
@@ -855,6 +862,51 @@ function getSummaryCounts() {
   return counts;
 }
 
+// Count compliance records for the analytics dashboard
+function getAnalyticsCounts() {
+  const counts = {
+    total: 0,
+    compliant: 0,
+    expiring30: 0,
+    expiring60: 0,
+    expiring90: 0,
+    expired: 0,
+    healthPercent: 0,
+  };
+
+  getAllComplianceRows().forEach((row) => {
+    counts.total += 1;
+    const daysRemaining = getDaysUntilExpiry(row.expiryDate);
+
+    if (Number.isNaN(daysRemaining)) {
+      return;
+    }
+
+    const status = getStatus(row.expiryDate);
+
+    if (status.key === "expired") {
+      counts.expired += 1;
+    } else if (status.key === "valid") {
+      counts.compliant += 1;
+    }
+
+    if (daysRemaining >= 0 && daysRemaining <= 30) {
+      counts.expiring30 += 1;
+    }
+    if (daysRemaining >= 0 && daysRemaining <= 60) {
+      counts.expiring60 += 1;
+    }
+    if (daysRemaining >= 0 && daysRemaining <= 90) {
+      counts.expiring90 += 1;
+    }
+  });
+
+  counts.healthPercent =
+    counts.total === 0 ? 0 : Math.round((counts.compliant / counts.total) * 100);
+
+  return counts;
+}
+
 // Update the summary cards at the top of the page
 function renderSummary() {
   const counts = getSummaryCounts();
@@ -865,6 +917,33 @@ function renderSummary() {
   summaryExpired.textContent = counts.expired;
 
   updateSummaryActiveState();
+}
+
+// Update the compliance analytics dashboard above the records table
+function renderAnalytics() {
+  if (!analyticsHealthScore) {
+    return;
+  }
+
+  const counts = getAnalyticsCounts();
+
+  analyticsTotal.textContent = counts.total;
+  analyticsCompliant.textContent = counts.compliant;
+  analyticsExpiring30.textContent = counts.expiring30;
+  analyticsExpiring60.textContent = counts.expiring60;
+  analyticsExpiring90.textContent = counts.expiring90;
+  analyticsExpired.textContent = counts.expired;
+  analyticsHealthScore.textContent = `${counts.healthPercent}%`;
+
+  analyticsHealthScore.classList.remove("health-high", "health-medium", "health-low");
+
+  if (counts.healthPercent >= 80) {
+    analyticsHealthScore.classList.add("health-high");
+  } else if (counts.healthPercent >= 50) {
+    analyticsHealthScore.classList.add("health-medium");
+  } else {
+    analyticsHealthScore.classList.add("health-low");
+  }
 }
 
 // Update the compliance dashboard counts
@@ -1207,6 +1286,7 @@ function renderTable() {
   noResultsMessage.classList.toggle("hidden", displayedCount > 0 || totalCount === 0);
 
   renderSummary();
+  renderAnalytics();
   renderDashboard();
 }
 

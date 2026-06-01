@@ -2,58 +2,82 @@
 
 ## Current Version
 
-v1.2 — Multiple Records
+**v1.4 — Compliance Analytics** (latest release)
 
-### Completed
+A local-first safeguarding compliance tracker. All data is stored in the browser (localStorage). No backend, login, or email sending.
 
-* Add person
-* Edit person
-* Delete person
-* Local storage persistence
-* Search
-* Status filter and sort
-* CSV import
-* CSV export
+---
+
+## Version Roadmap
+
+Versions are listed **oldest to newest**. Everything through **v1.4** is shipped. **v1.5** and above are planned.
+
+### v1.0 — Working prototype · Shipped
+
+* Table of people with DBS expiry dates
+* Add, edit, and delete
+* localStorage persistence
+* Search, status filter, and sort
+* CSV import and export
 * Validation and error handling
 * Summary dashboard
-* Compliance dashboard (30 / 60 / 90 day expiry windows)
-* Reminder engine
+
+### v1.1 — Reminder engine · Shipped
+
+* Reminder engine (30 / 14 / 7 day windows)
 * Reminder settings
-* Notes (per compliance record)
+* Action Required table and count
+* Compliance dashboard (expiring in 30 / 60 / 90 days)
+* Quick actions
+
+### v1.2 — Multiple records · Shipped
+
+* Multiple compliance records per person
 * Compliance types
 * Compliance type filtering
-* Multiple compliance records per person
-* GitHub repository
-* GitHub Pages deployment
+* Notes per compliance record
+* One table row per compliance record
 
-## Next Features
+### v1.3 — Audit and renewals · Shipped
 
-### Version 1.3
+* Mark reminder sent (audit trail in notes)
+* Hide reminders already sent (expired records always show)
+* Renew compliance (new expiry date + audit note)
+
+### v1.4 — Compliance analytics · Shipped · Current
+
+* Compliance analytics dashboard (above the records table)
+* Compliance health score (% of records with more than 90 days until expiry)
+* Total Records, Compliant, Expiring 30/60/90, Expired metrics
+
+### v1.5 — Reporting and bulk actions · Planned
 
 * Email reminder simulation
 * Reminder history
-* Improved dashboard metrics
-* Status badges with clearer urgency indicators
-
-### Version 1.4
-
+* Clickable analytics cards (filter the table from analytics)
 * Bulk actions
-* Better reporting
-* CSV templates
-* Compliance summary exports
+* Better reporting and CSV templates
 
-### Version 2.0
+### v2.0 — Accounts and sync · Planned
 
 * Database integration
-* User accounts
-* Login system
+* User accounts and login
 * Multi-device data storage
 
-### Version 3.0
+### v3.0 — Multi-organisation · Planned
 
 * Multi-organisation support
 * Organisation settings
 * User permissions and roles
+
+---
+
+## Platform
+
+* GitHub repository
+* GitHub Pages deployment
+
+---
 
 ## Customer Problems
 
@@ -84,6 +108,8 @@ v1.2 — Multiple Records
 * Lack of audit history
 * Difficulty identifying upcoming risks
 
+---
+
 ## Business Ideas
 
 * DBS compliance tracking
@@ -91,6 +117,8 @@ v1.2 — Multiple Records
 * First aid certificate tracking
 * Volunteer compliance management
 * Diocese compliance management
+
+---
 
 ## Notes
 

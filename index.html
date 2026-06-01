@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Compliance Reminder System v1.2</title>
-  <link rel="stylesheet" href="styles.css?v=1.2">
+  <title>Compliance Reminder System v1.4</title>
+  <link rel="stylesheet" href="styles.css?v=1.4">
 </head>
 <body>
   <div class="container">
     <header>
       <h1>Compliance Reminder System</h1>
-      <p class="version-badge">Version 1.2 — Multiple Records</p>
+      <p class="version-badge">Version 1.4 — Compliance Analytics</p>
       <p class="subtitle">Track safeguarding compliance, training renewals and DBS expiry dates</p>
       <button type="button" id="reset-sample-btn" class="reset-btn">Reset sample data</button>
     </header>
@@ -190,6 +190,41 @@
       <p id="edit-form-message" class="form-message hidden"></p>
     </section>
 
+    <section class="card analytics-dashboard" id="analytics-dashboard">
+      <h2>Compliance Analytics</h2>
+      <div class="analytics-health">
+        <span class="analytics-health-label">Compliance Health</span>
+        <span id="analytics-health-score" class="analytics-health-score">0%</span>
+      </div>
+      <p class="settings-hint">Percentage of records with more than 90 days until expiry. Based on all compliance records.</p>
+      <div class="analytics-cards">
+        <div class="analytics-card">
+          <p class="analytics-label">Total Records</p>
+          <p id="analytics-total" class="analytics-number">0</p>
+        </div>
+        <div class="analytics-card analytics-compliant">
+          <p class="analytics-label">Compliant</p>
+          <p id="analytics-compliant" class="analytics-number">0</p>
+        </div>
+        <div class="analytics-card analytics-expiring-30">
+          <p class="analytics-label">Expiring in 30 Days</p>
+          <p id="analytics-expiring-30" class="analytics-number">0</p>
+        </div>
+        <div class="analytics-card analytics-expiring-60">
+          <p class="analytics-label">Expiring in 60 Days</p>
+          <p id="analytics-expiring-60" class="analytics-number">0</p>
+        </div>
+        <div class="analytics-card analytics-expiring-90">
+          <p class="analytics-label">Expiring in 90 Days</p>
+          <p id="analytics-expiring-90" class="analytics-number">0</p>
+        </div>
+        <div class="analytics-card analytics-expired">
+          <p class="analytics-label">Expired</p>
+          <p id="analytics-expired" class="analytics-number">0</p>
+        </div>
+      </div>
+    </section>
+
     <section class="card" id="people-section">
       <div class="table-header">
         <h2>People</h2>
@@ -269,6 +304,6 @@
     </section>
   </div>
 
-  <script src="app.js?v=1.5"></script>
+  <script src="app.js?v=1.6"></script>
 </body>
 </html>

@@ -37,7 +37,9 @@ const REMINDER_LABELS = {
   30: "30 Day Reminder",
   14: "14 Day Reminder",
   7: "7 Day Reminder",
+  expired: "Expired",
 };
+const REMINDER_URGENCY = { expired: 0, 7: 1, 14: 2, 30: 3 };
 const REMINDER_SETTINGS_KEY = "complianceReminderSettings";
 
 const DEFAULT_REMINDER_SETTINGS = {
@@ -112,7 +114,7 @@ function getDateDaysFromToday(daysFromToday) {
 function applySampleData() {
   people = samplePeople.map((person) => ({ ...person }));
 
-  // Demo: Jane Smith always has a 30-day reminder due today
+  // Demo: Jane Smith is in the 30-day reminder window
   if (people.length > 0) {
     people[0].dbsExpiry = getDateDaysFromToday(30);
   }
@@ -438,32 +440,66 @@ function countExpiringWithinDays(days) {
   }).length;
 }
 
-// Build list of reminder actions due today (30, 14, or 7 days before expiry)
-function getRemindersDueToday() {
+// Work out the most urgent active reminder for one person (window-based)
+function getReminderForPerson(person) {
+  const daysRemaining = getDaysUntilExpiry(person.dbsExpiry);
+
+  if (Number.isNaN(daysRemaining)) {
+    return null;
+  }
+
+  if (daysRemaining < 0) {
+    return {
+      reminderType: REMINDER_LABELS.expired,
+      urgencyKey: "expired",
+    };
+  }
+
+  if (reminderSettings.days7 && daysRemaining <= 7) {
+    return { reminderType: REMINDER_LABELS[7], urgencyKey: 7 };
+  }
+
+  if (reminderSettings.days14 && daysRemaining <= 14) {
+    return { reminderType: REMINDER_LABELS[14], urgencyKey: 14 };
+  }
+
+  if (reminderSettings.days30 && daysRemaining <= 30) {
+    return { reminderType: REMINDER_LABELS[30], urgencyKey: 30 };
+  }
+
+  return null;
+}
+
+// Build list of people who need action based on active reminder windows
+function getActiveReminders() {
   const reminders = [];
 
   people.forEach((person) => {
-    const daysRemaining = getDaysUntilExpiry(person.dbsExpiry);
+    const reminder = getReminderForPerson(person);
 
-    if (Number.isNaN(daysRemaining) || daysRemaining < 0) {
+    if (!reminder) {
       return;
     }
 
-    getActiveReminderDays().forEach((daysBefore) => {
-      if (daysRemaining === daysBefore) {
-        reminders.push({
-          id: person.id,
-          name: person.name,
-          dbsExpiry: person.dbsExpiry,
-          reminderType: REMINDER_LABELS[daysBefore],
-          daysBefore: daysBefore,
-        });
-      }
+    reminders.push({
+      id: person.id,
+      name: person.name,
+      dbsExpiry: person.dbsExpiry,
+      reminderType: reminder.reminderType,
+      urgencyKey: reminder.urgencyKey,
+      daysRemaining: getDaysUntilExpiry(person.dbsExpiry),
     });
   });
 
   reminders.sort((a, b) => {
-    return a.daysBefore - b.daysBefore || a.name.localeCompare(b.name);
+    const urgencyA = REMINDER_URGENCY[a.urgencyKey];
+    const urgencyB = REMINDER_URGENCY[b.urgencyKey];
+
+    if (urgencyA !== urgencyB) {
+      return urgencyA - urgencyB;
+    }
+
+    return a.daysRemaining - b.daysRemaining || a.name.localeCompare(b.name);
   });
 
   return reminders;
@@ -556,31 +592,25 @@ function renderDashboard() {
   updateFilterActiveState();
 }
 
-// Update the Action Required card and Reminders Due Today table
+// Update the Action Required count and table
 function renderReminders() {
   if (!dashboardActionCount || !remindersTableBody || !remindersEmpty) {
     return;
   }
 
+  const reminders = getActiveReminders();
   const activeDays = getActiveReminderDays();
-
-  if (activeDays.length === 0) {
-    dashboardActionCount.textContent = "0";
-    remindersTableBody.innerHTML = "";
-    remindersEmpty.textContent =
-      "All reminder periods are turned off. Turn on a setting above to see reminders.";
-    remindersEmpty.classList.remove("hidden");
-    return;
-  }
-
-  remindersEmpty.textContent = "No reminders due today.";
-
-  const reminders = getRemindersDueToday();
 
   dashboardActionCount.textContent = reminders.length;
   remindersTableBody.innerHTML = "";
 
   if (reminders.length === 0) {
+    if (activeDays.length === 0) {
+      remindersEmpty.textContent =
+        "All reminder periods are turned off. Turn on a setting above to see reminders.";
+    } else {
+      remindersEmpty.textContent = "No action required at this time.";
+    }
     remindersEmpty.classList.remove("hidden");
     return;
   }
@@ -593,7 +623,7 @@ function renderReminders() {
     row.innerHTML = `
       <td>${reminder.name}</td>
       <td>${formatDate(reminder.dbsExpiry)}</td>
-      <td><span class="reminder-badge reminder-${reminder.daysBefore}">${reminder.reminderType}</span></td>
+      <td><span class="reminder-badge reminder-${reminder.urgencyKey}">${reminder.reminderType}</span></td>
     `;
 
     remindersTableBody.appendChild(row);

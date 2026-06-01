@@ -299,6 +299,12 @@ header h1 {
   color: #c0392b;
 }
 
+.reminder-expired {
+  background: #fde8e8;
+  color: #c0392b;
+  border: 1px solid #f5c6cb;
+}
+
 .dashboard-label {
   font-size: 0.8rem;
   font-weight: 600;

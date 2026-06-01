@@ -6,12 +6,21 @@ A local-first safeguarding compliance tracker. All data is stored in the browser
 
 # Current Release
 
-## v2.3.0
+## v2.4.0
 
-- Compliance Record Workspace (detail view per record)
-- Simplified main register table with Details button
-- Evidence, actions, history, and notes managed in workspace
-- Live sync with dashboards, reports, and reminders
+- Data layer refactor (repository pattern)
+- ES module data stores (`js/data/`)
+- Local storage backend with cloud stub
+- Backup validate dry-run before import
+- Draft v3 PostgreSQL schema (`docs/schema-v3-draft.sql`)
+
+---
+
+# Next Planned Release
+
+## v2.5.0
+
+- Supabase auth + read-only cloud sync
 
 ---
 
@@ -28,19 +37,9 @@ A local-first safeguarding compliance tracker. All data is stored in the browser
 
 ---
 
-# Next Planned Release
-
-## v2.4.0
-
-- Database integration
-- User accounts and login
-- Multi-device data storage
-
----
-
 ## Version Roadmap
 
-Versions are listed **oldest to newest**. Everything through **v2.2.0** is shipped. **v2.3.0** is the current release.
+Versions are listed **oldest to newest**. Everything through **v2.3.0** is shipped. **v2.4.0** is the current release.
 
 ### v1.0 — Working prototype · Shipped
 
@@ -153,7 +152,7 @@ Versions are listed **oldest to newest**. Everything through **v2.2.0** is shipp
 - Open Actions reports in Audit Pack
 - CSV and backup support for actions
 
-### v2.3.0 — Record workspace · Current
+### v2.3.0 — Record workspace · Shipped
 
 - Compliance Record Workspace detail view
 - Details button on each register row
@@ -162,11 +161,16 @@ Versions are listed **oldest to newest**. Everything through **v2.2.0** is shipp
 - Close workspace / Escape to return to table
 - Live UI sync without page refresh
 
-### v2.4 — Accounts and sync · Planned
+### v2.4.0 — Data layer refactor · Current
 
-- Database integration
-- User accounts and login
-- Multi-device data storage
+- Repository pattern for all persistence
+- `js/data/` modules (local store, settings store, cloud stub)
+- `DATA_BACKEND` feature flag (`local` | `cloud`)
+- Backup validate dry-run
+- ES module entry point for `app.js`
+- Draft PostgreSQL schema for v3 migration
+
+### v2.5 — Auth and cloud sync · Planned
 
 ### v3.0 — Multi-organisation · Planned
 

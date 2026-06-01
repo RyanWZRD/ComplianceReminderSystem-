@@ -45,6 +45,18 @@ header h1 {
   font-weight: 700;
 }
 
+.data-backend-badge {
+  display: inline-block;
+  margin-top: 0.35rem;
+  padding: 0.2rem 0.55rem;
+  background: #eef1ff;
+  color: #4361ee;
+  border: 1px solid #c7d2fe;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
 .reminder-engine-card {
   display: block;
   border: 2px solid #9b59b6;

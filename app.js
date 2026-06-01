@@ -1,5 +1,30 @@
-// Compliance Reminder System v2.3.0
-console.log("Compliance Reminder System v2.3.0 — app.js loaded");
+import {
+  APP_VERSION,
+  DATA_BACKEND,
+  repository,
+  settingsRepository,
+} from "./js/data/repository.js";
+import {
+  COMPLIANCE_TYPES,
+  DEFAULT_COMPLIANCE_TYPE,
+  DEFAULT_RENEWAL_CYCLE,
+  EVIDENCE_TYPES,
+  HISTORY_ACTIONS,
+  MAX_EVIDENCE_FILE_BYTES,
+  RENEWAL_CYCLE_MANUAL,
+  RENEWAL_CYCLE_OPTIONS,
+} from "./js/data/constants.js";
+import {
+  dateToISOString,
+  getTodayAtMidnight,
+  isValidExpiryDate,
+  normalizeExpiryDate,
+  parseDateAtMidnight,
+} from "./js/data/dates.js";
+
+console.log(
+  `Compliance Reminder System v${APP_VERSION} — app.js loaded (${DATA_BACKEND} data backend)`
+);
 
 // Fake sample data — used only on the very first visit
 const samplePeople = [
@@ -25,54 +50,12 @@ const samplePeople = [
   { id: 20, name: "Lucas Gray", role: "Care Assistant", dbsExpiry: "2026-07-15" },
 ];
 
-// The key we use to store data in the browser's localStorage
-const STORAGE_KEY = "complianceReminderPeople";
-
-// Our working copy of the data (loaded from localStorage or sample data)
-let people = [];
-let nextPersonId = 21;
-let nextRecordId = 1000;
-let nextHistoryEntryId = 1;
-let nextEvidenceId = 1;
-let nextActionId = 1;
-let deletedRecordHistory = [];
 const expandedHistoryRows = new Set();
 const expandedEvidenceRows = new Set();
 const expandedActionRows = new Set();
 
 const DUE_SOON_DAYS = 90;
 const RECORDS_PER_PAGE = 25;
-const COMPLIANCE_TYPES = [
-  "DBS",
-  "Basic Awareness",
-  "Foundations",
-  "Leadership",
-  "Senior Leadership",
-  "Domestic Abuse",
-  "Safer Recruitment",
-  "Modern Slavery",
-];
-const DEFAULT_COMPLIANCE_TYPE = "DBS";
-const RENEWAL_CYCLE_MANUAL = "manual";
-const RENEWAL_CYCLE_OPTIONS = [
-  { value: "manual", label: "Manual" },
-  { value: "6-months", label: "6 Months" },
-  { value: "1-year", label: "1 Year" },
-  { value: "2-years", label: "2 Years" },
-  { value: "3-years", label: "3 Years" },
-  { value: "5-years", label: "5 Years" },
-];
-const DEFAULT_RENEWAL_CYCLE = "3-years";
-// localStorage is typically ~5MB per origin. Keep per-file uploads small.
-const MAX_EVIDENCE_FILE_BYTES = 512 * 1024;
-const EVIDENCE_TYPES = [
-  "DBS Certificate",
-  "Training Certificate",
-  "Policy Acknowledgement",
-  "ID Check",
-  "Right to Work",
-  "Other",
-];
 const DEFAULT_ACTION_TEMPLATES = [
   "Reminder sent",
   "Renewal chased",
@@ -87,22 +70,6 @@ const REMINDER_LABELS = {
   expired: "Expired",
 };
 const REMINDER_URGENCY = { expired: 0, 7: 1, 14: 2, 30: 3 };
-const REMINDER_SETTINGS_KEY = "complianceReminderSettings";
-const BACKUP_VERSION = 1;
-
-const HISTORY_ACTIONS = {
-  CREATED: "created",
-  EDITED: "edited",
-  REMINDER_SENT: "reminder_sent",
-  RENEWED: "renewed",
-  DELETED: "deleted",
-  EVIDENCE_ADDED: "evidence_added",
-  EVIDENCE_DELETED: "evidence_deleted",
-  ACTION_ADDED: "action_added",
-  ACTION_COMPLETED: "action_completed",
-  ACTION_REOPENED: "action_reopened",
-  ACTION_DELETED: "action_deleted",
-};
 
 const HISTORY_ACTION_LABELS = {
   created: "Created",
@@ -118,14 +85,7 @@ const HISTORY_ACTION_LABELS = {
   action_deleted: "Action deleted",
 };
 
-const DEFAULT_REMINDER_SETTINGS = {
-  days30: true,
-  days14: true,
-  days7: true,
-  hideSentReminders: false,
-};
-
-let reminderSettings = { ...DEFAULT_REMINDER_SETTINGS };
+let reminderSettings = settingsRepository.getSettings();
 
 const form = document.getElementById("add-person-form");
 const tableBody = document.getElementById("people-table-body");
@@ -150,7 +110,9 @@ const importCsvBtn = document.getElementById("import-csv-btn");
 const csvFileInput = document.getElementById("csv-file-input");
 const exportBackupBtn = document.getElementById("export-backup-btn");
 const importBackupBtn = document.getElementById("import-backup-btn");
+const validateBackupBtn = document.getElementById("validate-backup-btn");
 const backupFileInput = document.getElementById("backup-file-input");
+const validateBackupFileInput = document.getElementById("validate-backup-file-input");
 const importMessage = document.getElementById("import-message");
 const appMessage = document.getElementById("app-message");
 const addFormMessage = document.getElementById("add-form-message");
@@ -282,16 +244,11 @@ const STATUS_FILTER_LABELS = {
 function getDateDaysFromToday(daysFromToday) {
   const date = getTodayAtMidnight();
   date.setDate(date.getDate() + daysFromToday);
-
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-
-  return `${year}-${month}-${day}`;
+  return dateToISOString(date);
 }
 
 function applySampleData() {
-  people = samplePeople.map((person, index) => ({
+  repository.people = samplePeople.map((person, index) => ({
     id: person.id,
     name: person.name,
     role: person.role,
@@ -309,13 +266,13 @@ function applySampleData() {
     ],
   }));
 
-  nextPersonId = 21;
-  nextRecordId = 1000;
-  deletedRecordHistory = [];
-  nextEvidenceId = 1;
-  nextActionId = 1;
+  repository.nextPersonId = 21;
+  repository.nextRecordId = 1000;
+  repository.deletedRecordHistory = [];
+  repository.nextEvidenceId = 1;
+  repository.nextActionId = 1;
 
-  people.forEach((person) => {
+  repository.people.forEach((person) => {
     person.complianceRecords.forEach((record) => {
       appendHistoryEntry(
         record,
@@ -326,57 +283,8 @@ function applySampleData() {
   });
 }
 
-// Save the current people list and IDs to localStorage
 function savePeople() {
-  const data = {
-    people: people,
-    nextPersonId: nextPersonId,
-    nextRecordId: nextRecordId,
-    deletedRecordHistory: deletedRecordHistory,
-    nextHistoryEntryId: nextHistoryEntryId,
-    nextEvidenceId: nextEvidenceId,
-    nextActionId: nextActionId,
-  };
-
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-}
-
-// Check if a stored person uses the old flat record format
-function isLegacyPerson(person) {
-  return (
-    !Array.isArray(person.complianceRecords) &&
-    (typeof person.dbsExpiry === "string" || typeof person.expiryDate === "string")
-  );
-}
-
-// Build one compliance record object
-function createComplianceRecord(data, recordId) {
-  const complianceType = normalizeComplianceType(data.complianceType);
-
-  return {
-    id: recordId,
-    complianceType,
-    expiryDate: normalizeExpiryDate(data.expiryDate || data.dbsExpiry),
-    notes: typeof data.notes === "string" ? data.notes : "",
-    renewalCycle: normalizeRenewalCycle(
-      data.renewalCycle !== undefined ? data.renewalCycle : RENEWAL_CYCLE_MANUAL
-    ),
-    history: Array.isArray(data.history) ? data.history : [],
-    evidence: Array.isArray(data.evidence) ? data.evidence : [],
-    actions: Array.isArray(data.actions) ? data.actions : [],
-  };
-}
-
-function normalizeRenewalCycle(value) {
-  const normalized = String(value || RENEWAL_CYCLE_MANUAL).trim().toLowerCase();
-  const match = RENEWAL_CYCLE_OPTIONS.find(
-    (option) =>
-      option.value === normalized ||
-      option.label.toLowerCase() === normalized ||
-      option.label.toLowerCase().replace(/\s+/g, "-") === normalized
-  );
-
-  return match ? match.value : RENEWAL_CYCLE_MANUAL;
+  repository.save();
 }
 
 function getDefaultRenewalCycleForType() {
@@ -408,18 +316,11 @@ function getRenewalCycleRenewalText(cycleValue) {
 }
 
 function isActiveRenewalCycle(cycleValue) {
-  return normalizeRenewalCycle(cycleValue) !== RENEWAL_CYCLE_MANUAL;
-}
-
-function dateToISOString(date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
+  return repository.normalizeRenewalCycle(cycleValue) !== RENEWAL_CYCLE_MANUAL;
 }
 
 function calculateRenewalExpiryDate(expiryDate, renewalCycle) {
-  const cycle = normalizeRenewalCycle(renewalCycle);
+  const cycle = repository.normalizeRenewalCycle(renewalCycle);
   const base = parseDateAtMidnight(expiryDate);
 
   if (!isActiveRenewalCycle(cycle) || Number.isNaN(base.getTime())) {
@@ -452,26 +353,13 @@ function syncAddFormRenewalCycleDefault() {
   }
 }
 
-function normalizeHistoryEntry(entry) {
-  return {
-    id: typeof entry.id === "number" ? entry.id : nextHistoryEntryId++,
-    action:
-      typeof entry.action === "string" ? entry.action : HISTORY_ACTIONS.EDITED,
-    timestamp:
-      typeof entry.timestamp === "string"
-        ? entry.timestamp
-        : new Date().toISOString(),
-    description: typeof entry.description === "string" ? entry.description : "",
-  };
-}
-
 function appendHistoryEntry(record, action, description) {
   if (!Array.isArray(record.history)) {
     record.history = [];
   }
 
   record.history.unshift({
-    id: nextHistoryEntryId++,
+    id: repository.nextHistoryEntryId++,
     action,
     timestamp: new Date().toISOString(),
     description,
@@ -542,96 +430,6 @@ function buildHistoryPanelHtml(personId, recordId) {
     .join("");
 
   return `<ul class="history-list">${items}</ul>`;
-}
-
-function syncNextHistoryEntryId() {
-  let maxId = 0;
-
-  people.forEach((person) => {
-    person.complianceRecords.forEach((record) => {
-      (record.history || []).forEach((entry) => {
-        if (typeof entry.id === "number" && entry.id > maxId) {
-          maxId = entry.id;
-        }
-      });
-    });
-  });
-
-  deletedRecordHistory.forEach((item) => {
-    (item.record?.history || []).forEach((entry) => {
-      if (typeof entry.id === "number" && entry.id > maxId) {
-        maxId = entry.id;
-      }
-    });
-  });
-
-  if (maxId >= nextHistoryEntryId) {
-    nextHistoryEntryId = maxId + 1;
-  }
-}
-
-function normalizeDocumentType(value) {
-  const text = String(value || "").trim();
-  const match = EVIDENCE_TYPES.find(
-    (type) => type.toLowerCase() === text.toLowerCase()
-  );
-
-  return match || EVIDENCE_TYPES[0];
-}
-
-function normalizeEvidenceItem(item) {
-  return {
-    id: typeof item.id === "number" ? item.id : nextEvidenceId++,
-    name: typeof item.name === "string" ? item.name.trim() : "",
-    documentType: normalizeDocumentType(item.documentType),
-    addedDate:
-      normalizeExpiryDate(item.addedDate) ||
-      dateToISOString(getTodayAtMidnight()),
-    notes: typeof item.notes === "string" ? item.notes : "",
-    fileName:
-      typeof item.fileName === "string" && item.fileName.trim()
-        ? item.fileName.trim()
-        : null,
-    // Base64 data URL stored locally only — subject to browser storage limits.
-    fileData:
-      typeof item.fileData === "string" && item.fileData.trim()
-        ? item.fileData.trim()
-        : null,
-  };
-}
-
-function normalizeEvidenceList(evidence) {
-  if (!Array.isArray(evidence)) {
-    return [];
-  }
-
-  return evidence.map((item) => normalizeEvidenceItem(item));
-}
-
-function syncNextEvidenceId() {
-  let maxId = 0;
-
-  people.forEach((person) => {
-    person.complianceRecords.forEach((record) => {
-      (record.evidence || []).forEach((item) => {
-        if (typeof item.id === "number" && item.id > maxId) {
-          maxId = item.id;
-        }
-      });
-    });
-  });
-
-  deletedRecordHistory.forEach((item) => {
-    (item.record?.evidence || []).forEach((evidenceItem) => {
-      if (typeof evidenceItem.id === "number" && evidenceItem.id > maxId) {
-        maxId = evidenceItem.id;
-      }
-    });
-  });
-
-  if (maxId >= nextEvidenceId) {
-    nextEvidenceId = maxId + 1;
-  }
 }
 
 function getEvidenceSummary(evidence) {
@@ -779,7 +577,7 @@ async function handleSaveEvidence() {
   }
 
   const name = evidenceNameInput.value.trim();
-  const documentType = normalizeDocumentType(evidenceTypeInput.value);
+  const documentType = repository.normalizeDocumentType(evidenceTypeInput.value);
   const notes = evidenceNotesInput.value.trim();
   const file = evidenceFileInput.files[0] || null;
 
@@ -819,7 +617,7 @@ async function handleSaveEvidence() {
   }
 
   const evidenceItem = {
-    id: nextEvidenceId++,
+    id: repository.nextEvidenceId++,
     name,
     documentType,
     addedDate: dateToISOString(getTodayAtMidnight()),
@@ -901,57 +699,6 @@ function downloadEvidenceFile(personId, recordId, evidenceId) {
   link.href = evidenceItem.fileData;
   link.download = evidenceItem.fileName || "evidence-file";
   link.click();
-}
-
-function normalizeActionItem(item) {
-  return {
-    id: typeof item.id === "number" ? item.id : nextActionId++,
-    title: typeof item.title === "string" ? item.title.trim() : "",
-    completed: item.completed === true,
-    createdAt:
-      typeof item.createdAt === "string"
-        ? item.createdAt
-        : new Date().toISOString(),
-    completedAt:
-      typeof item.completedAt === "string" && item.completedAt
-        ? item.completedAt
-        : null,
-    notes: typeof item.notes === "string" ? item.notes : "",
-  };
-}
-
-function normalizeActionsList(actions) {
-  if (!Array.isArray(actions)) {
-    return [];
-  }
-
-  return actions.map((item) => normalizeActionItem(item));
-}
-
-function syncNextActionId() {
-  let maxId = 0;
-
-  people.forEach((person) => {
-    person.complianceRecords.forEach((record) => {
-      (record.actions || []).forEach((item) => {
-        if (typeof item.id === "number" && item.id > maxId) {
-          maxId = item.id;
-        }
-      });
-    });
-  });
-
-  deletedRecordHistory.forEach((item) => {
-    (item.record?.actions || []).forEach((actionItem) => {
-      if (typeof actionItem.id === "number" && actionItem.id > maxId) {
-        maxId = actionItem.id;
-      }
-    });
-  });
-
-  if (maxId >= nextActionId) {
-    nextActionId = maxId + 1;
-  }
 }
 
 function getActionSummary(actions) {
@@ -1382,7 +1129,7 @@ function handleSaveAction() {
   }
 
   const actionItem = {
-    id: nextActionId++,
+    id: repository.nextActionId++,
     title,
     completed: false,
     createdAt: new Date().toISOString(),
@@ -1431,7 +1178,7 @@ function addDefaultActions(personId, recordId) {
     }
 
     record.actions.push({
-      id: nextActionId++,
+      id: repository.nextActionId++,
       title: templateTitle,
       completed: false,
       createdAt: new Date().toISOString(),
@@ -1608,46 +1355,11 @@ function setupActionModalListeners() {
   });
 }
 
-// Convert an old flat person row into the new nested format
-function migrateLegacyPerson(person, recordId) {
-  return {
-    id: person.id,
-    name: person.name,
-    role: person.role,
-    complianceRecords: [createComplianceRecord(person, recordId)],
-  };
-}
-
-// Make sure a person has the expected nested structure
-function normalizePerson(person) {
-  if (isLegacyPerson(person)) {
-    const recordId = nextRecordId;
-    nextRecordId += 1;
-    return migrateLegacyPerson(person, recordId);
-  }
-
-  return {
-    id: person.id,
-    name: person.name,
-    role: person.role,
-    complianceRecords: (person.complianceRecords || []).map((record) => ({
-      id: record.id,
-      complianceType: normalizeComplianceType(record.complianceType),
-      expiryDate: normalizeExpiryDate(record.expiryDate || record.dbsExpiry),
-      notes: typeof record.notes === "string" ? record.notes : "",
-      renewalCycle: normalizeRenewalCycle(record.renewalCycle),
-      history: (record.history || []).map((entry) => normalizeHistoryEntry(entry)),
-      evidence: normalizeEvidenceList(record.evidence),
-      actions: normalizeActionsList(record.actions),
-    })),
-  };
-}
-
 // Flatten people into one table row per compliance record
 function getAllComplianceRows() {
   const rows = [];
 
-  people.forEach((person) => {
+  repository.people.forEach((person) => {
     person.complianceRecords.forEach((record) => {
       rows.push({
         personId: person.id,
@@ -1669,12 +1381,12 @@ function getAllComplianceRows() {
 }
 
 function findPersonById(personId) {
-  return people.find((person) => person.id === personId);
+  return repository.people.find((person) => person.id === personId);
 }
 
 function findPersonByName(name) {
   const trimmed = name.trim().toLowerCase();
-  return people.find((person) => person.name.trim().toLowerCase() === trimmed);
+  return repository.people.find((person) => person.name.trim().toLowerCase() === trimmed);
 }
 
 function findPersonAndRecord(personId, recordId) {
@@ -1691,36 +1403,15 @@ function getTotalRecordCount() {
   return getAllComplianceRows().length;
 }
 
-// Load reminder period settings from localStorage
+// Load reminder period settings via the settings repository
 function loadReminderSettings() {
-  const saved = localStorage.getItem(REMINDER_SETTINGS_KEY);
-
-  if (saved === null) {
-    reminderSettings = { ...DEFAULT_REMINDER_SETTINGS };
-    saveReminderSettings();
-    syncReminderSettingsUI();
-    return;
-  }
-
-  try {
-    const data = JSON.parse(saved);
-    reminderSettings = {
-      days30: data.days30 !== false,
-      days14: data.days14 !== false,
-      days7: data.days7 !== false,
-      hideSentReminders: data.hideSentReminders === true,
-    };
-  } catch (error) {
-    reminderSettings = { ...DEFAULT_REMINDER_SETTINGS };
-    saveReminderSettings();
-  }
-
+  settingsRepository.load();
+  reminderSettings = settingsRepository.getSettings();
   syncReminderSettingsUI();
 }
 
-// Save reminder period settings to localStorage
 function saveReminderSettings() {
-  localStorage.setItem(REMINDER_SETTINGS_KEY, JSON.stringify(reminderSettings));
+  settingsRepository.setSettings(reminderSettings);
 }
 
 // Update checkboxes to match saved settings
@@ -1777,36 +1468,11 @@ function getActiveReminderDays() {
   return activeDays;
 }
 
-// Check that a date string is a real calendar date in YYYY-MM-DD format
-function isValidExpiryDate(dateString) {
-  if (!dateString || !/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
-    return false;
-  }
-
-  const [year, month, day] = dateString.split("-").map(Number);
-  const date = new Date(year, month - 1, day);
-
-  return (
-    date.getFullYear() === year &&
-    date.getMonth() === month - 1 &&
-    date.getDate() === day
-  );
-}
-
-// Validate name, role, compliance type, and expiry date from a form or CSV row
-function normalizeComplianceType(value) {
-  if (COMPLIANCE_TYPES.includes(value)) {
-    return value;
-  }
-
-  return DEFAULT_COMPLIANCE_TYPE;
-}
-
 function validatePersonInput(name, role, complianceType, dbsExpiry) {
   const errors = [];
   const trimmedName = name.trim();
   const trimmedRole = role.trim();
-  const normalizedType = normalizeComplianceType(complianceType);
+  const normalizedType = repository.normalizeComplianceType(complianceType);
 
   if (!trimmedName) {
     errors.push("Name cannot be blank.");
@@ -1845,90 +1511,21 @@ function hideMessage(element) {
   element.textContent = "";
 }
 
-// Check that data loaded from localStorage has the shape we expect
-function isValidStoredData(data) {
-  if (!data || !Array.isArray(data.people)) {
-    return false;
-  }
-
-  const hasPersonIds =
-    typeof data.nextPersonId === "number" || typeof data.nextId === "number";
-
-  if (!hasPersonIds) {
-    return false;
-  }
-
-  return data.people.every((person) => {
-    if (
-      typeof person.id !== "number" ||
-      typeof person.name !== "string" ||
-      person.name.trim() === "" ||
-      typeof person.role !== "string" ||
-      person.role.trim() === ""
-    ) {
-      return false;
-    }
-
-    if (isLegacyPerson(person)) {
-      const expiry = person.expiryDate || person.dbsExpiry;
-      return typeof expiry === "string" && isValidExpiryDate(normalizeExpiryDate(expiry));
-    }
-
-    if (!Array.isArray(person.complianceRecords) || person.complianceRecords.length === 0) {
-      return false;
-    }
-
-    return person.complianceRecords.every(
-      (record) =>
-        typeof record.id === "number" &&
-        COMPLIANCE_TYPES.includes(normalizeComplianceType(record.complianceType)) &&
-        typeof (record.expiryDate || record.dbsExpiry) === "string" &&
-        isValidExpiryDate(normalizeExpiryDate(record.expiryDate || record.dbsExpiry)) &&
-        (record.notes === undefined || typeof record.notes === "string")
-    );
-  });
-}
-
-// Load people from localStorage, or use sample data on first visit
+// Load people via the data repository, or use sample data on first visit
 function loadPeople() {
-  const saved = localStorage.getItem(STORAGE_KEY);
+  const result = repository.load({
+    onLoadError: () => {
+      showMessage(
+        appMessage,
+        "Your saved data could not be loaded, so the sample data has been restored.",
+        "error"
+      );
+    },
+  });
 
-  if (saved === null) {
+  if (result.isFirstVisit || result.usedSample) {
     applySampleData();
     savePeople();
-    return;
-  }
-
-  try {
-    const data = JSON.parse(saved);
-
-    if (!isValidStoredData(data)) {
-      throw new Error("Stored data is invalid");
-    }
-
-    nextPersonId = data.nextPersonId || data.nextId;
-    nextRecordId = data.nextRecordId || 1000;
-
-    people = data.people.map((person) => normalizePerson(person));
-    deletedRecordHistory = Array.isArray(data.deletedRecordHistory)
-      ? data.deletedRecordHistory
-      : [];
-    nextHistoryEntryId =
-      typeof data.nextHistoryEntryId === "number" ? data.nextHistoryEntryId : 1;
-    nextEvidenceId = typeof data.nextEvidenceId === "number" ? data.nextEvidenceId : 1;
-    nextActionId = typeof data.nextActionId === "number" ? data.nextActionId : 1;
-    syncNextHistoryEntryId();
-    syncNextEvidenceId();
-    syncNextActionId();
-    savePeople();
-  } catch (error) {
-    applySampleData();
-    savePeople();
-    showMessage(
-      appMessage,
-      "Your saved data could not be loaded, so the sample data has been restored.",
-      "error"
-    );
   }
 }
 
@@ -1964,44 +1561,6 @@ function formatDate(dateString) {
     month: "short",
     year: "numeric",
   });
-}
-
-// Get today's date at midnight (local time)
-function getTodayAtMidnight() {
-  const now = new Date();
-  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
-}
-
-// Turn a stored date into YYYY-MM-DD (handles extra time text from imports)
-function normalizeExpiryDate(dateString) {
-  if (!dateString) {
-    return "";
-  }
-
-  const text = String(dateString).trim();
-
-  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) {
-    return text;
-  }
-
-  if (text.length >= 10 && /^\d{4}-\d{2}-\d{2}/.test(text)) {
-    return text.slice(0, 10);
-  }
-
-  return text;
-}
-
-// Parse a YYYY-MM-DD string as a local date at midnight
-function parseDateAtMidnight(dateString) {
-  const normalized = normalizeExpiryDate(dateString);
-  const parts = normalized.split("-").map(Number);
-
-  if (parts.length !== 3 || parts.some((part) => Number.isNaN(part))) {
-    return new Date(NaN);
-  }
-
-  const [year, month, day] = parts;
-  return new Date(year, month - 1, day);
 }
 
 // Calculate whole days from today (midnight) until expiry (midnight)
@@ -2955,8 +2514,8 @@ function updatePerson(
   if (!result) return false;
 
   const { person, record } = result;
-  const normalizedCycle = normalizeRenewalCycle(renewalCycle);
-  const previousCycle = normalizeRenewalCycle(record.renewalCycle);
+  const normalizedCycle = repository.normalizeRenewalCycle(renewalCycle);
+  const previousCycle = repository.normalizeRenewalCycle(record.renewalCycle);
   const changes = [];
   let cycleChanged = false;
 
@@ -3058,7 +2617,7 @@ function deleteComplianceRecord(personId, recordId) {
     `Record deleted (${record.complianceType}, expires ${formatDate(record.expiryDate)}).`
   );
 
-  deletedRecordHistory.unshift({
+  repository.deletedRecordHistory.unshift({
     deletedAt: new Date().toISOString(),
     personName: person.name,
     personRole: person.role,
@@ -3088,7 +2647,7 @@ function deleteComplianceRecord(personId, recordId) {
   );
 
   if (person.complianceRecords.length === 0) {
-    people = people.filter((item) => item.id !== personId);
+    repository.people = repository.people.filter((item) => item.id !== personId);
   }
 
   if (
@@ -3150,7 +2709,7 @@ function openRenewModal(personId, recordId) {
   }
 
   const { person, record } = result;
-  const renewalCycle = normalizeRenewalCycle(record.renewalCycle);
+  const renewalCycle = repository.normalizeRenewalCycle(record.renewalCycle);
   const hasActiveCycle = isActiveRenewalCycle(renewalCycle);
   const suggestedExpiryDate = hasActiveCycle
     ? calculateRenewalExpiryDate(record.expiryDate, renewalCycle)
@@ -3876,23 +3435,8 @@ function exportToCsv() {
   downloadFile(csvContent, "compliance-reminder-data.csv", "text/csv");
 }
 
-function buildBackupData() {
-  return {
-    backupVersion: BACKUP_VERSION,
-    appVersion: "2.3.0",
-    exportedAt: new Date().toISOString(),
-    people,
-    nextPersonId,
-    nextRecordId,
-    nextHistoryEntryId,
-    nextEvidenceId,
-    nextActionId,
-    deletedRecordHistory,
-  };
-}
-
 function exportBackup() {
-  const backup = buildBackupData();
+  const backup = repository.buildBackup();
   downloadFile(
     JSON.stringify(backup, null, 2),
     "compliance-reminder-backup.json",
@@ -3901,64 +3445,63 @@ function exportBackup() {
   showMessage(appMessage, "Backup downloaded successfully.", "success");
 }
 
-function countBackupRecords(backupPeople) {
-  if (!Array.isArray(backupPeople)) {
-    return 0;
-  }
-
-  return backupPeople.reduce((total, person) => {
-    if (Array.isArray(person.complianceRecords)) {
-      return total + person.complianceRecords.length;
-    }
-
-    if (isLegacyPerson(person)) {
-      return total + 1;
-    }
-
-    return total;
-  }, 0);
-}
-
-function isValidBackupData(data) {
-  if (!data || typeof data !== "object") {
-    return false;
-  }
-
-  if (typeof data.backupVersion !== "number" && typeof data.appVersion !== "string") {
-    return false;
-  }
-
-  if (!Array.isArray(data.people) || data.people.length === 0) {
-    return false;
-  }
-
-  return isValidStoredData({
-    people: data.people,
-    nextPersonId: data.nextPersonId || data.nextId,
-    nextRecordId: data.nextRecordId || 1000,
-  });
-}
-
 function applyBackupData(data) {
-  nextPersonId = data.nextPersonId || data.nextId || 1;
-  nextRecordId = data.nextRecordId || 1000;
-  nextHistoryEntryId =
-    typeof data.nextHistoryEntryId === "number" ? data.nextHistoryEntryId : 1;
-  nextEvidenceId = typeof data.nextEvidenceId === "number" ? data.nextEvidenceId : 1;
-  nextActionId = typeof data.nextActionId === "number" ? data.nextActionId : 1;
-  deletedRecordHistory = Array.isArray(data.deletedRecordHistory)
-    ? data.deletedRecordHistory
-    : [];
-  people = data.people.map((person) => normalizePerson(person));
-  syncNextHistoryEntryId();
-  syncNextEvidenceId();
-  syncNextActionId();
+  repository.applyBackup(data);
   expandedHistoryRows.clear();
   expandedEvidenceRows.clear();
   expandedActionRows.clear();
   closeRecordWorkspace();
   hideEditForm();
   savePeople();
+}
+
+function showBackupValidationMessage(result) {
+  importMessage.classList.remove("hidden", "message-success", "message-error");
+
+  if (!result.valid) {
+    const detail = result.errors.length ? ` ${result.errors.join(" ")}` : "";
+    showMessage(importMessage, `Backup validation failed.${detail}`, "error");
+    return;
+  }
+
+  let message = `Backup is valid: ${result.recordCount} compliance record(s) across ${result.personCount} people.`;
+  if (result.warnings.length) {
+    message += ` Note: ${result.warnings.join(" ")}`;
+  }
+  showMessage(importMessage, message, "success");
+}
+
+function handleBackupValidate(event) {
+  const file = event.target.files[0];
+  if (!file) {
+    return;
+  }
+
+  const reader = new FileReader();
+
+  reader.onload = (loadEvent) => {
+    try {
+      const data = JSON.parse(loadEvent.target.result);
+      showBackupValidationMessage(repository.validateBackupDryRun(data));
+    } catch (error) {
+      showMessage(
+        importMessage,
+        "Could not read the backup file. Please check the file and try again.",
+        "error"
+      );
+      importMessage.classList.remove("hidden");
+    }
+
+    validateBackupFileInput.value = "";
+  };
+
+  reader.onerror = () => {
+    showMessage(importMessage, "Could not read the file. Please try again.", "error");
+    importMessage.classList.remove("hidden");
+    validateBackupFileInput.value = "";
+  };
+
+  reader.readAsText(file);
 }
 
 function handleBackupImport(event) {
@@ -3981,7 +3524,7 @@ function handleBackupImport(event) {
         return;
       }
 
-      if (!isValidBackupData(data)) {
+      if (!repository.isValidBackupData(data)) {
         showMessage(
           importMessage,
           "Invalid backup file. Please choose a compliance reminder JSON backup.",
@@ -3991,7 +3534,7 @@ function handleBackupImport(event) {
         return;
       }
 
-      const recordCount = countBackupRecords(data.people);
+      const recordCount = repository.countBackupRecords(data.people);
       const confirmed = confirm(
         `Import backup?\n\nThis will replace all ${getTotalRecordCount()} current record(s) with ${recordCount} record(s) from the backup.\n\nYour current data will be overwritten. Continue?`
       );
@@ -4108,7 +3651,7 @@ function formatSkipReasons(skipReasons) {
 
 // Add a compliance record — reuse an existing person when the name matches
 function addComplianceRecord(name, role, complianceType, expiryDate, renewalCycle) {
-  const record = createComplianceRecord(
+  const record = repository.createComplianceRecord(
     {
       complianceType,
       expiryDate,
@@ -4118,9 +3661,9 @@ function addComplianceRecord(name, role, complianceType, expiryDate, renewalCycl
           ? renewalCycle
           : getDefaultRenewalCycleForType(complianceType),
     },
-    nextRecordId
+    repository.nextRecordId
   );
-  nextRecordId += 1;
+  repository.nextRecordId += 1;
 
   const existingPerson = findPersonByName(name);
 
@@ -4136,13 +3679,13 @@ function addComplianceRecord(name, role, complianceType, expiryDate, renewalCycl
     return { isNewPerson: false, record };
   }
 
-  people.push({
-    id: nextPersonId,
+  repository.people.push({
+    id: repository.nextPersonId,
     name,
     role,
     complianceRecords: [record],
   });
-  nextPersonId += 1;
+  repository.nextPersonId += 1;
 
   appendHistoryEntry(
     record,
@@ -4232,7 +3775,7 @@ function importPeopleFromCsv(csvText) {
     addComplianceRecord(
       name,
       role,
-      normalizeComplianceType(complianceType),
+      repository.normalizeComplianceType(complianceType),
       normalizeExpiryDate(expiryDate),
       renewalCycle
     );
@@ -4648,6 +4191,11 @@ if (importBackupBtn && backupFileInput) {
   backupFileInput.addEventListener("change", handleBackupImport);
 }
 
+if (validateBackupBtn && validateBackupFileInput) {
+  validateBackupBtn.addEventListener("click", () => validateBackupFileInput.click());
+  validateBackupFileInput.addEventListener("change", handleBackupValidate);
+}
+
 // Load saved data, then show the table
 setupRenewModalListeners();
 setupEvidenceModalListeners();
@@ -4657,6 +4205,12 @@ setupReportListeners();
 loadReminderSettings();
 loadPeople();
 syncAddFormRenewalCycleDefault();
+
+const dataBackendBadge = document.getElementById("data-backend-badge");
+if (dataBackendBadge) {
+  dataBackendBadge.textContent =
+    DATA_BACKEND === "local" ? "Local storage mode" : "Cloud mode (preview)";
+}
 
 const complianceTypeInput = document.getElementById("compliance-type");
 if (complianceTypeInput) {

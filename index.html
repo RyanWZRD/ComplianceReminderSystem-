@@ -3,15 +3,16 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Compliance Reminder System v2.3.0</title>
-  <link rel="stylesheet" href="styles.css?v=2.3.0">
+  <title>Compliance Reminder System v2.4.0</title>
+  <link rel="stylesheet" href="styles.css?v=2.4.0">
 </head>
 <body>
   <div class="container">
     <header>
       <h1>Compliance Reminder System</h1>
-      <p class="version-badge">Version 2.3.0</p>
+      <p class="version-badge">Version 2.4.0</p>
       <p class="subtitle">Track safeguarding compliance, training renewals and DBS expiry dates</p>
+      <p id="data-backend-badge" class="data-backend-badge">Local storage mode</p>
       <button type="button" id="reset-sample-btn" class="reset-btn">Reset sample data</button>
     </header>
 
@@ -338,11 +339,13 @@
           <button type="button" id="import-csv-btn" class="import-btn">Import CSV</button>
           <button type="button" id="export-csv-btn" class="export-btn">Export CSV</button>
           <button type="button" id="import-backup-btn" class="backup-btn">Import Backup</button>
+          <button type="button" id="validate-backup-btn" class="backup-btn">Validate Backup</button>
           <button type="button" id="export-backup-btn" class="backup-btn">Export Backup</button>
+          <input type="file" id="validate-backup-file-input" accept=".json,application/json" class="hidden">
           <span id="person-count" class="badge">0 records</span>
         </div>
       </div>
-      <p class="settings-hint">Export CSV downloads all records. Export Backup saves a JSON file with full record history.</p>
+      <p class="settings-hint">Export CSV downloads all records. Export Backup saves a JSON file with full record history. Validate Backup checks a file before importing (dry run).</p>
       <p id="import-message" class="import-message hidden"></p>
       <div class="filter-controls">
         <div class="filter-row">
@@ -566,6 +569,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=2.3.0"></script>
+  <script type="module" src="app.js?v=2.4.0"></script>
 </body>
 </html>

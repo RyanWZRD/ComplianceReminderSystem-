@@ -1,10 +1,30 @@
 # Compliance Reminder System Roadmap
 
-## Current Version
-
-**v1.9.0** (current)
-
 A local-first safeguarding compliance tracker. All data is stored in the browser (localStorage). No backend, login, or email sending.
+
+---
+
+# Current Release
+
+## v1.9.0
+
+- Renewal cycles
+- Smart renewal workflow
+- Suggested renewal dates
+- Renewal modal
+- Backup compatibility
+- History integration
+
+---
+
+# Next Planned Release
+
+## v2.0.0
+
+- File attachments
+- Certificate uploads
+- Compliance documents
+- Renewal evidence storage
 
 ---
 
@@ -89,16 +109,26 @@ Versions are listed **oldest to newest**. Everything through **v1.8.1** is shipp
 
 ### v1.9.0 — Renewal cycles · Current
 
-* Renewal cycle field per compliance record
-* Smart renew with suggested dates from current expiry
-* Renewal cycle column in register and CSV export
-* Backup compatibility for renewalCycle
+- Renewal cycles
+- Smart renewal workflow
+- Suggested renewal dates
+- Renewal modal
+- Backup compatibility
+- History integration
+- Renewal cycle column in register and CSV export
 
-### v2.0 — Accounts and sync · Planned
+### v2.0.0 — Compliance documents · Planned
 
-* Database integration
-* User accounts and login
-* Multi-device data storage
+- File attachments
+- Certificate uploads
+- Compliance documents
+- Renewal evidence storage
+
+### v2.1 — Accounts and sync · Planned
+
+- Database integration
+- User accounts and login
+- Multi-device data storage
 
 ### v3.0 — Multi-organisation · Planned
 

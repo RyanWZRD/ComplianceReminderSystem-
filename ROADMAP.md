@@ -28,17 +28,19 @@ v1.2 — Multiple Records
 
 ## Next Features
 
-### Version 1.1
+### Version 1.3
 
 * Email reminder simulation
 * Reminder history
 * Improved dashboard metrics
+* Status badges with clearer urgency indicators
 
-### Version 1.2
+### Version 1.4
 
-* Real email notifications
-* Configurable reminder periods
 * Bulk actions
+* Better reporting
+* CSV templates
+* Compliance summary exports
 
 ### Version 2.0
 
@@ -52,6 +54,35 @@ v1.2 — Multiple Records
 * Multi-organisation support
 * Organisation settings
 * User permissions and roles
+
+## Customer Problems
+
+### Safeguarding Officers
+
+* Chasing expired DBS checks
+* Tracking training renewals
+* Producing inspection reports
+* Knowing who needs action today
+* Maintaining audit trails
+
+### Diocesan Administrators
+
+* Multiple parishes using spreadsheets
+* No central compliance visibility
+* Time-consuming reporting
+* Manual reminder chasing
+
+### Volunteer Coordinators
+
+* Forgotten renewals
+* Tracking volunteer training
+* Maintaining accurate records
+
+### Compliance Teams
+
+* Spreadsheet overload
+* Lack of audit history
+* Difficulty identifying upcoming risks
 
 ## Business Ideas
 

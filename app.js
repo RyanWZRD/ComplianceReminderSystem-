@@ -58,6 +58,7 @@ const DEFAULT_REMINDER_SETTINGS = {
   days30: true,
   days14: true,
   days7: true,
+  hideSentReminders: false,
 };
 
 let reminderSettings = { ...DEFAULT_REMINDER_SETTINGS };
@@ -110,6 +111,7 @@ const remindersSection = document.getElementById("reminders-section");
 const reminderDays30 = document.getElementById("reminder-days-30");
 const reminderDays14 = document.getElementById("reminder-days-14");
 const reminderDays7 = document.getElementById("reminder-days-7");
+const hideSentRemindersCheckbox = document.getElementById("hide-sent-reminders");
 const peopleSection = document.getElementById("people-section");
 const addPersonSection = document.getElementById("add-person-section");
 
@@ -268,6 +270,7 @@ function loadReminderSettings() {
       days30: data.days30 !== false,
       days14: data.days14 !== false,
       days7: data.days7 !== false,
+      hideSentReminders: data.hideSentReminders === true,
     };
   } catch (error) {
     reminderSettings = { ...DEFAULT_REMINDER_SETTINGS };
@@ -284,13 +287,24 @@ function saveReminderSettings() {
 
 // Update checkboxes to match saved settings
 function syncReminderSettingsUI() {
-  if (!reminderDays30 || !reminderDays14 || !reminderDays7) {
-    return;
+  if (reminderDays30 && reminderDays14 && reminderDays7) {
+    reminderDays30.checked = reminderSettings.days30;
+    reminderDays14.checked = reminderSettings.days14;
+    reminderDays7.checked = reminderSettings.days7;
   }
 
-  reminderDays30.checked = reminderSettings.days30;
-  reminderDays14.checked = reminderSettings.days14;
-  reminderDays7.checked = reminderSettings.days7;
+  if (hideSentRemindersCheckbox) {
+    hideSentRemindersCheckbox.checked = reminderSettings.hideSentReminders;
+  }
+}
+
+// Read the hide-sent toggle from the checkbox (live UI) or saved settings
+function isHideSentRemindersEnabled() {
+  if (hideSentRemindersCheckbox) {
+    return hideSentRemindersCheckbox.checked;
+  }
+
+  return reminderSettings.hideSentReminders === true;
 }
 
 // Read checkboxes and refresh reminders
@@ -299,6 +313,9 @@ function handleReminderSettingsChange() {
     days30: reminderDays30.checked,
     days14: reminderDays14.checked,
     days7: reminderDays7.checked,
+    hideSentReminders: hideSentRemindersCheckbox
+      ? hideSentRemindersCheckbox.checked
+      : false,
   };
 
   saveReminderSettings();
@@ -624,8 +641,92 @@ function getReminderForRecord(record) {
   return null;
 }
 
-// Build list of compliance records that need action
-function getActiveReminders() {
+// Build the audit-trail text for a reminder type (e.g. "7 Day Reminder Sent")
+function getReminderSentText(reminderType) {
+  if (reminderType === REMINDER_LABELS.expired) {
+    return "Expired Reminder Sent";
+  }
+
+  return `${reminderType} Sent`;
+}
+
+// Format today's date for audit notes (DD/MM/YYYY)
+function formatAuditDate(date = new Date()) {
+  const day = String(date.getDate()).padStart(2, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const year = date.getFullYear();
+
+  return `${day}/${month}/${year}`;
+}
+
+// Check whether this reminder type is already logged in the record notes
+function hasReminderBeenSent(notes, sentLabel) {
+  if (!notes) {
+    return false;
+  }
+
+  return notes.split(/\r?\n/).some((line) => line.includes(sentLabel));
+}
+
+// Use the same sent text for Mark Sent, duplicate checks, and filtering
+function isReminderTypeMarkedSent(notes, reminderType) {
+  return hasReminderBeenSent(notes, getReminderSentText(reminderType));
+}
+
+function getRecordNotes(personId, recordId) {
+  const result = findPersonAndRecord(personId, recordId);
+  return result ? result.record.notes || "" : "";
+}
+
+// Refresh the Action Required table and count
+function refreshActionRequiredUI() {
+  renderReminders();
+  requestAnimationFrame(() => {
+    renderReminders();
+  });
+}
+
+// Record that a reminder was sent by appending a timestamped note
+function markReminderSent(personId, recordId, reminderType) {
+  const result = findPersonAndRecord(personId, recordId);
+  if (!result) {
+    return;
+  }
+
+  const sentText = getReminderSentText(reminderType);
+  const existingNotes = result.record.notes || "";
+
+  if (isReminderTypeMarkedSent(existingNotes, reminderType)) {
+    showMessage(
+      appMessage,
+      `This ${sentText.toLowerCase()} entry is already recorded.`,
+      "error"
+    );
+    return;
+  }
+
+  const auditLine = `${formatAuditDate()} - ${sentText}`;
+  result.record.notes = existingNotes ? `${existingNotes}\n${auditLine}` : auditLine;
+
+  savePeople();
+  syncNotesInTable(personId, recordId, result.record.notes);
+  refreshActionRequiredUI();
+  showMessage(appMessage, `Recorded: ${auditLine}`, "success");
+}
+
+// Update the notes field in the main table if that record is visible
+function syncNotesInTable(personId, recordId, notes) {
+  const textarea = tableBody.querySelector(
+    `.notes-input[data-person-id="${personId}"][data-record-id="${recordId}"]`
+  );
+
+  if (textarea) {
+    textarea.value = notes;
+  }
+}
+
+// Build all active reminders (before hide-sent filtering)
+function buildActiveReminders() {
   const reminders = [];
 
   getAllComplianceRows().forEach((row) => {
@@ -661,6 +762,22 @@ function getActiveReminders() {
   });
 
   return reminders;
+}
+
+// Apply the hide-sent toggle to the active reminder list
+function filterVisibleActionRequiredReminders(activeReminders) {
+  if (!isHideSentRemindersEnabled()) {
+    return activeReminders;
+  }
+
+  return activeReminders.filter((reminder) => {
+    if (reminder.urgencyKey === "expired") {
+      return true;
+    }
+
+    const notes = getRecordNotes(reminder.personId, reminder.recordId);
+    return !isReminderTypeMarkedSent(notes, reminder.reminderType);
+  });
 }
 
 // Return only the compliance rows that match the current filters
@@ -759,14 +876,20 @@ function renderDashboard() {
   updateFilterActiveState();
 }
 
+function getTotalActiveReminders() {
+  return buildActiveReminders().length;
+}
+
 // Update the Action Required count and table
 function renderReminders() {
   if (!dashboardActionCount || !remindersTableBody || !remindersEmpty) {
     return;
   }
 
-  const reminders = getActiveReminders();
+  const activeReminders = buildActiveReminders();
+  const reminders = filterVisibleActionRequiredReminders(activeReminders);
   const activeDays = getActiveReminderDays();
+  const hideSent = isHideSentRemindersEnabled();
 
   dashboardActionCount.textContent = reminders.length;
   remindersTableBody.innerHTML = "";
@@ -775,6 +898,9 @@ function renderReminders() {
     if (activeDays.length === 0) {
       remindersEmpty.textContent =
         "All reminder periods are turned off. Turn on a setting above to see reminders.";
+    } else if (activeReminders.length > 0 && hideSent) {
+      remindersEmpty.textContent =
+        "All active reminders have been marked as sent.";
     } else {
       remindersEmpty.textContent = "No action required at this time.";
     }
@@ -786,12 +912,24 @@ function renderReminders() {
 
   reminders.forEach((reminder) => {
     const row = document.createElement("tr");
+    const notes = getRecordNotes(reminder.personId, reminder.recordId);
+    const alreadySent = isReminderTypeMarkedSent(notes, reminder.reminderType);
 
     row.innerHTML = `
       <td>${reminder.name}</td>
       <td>${reminder.complianceType}</td>
       <td>${formatDate(reminder.expiryDate)}</td>
       <td><span class="reminder-badge reminder-${reminder.urgencyKey}">${reminder.reminderType}</span></td>
+      <td>
+        <button
+          type="button"
+          class="mark-sent-btn"
+          data-person-id="${reminder.personId}"
+          data-record-id="${reminder.recordId}"
+          data-reminder-type="${reminder.reminderType}"
+          ${alreadySent ? "disabled" : ""}
+        >${alreadySent ? "Sent" : "Mark Sent"}</button>
+      </td>
     `;
 
     remindersTableBody.appendChild(row);
@@ -918,7 +1056,16 @@ function updateRecordNotes(personId, recordId, notes) {
   const result = findPersonAndRecord(personId, recordId);
   if (!result) return;
 
-  if ((result.record.notes || "") === notes) return;
+  const currentNotes = result.record.notes || "";
+  if (currentNotes === notes) return;
+
+  // Do not let a stale textarea blur wipe audit-trail entries
+  if (
+    currentNotes.includes("Reminder Sent") &&
+    !notes.includes("Reminder Sent")
+  ) {
+    return;
+  }
 
   result.record.notes = notes;
   savePeople();
@@ -945,6 +1092,67 @@ function deleteComplianceRecord(personId, recordId) {
   }
 
   savePeople();
+  renderTable();
+}
+
+// Format a stored expiry date for audit notes (DD/MM/YYYY)
+function formatExpiryDateForAuditNote(dateString) {
+  const date = parseDateAtMidnight(dateString);
+  if (Number.isNaN(date.getTime())) {
+    return dateString;
+  }
+
+  return formatAuditDate(date);
+}
+
+// Renew one compliance record with a new expiry date and audit note
+function renewComplianceRecord(personId, recordId) {
+  const result = findPersonAndRecord(personId, recordId);
+  if (!result) {
+    return;
+  }
+
+  const input = prompt("Enter new expiry date (YYYY-MM-DD):");
+  if (input === null) {
+    return;
+  }
+
+  const trimmed = input.trim();
+  if (!trimmed) {
+    showMessage(appMessage, "Renewal cancelled. Expiry date cannot be blank.", "error");
+    return;
+  }
+
+  if (!isValidExpiryDate(trimmed)) {
+    showMessage(
+      appMessage,
+      "Invalid date. Please enter a valid date in YYYY-MM-DD format.",
+      "error"
+    );
+    return;
+  }
+
+  const newExpiryDate = normalizeExpiryDate(trimmed);
+  const existingNotes = result.record.notes || "";
+  const auditLine = `${formatAuditDate()} - Compliance renewed. New expiry date: ${formatExpiryDateForAuditNote(newExpiryDate)}`;
+
+  result.record.expiryDate = newExpiryDate;
+  result.record.notes = existingNotes ? `${existingNotes}\n${auditLine}` : auditLine;
+
+  savePeople();
+
+  if (
+    Number(editIdInput.value) === personId &&
+    Number(editRecordIdInput.value) === recordId
+  ) {
+    document.getElementById("edit-dbs-expiry").value = newExpiryDate;
+  }
+
+  showMessage(
+    appMessage,
+    `Compliance renewed. New expiry date: ${formatDate(newExpiryDate)}.`,
+    "success"
+  );
   renderTable();
 }
 
@@ -979,6 +1187,7 @@ function renderTable() {
       <td>
         <div class="action-buttons">
           <button type="button" class="edit-btn" data-person-id="${row.personId}" data-record-id="${row.recordId}">Edit</button>
+          <button type="button" class="renew-btn" data-person-id="${row.personId}" data-record-id="${row.recordId}">Renew</button>
           <button type="button" class="delete-btn" data-person-id="${row.personId}" data-record-id="${row.recordId}">Delete</button>
         </div>
       </td>
@@ -1309,6 +1518,8 @@ tableBody.addEventListener("click", (event) => {
 
   if (button.classList.contains("edit-btn")) {
     startEdit(personId, recordId);
+  } else if (button.classList.contains("renew-btn")) {
+    renewComplianceRecord(personId, recordId);
   } else if (button.classList.contains("delete-btn")) {
     deleteComplianceRecord(personId, recordId);
   }
@@ -1319,7 +1530,11 @@ tableBody.addEventListener("blur", (event) => {
 
   const personId = Number(event.target.dataset.personId);
   const recordId = Number(event.target.dataset.recordId);
-  updateRecordNotes(personId, recordId, event.target.value);
+  const textarea = event.target;
+
+  setTimeout(() => {
+    updateRecordNotes(personId, recordId, textarea.value);
+  }, 0);
 }, true);
 
 // Handle the edit-person form
@@ -1402,6 +1617,24 @@ if (reminderDays14) {
 }
 if (reminderDays7) {
   reminderDays7.addEventListener("change", handleReminderSettingsChange);
+}
+if (hideSentRemindersCheckbox) {
+  hideSentRemindersCheckbox.addEventListener("change", handleReminderSettingsChange);
+}
+
+if (remindersTableBody) {
+  remindersTableBody.addEventListener("click", (event) => {
+    const button = event.target.closest(".mark-sent-btn");
+    if (!button || button.disabled) {
+      return;
+    }
+
+    markReminderSent(
+      Number(button.dataset.personId),
+      Number(button.dataset.recordId),
+      button.dataset.reminderType
+    );
+  });
 }
 
 summaryCards.forEach((card) => {

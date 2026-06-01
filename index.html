@@ -56,7 +56,12 @@
             <input type="checkbox" id="reminder-days-7" checked>
             7 days before expiry
           </label>
+          <label class="checkbox-row">
+            <input type="checkbox" id="hide-sent-reminders">
+            Hide reminders already sent (expired records always show)
+          </label>
         </div>
+        <p class="settings-hint">Expired records remain visible until the compliance record is renewed. Marking reminders as sent does not remove expired items.</p>
       </div>
 
       <button type="button" class="action-required-banner" id="action-required-card">
@@ -74,6 +79,7 @@
               <th>Compliance Type</th>
               <th>Expiry Date</th>
               <th>Reminder Type</th>
+              <th>Action</th>
             </tr>
           </thead>
           <tbody id="reminders-table-body">
@@ -263,6 +269,6 @@
     </section>
   </div>
 
-  <script src="app.js?v=1.2"></script>
+  <script src="app.js?v=1.5"></script>
 </body>
 </html>

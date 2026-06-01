@@ -660,8 +660,46 @@ tr:last-child td {
   background: #eef1ff;
 }
 
+.renew-btn {
+  background: #fff;
+  color: #b45309;
+  border: 1px solid #fcd34d;
+  padding: 0.35rem 0.65rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.renew-btn:hover {
+  background: #fffbeb;
+}
+
 .delete-btn:hover {
   background: #fde8e8;
+}
+
+.mark-sent-btn {
+  background: #fff;
+  color: #2d6a4f;
+  border: 1px solid #b7e4c7;
+  padding: 0.35rem 0.65rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.mark-sent-btn:hover:not(:disabled) {
+  background: #e8f5e9;
+}
+
+.mark-sent-btn:disabled {
+  color: #5a6270;
+  border-color: #d8dce3;
+  cursor: default;
+  opacity: 0.85;
 }
 
 .empty-message {

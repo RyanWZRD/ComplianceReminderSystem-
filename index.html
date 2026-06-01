@@ -3,21 +3,27 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Compliance Reminder System v2.4.0</title>
-  <link rel="stylesheet" href="styles.css?v=2.4.0-badges">
+  <title>Compliance Reminder System v2.5.1</title>
+  <link rel="stylesheet" href="styles.css?v=2.5.1">
 </head>
 <body>
   <div class="container">
     <header>
       <h1>Compliance Reminder System</h1>
       <div class="header-badges">
-        <p class="version-badge">Version 2.4.0</p>
+        <p class="version-badge">Version 2.5.1</p>
         <p id="data-backend-badge" class="data-backend-badge">Local storage mode</p>
+        <p id="auth-mode-badge" class="auth-mode-badge hidden">Local auth</p>
+      </div>
+      <div class="header-user" id="header-user">
+        <span class="header-user-item">User: <strong id="header-user-name">Local User</strong></span>
+        <span class="header-user-item">Role: <strong id="header-user-role">Admin</strong></span>
       </div>
       <p class="subtitle">Track safeguarding compliance, training renewals and DBS expiry dates</p>
       <button type="button" id="reset-sample-btn" class="reset-btn">Reset sample data</button>
     </header>
 
+    <p id="app-boot-error" class="app-boot-error hidden" role="alert"></p>
     <p id="app-message" class="app-message hidden"></p>
 
     <section class="summary-cards">
@@ -336,14 +342,14 @@
       <div class="table-header">
         <h2>People</h2>
         <div class="table-header-actions">
-          <input type="file" id="csv-file-input" accept=".csv,text/csv" class="hidden">
-          <input type="file" id="backup-file-input" accept=".json,application/json" class="hidden">
+          <input type="file" id="csv-file-input" accept=".csv,text/csv" class="file-input-offscreen">
+          <input type="file" id="backup-file-input" accept=".json,application/json" class="file-input-offscreen">
           <button type="button" id="import-csv-btn" class="import-btn">Import CSV</button>
           <button type="button" id="export-csv-btn" class="export-btn">Export CSV</button>
           <button type="button" id="import-backup-btn" class="backup-btn">Import Backup</button>
           <button type="button" id="validate-backup-btn" class="backup-btn">Validate Backup</button>
           <button type="button" id="export-backup-btn" class="backup-btn">Export Backup</button>
-          <input type="file" id="validate-backup-file-input" accept=".json,application/json" class="hidden">
+          <input type="file" id="validate-backup-file-input" accept=".json,application/json" class="file-input-offscreen">
           <span id="person-count" class="badge">0 records</span>
         </div>
       </div>
@@ -571,6 +577,24 @@
     </div>
   </div>
 
-  <script type="module" src="app.js?v=2.4.0"></script>
+  <script src="app.bundle.js?v=2.5.1"></script>
+  <script>
+    window.addEventListener("load", function () {
+      window.setTimeout(function () {
+        if (document.documentElement.dataset.appReady === "true") {
+          return;
+        }
+
+        var bootError = document.getElementById("app-boot-error");
+        if (!bootError) {
+          return;
+        }
+
+        bootError.classList.remove("hidden");
+        bootError.textContent =
+          "The app did not start. Try a hard refresh (Ctrl+Shift+R). If the problem continues, run serve.ps1 and open http://localhost:8765, or check the browser console (F12).";
+      }, 800);
+    });
+  </script>
 </body>
 </html>

@@ -1,0 +1,11 @@
+{
+  "name": "compliance-reminder-system",
+  "private": true,
+  "scripts": {
+    "build": "npx esbuild app.js --bundle --format=iife --outfile=app.bundle.js",
+    "serve": "python -m http.server 8765"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0"
+  }
+}

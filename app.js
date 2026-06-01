@@ -1,4 +1,9 @@
 import {
+  AUTH_MODE,
+  initAuth,
+  getCurrentUser,
+} from "./js/auth/session.js";
+import {
   APP_VERSION,
   DATA_BACKEND,
   repository,
@@ -23,7 +28,7 @@ import {
 } from "./js/data/dates.js";
 
 console.log(
-  `Compliance Reminder System v${APP_VERSION} — app.js loaded (${DATA_BACKEND} data backend)`
+  `Compliance Reminder System v${APP_VERSION} — app.js loaded (${DATA_BACKEND} data, ${AUTH_MODE} auth)`
 );
 
 // Fake sample data — used only on the very first visit
@@ -358,12 +363,20 @@ function appendHistoryEntry(record, action, description) {
     record.history = [];
   }
 
-  record.history.unshift({
+  const entry = {
     id: repository.nextHistoryEntryId++,
     action,
     timestamp: new Date().toISOString(),
     description,
-  });
+  };
+
+  const user = getCurrentUser();
+  if (user) {
+    entry.userId = user.userId;
+    entry.userDisplayName = user.displayName;
+  }
+
+  record.history.unshift(entry);
 }
 
 function formatHistoryTimestamp(timestamp) {
@@ -418,11 +431,14 @@ function buildHistoryPanelHtml(personId, recordId) {
     .map((entry) => {
       const actionLabel =
         HISTORY_ACTION_LABELS[entry.action] || entry.action || "Action";
+      const userLine = entry.userDisplayName
+        ? `<span class="history-entry-user">${escapeHtml(entry.userDisplayName)}</span>`
+        : "";
 
       return `
         <li class="history-entry">
           <span class="history-entry-action">${escapeHtml(actionLabel)}</span>
-          <span class="history-entry-time">${escapeHtml(formatHistoryTimestamp(entry.timestamp))}</span>
+          <span class="history-entry-time">${escapeHtml(formatHistoryTimestamp(entry.timestamp))}${userLine ? ` ${userLine}` : ""}</span>
           <span class="history-entry-desc">${escapeHtml(entry.description)}</span>
         </li>
       `;
@@ -3847,8 +3863,34 @@ function handleCsvImport(event) {
   reader.readAsText(file);
 }
 
+function wireImportExportControls() {
+  exportCsvBtn?.addEventListener("click", exportToCsv);
+  importCsvBtn?.addEventListener("click", () => csvFileInput?.click());
+  csvFileInput?.addEventListener("change", handleCsvImport);
+
+  if (exportBackupBtn) {
+    exportBackupBtn.addEventListener("click", exportBackup);
+  }
+
+  if (importBackupBtn && backupFileInput) {
+    importBackupBtn.addEventListener("click", () => backupFileInput.click());
+    backupFileInput.addEventListener("change", handleBackupImport);
+  }
+
+  if (validateBackupBtn && validateBackupFileInput) {
+    validateBackupBtn.addEventListener("click", () => validateBackupFileInput.click());
+    validateBackupFileInput.addEventListener("change", handleBackupValidate);
+  }
+
+  const quickExportCsv = document.getElementById("action-export-csv");
+  quickExportCsv?.addEventListener("click", exportToCsv);
+}
+
+wireImportExportControls();
+
 // Handle Edit, Details, and Renew in the table
-tableBody.addEventListener("click", (event) => {
+if (tableBody) {
+  tableBody.addEventListener("click", (event) => {
   const button = event.target;
   if (!button.matches("button")) return;
 
@@ -3862,10 +3904,12 @@ tableBody.addEventListener("click", (event) => {
   } else if (button.classList.contains("renew-btn")) {
     renewComplianceRecord(personId, recordId);
   }
-});
+  });
+}
 
 // Handle the edit-person form
-editForm.addEventListener("submit", (event) => {
+if (editForm) {
+  editForm.addEventListener("submit", (event) => {
   event.preventDefault();
 
   const personId = Number(editIdInput.value);
@@ -3887,9 +3931,12 @@ editForm.addEventListener("submit", (event) => {
     notes,
     renewalCycle
   );
-});
+  });
+}
 
-cancelEditBtn.addEventListener("click", hideEditForm);
+if (cancelEditBtn) {
+  cancelEditBtn.addEventListener("click", hideEditForm);
+}
 
 function setupRenewModalListeners() {
   if (!renewModal) {
@@ -3978,7 +4025,8 @@ function setupEvidenceModalListeners() {
 }
 
 // Handle the add-person form
-form.addEventListener("submit", (event) => {
+if (form) {
+  form.addEventListener("submit", (event) => {
   event.preventDefault();
 
   const nameInput = document.getElementById("name");
@@ -4020,9 +4068,10 @@ form.addEventListener("submit", (event) => {
     "success"
   );
   renderTable();
-});
+  });
+}
 
-resetSampleBtn.addEventListener("click", resetSampleData);
+resetSampleBtn?.addEventListener("click", resetSampleData);
 
 dashboardCards.forEach((card) => {
   card.addEventListener("click", () => {
@@ -4082,35 +4131,33 @@ summaryCards.forEach((card) => {
   });
 });
 
-document.getElementById("action-show-all").addEventListener("click", showAllPeople);
+document.getElementById("action-show-all")?.addEventListener("click", showAllPeople);
 
-document.getElementById("action-show-expired").addEventListener("click", () => {
+document.getElementById("action-show-expired")?.addEventListener("click", () => {
   filterByStatus("expired");
 });
 
-document.getElementById("action-show-due-soon").addEventListener("click", () => {
+document.getElementById("action-show-due-soon")?.addEventListener("click", () => {
   filterByStatus("dueSoon");
 });
 
-document.getElementById("action-add-person").addEventListener("click", () => {
-  addPersonSection.scrollIntoView({ behavior: "smooth" });
-  document.getElementById("name").focus();
+document.getElementById("action-add-person")?.addEventListener("click", () => {
+  addPersonSection?.scrollIntoView({ behavior: "smooth" });
+  document.getElementById("name")?.focus();
 });
 
-document.getElementById("action-export-csv").addEventListener("click", exportToCsv);
-
-searchInput.addEventListener("input", () => {
+searchInput?.addEventListener("input", () => {
   updateFilterActiveState();
   refreshRegisterView({ resetPage: true });
 });
 
-statusFilter.addEventListener("change", () => {
+statusFilter?.addEventListener("change", () => {
   reconcileStatusExpiryFilters("status");
   updateFilterActiveState();
   refreshRegisterView({ resetPage: true });
 });
 
-complianceTypeFilter.addEventListener("change", () => {
+complianceTypeFilter?.addEventListener("change", () => {
   setExpiryWindowFilter(null);
   updateFilterActiveState();
   refreshRegisterView({ resetPage: true });
@@ -4178,25 +4225,8 @@ if (paginationNextBtn) {
   });
 }
 
-exportCsvBtn.addEventListener("click", exportToCsv);
-importCsvBtn.addEventListener("click", () => csvFileInput.click());
-csvFileInput.addEventListener("change", handleCsvImport);
-
-if (exportBackupBtn) {
-  exportBackupBtn.addEventListener("click", exportBackup);
-}
-
-if (importBackupBtn && backupFileInput) {
-  importBackupBtn.addEventListener("click", () => backupFileInput.click());
-  backupFileInput.addEventListener("change", handleBackupImport);
-}
-
-if (validateBackupBtn && validateBackupFileInput) {
-  validateBackupBtn.addEventListener("click", () => validateBackupFileInput.click());
-  validateBackupFileInput.addEventListener("change", handleBackupValidate);
-}
-
 // Load saved data, then show the table
+initAuth();
 setupRenewModalListeners();
 setupEvidenceModalListeners();
 setupActionModalListeners();
@@ -4218,3 +4248,4 @@ if (complianceTypeInput) {
 }
 
 renderTable();
+document.documentElement.dataset.appReady = "true";

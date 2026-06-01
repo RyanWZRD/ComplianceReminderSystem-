@@ -6,25 +6,43 @@ A local-first safeguarding compliance tracker. All data is stored in the browser
 
 # Current Release
 
-## v2.4.0
+## v2.5.1
 
-- Data layer refactor (repository pattern)
-- ES module data stores (`js/data/`)
-- Local storage backend with cloud stub
-- Backup validate dry-run before import
-- Draft v3 PostgreSQL schema (`docs/schema-v3-draft.sql`)
+- `app.bundle.js` for opening `index.html` directly (`file://`) without a web server
+- Import/export and backup buttons wired early with safer null checks
+- Boot error banner if JavaScript fails to start
+- `npm run build` to rebuild the bundle after editing `app.js`
 
 ---
 
 # Next Planned Release
 
-## v2.5.0
+## v2.6.0
 
-- Supabase auth + read-only cloud sync
+- Supabase Auth integration (real login)
 
 ---
 
 # Recent Releases
+
+## v2.5.0 (Released)
+
+- Authentication shell (local mock session)
+- `AUTH_MODE` config (`local` | `supabase-preview`)
+- Session helpers and role permission stubs
+- History entries include user identity (new entries only)
+- Header user badge (User / Role)
+
+---
+
+## v2.4.0 (Released)
+
+- Data layer refactor (repository pattern)
+- ES module data stores
+- Backup validate dry-run
+- Draft v3 PostgreSQL schema
+
+---
 
 ## v2.3.0 (Released)
 
@@ -39,7 +57,7 @@ A local-first safeguarding compliance tracker. All data is stored in the browser
 
 ## Version Roadmap
 
-Versions are listed **oldest to newest**. Everything through **v2.3.0** is shipped. **v2.4.0** is the current release.
+Versions are listed **oldest to newest**. Everything through **v2.5.1** is shipped. **v2.6.0** is next.
 
 ### v1.0 — Working prototype · Shipped
 
@@ -161,7 +179,7 @@ Versions are listed **oldest to newest**. Everything through **v2.3.0** is shipp
 - Close workspace / Escape to return to table
 - Live UI sync without page refresh
 
-### v2.4.0 — Data layer refactor · Current
+### v2.4.0 — Data layer refactor · Shipped
 
 - Repository pattern for all persistence
 - `js/data/` modules (local store, settings store, cloud stub)
@@ -170,7 +188,27 @@ Versions are listed **oldest to newest**. Everything through **v2.3.0** is shipp
 - ES module entry point for `app.js`
 - Draft PostgreSQL schema for v3 migration
 
-### v2.5 — Auth and cloud sync · Planned
+### v2.5.0 — Auth shell · Shipped
+
+- `AUTH_MODE` config (`local` | `supabase-preview`)
+- Mock local session (`local-user`, admin role)
+- `js/auth/session.js` — user, role, and permission helpers
+- Header user badge (User / Role)
+- History entries store `userId` and `userDisplayName`
+- Prepared for Supabase Auth (no cloud login yet)
+
+### v2.5.1 — Direct-open fix · Shipped
+
+- Bundled `app.bundle.js` (ES modules do not run on `file://`)
+- Import/export/backup controls wired before other listeners
+- Off-screen file inputs and startup error banner
+- `npm run build` / `serve.ps1` documented in README
+
+### v2.6 — Supabase Auth · Planned
+
+- Supabase Auth login/logout
+- Real user sessions replacing mock preview user
+- Read-only cloud sync (initial)
 
 ### v3.0 — Multi-organisation · Planned
 

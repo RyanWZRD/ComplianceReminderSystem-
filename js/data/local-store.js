@@ -260,7 +260,7 @@ export class LocalComplianceStore {
   }
 
   normalizeHistoryEntry(entry) {
-    return {
+    const normalized = {
       id: typeof entry.id === "number" ? entry.id : this.nextHistoryEntryId++,
       action:
         typeof entry.action === "string" ? entry.action : HISTORY_ACTIONS.EDITED,
@@ -270,6 +270,16 @@ export class LocalComplianceStore {
           : new Date().toISOString(),
       description: typeof entry.description === "string" ? entry.description : "",
     };
+
+    if (typeof entry.userId === "string" && entry.userId.trim()) {
+      normalized.userId = entry.userId.trim();
+    }
+
+    if (typeof entry.userDisplayName === "string" && entry.userDisplayName.trim()) {
+      normalized.userDisplayName = entry.userDisplayName.trim();
+    }
+
+    return normalized;
   }
 
   normalizeDocumentType(value) {

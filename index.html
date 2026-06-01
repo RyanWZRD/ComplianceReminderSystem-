@@ -71,7 +71,7 @@
           <thead>
             <tr>
               <th>Name</th>
-              <th>DBS Expiry Date</th>
+              <th>Expiry Date</th>
               <th>Reminder Type</th>
             </tr>
           </thead>
@@ -124,7 +124,20 @@
           <input type="text" id="role" name="role" placeholder="e.g. Support Worker" required>
         </div>
         <div class="form-row">
-          <label for="dbs-expiry">DBS Expiry Date</label>
+          <label for="compliance-type">Compliance Type</label>
+          <select id="compliance-type" name="compliance-type" required>
+            <option value="DBS">DBS</option>
+            <option value="Basic Awareness">Basic Awareness</option>
+            <option value="Foundations">Foundations</option>
+            <option value="Leadership">Leadership</option>
+            <option value="Senior Leadership">Senior Leadership</option>
+            <option value="Domestic Abuse">Domestic Abuse</option>
+            <option value="Safer Recruitment">Safer Recruitment</option>
+            <option value="Modern Slavery">Modern Slavery</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label for="dbs-expiry">Expiry Date</label>
           <input type="date" id="dbs-expiry" name="dbs-expiry" required>
         </div>
         <button type="submit">Add Person</button>
@@ -145,7 +158,20 @@
           <input type="text" id="edit-role" name="edit-role" required>
         </div>
         <div class="form-row">
-          <label for="edit-dbs-expiry">DBS Expiry Date</label>
+          <label for="edit-compliance-type">Compliance Type</label>
+          <select id="edit-compliance-type" name="edit-compliance-type" required>
+            <option value="DBS">DBS</option>
+            <option value="Basic Awareness">Basic Awareness</option>
+            <option value="Foundations">Foundations</option>
+            <option value="Leadership">Leadership</option>
+            <option value="Senior Leadership">Senior Leadership</option>
+            <option value="Domestic Abuse">Domestic Abuse</option>
+            <option value="Safer Recruitment">Safer Recruitment</option>
+            <option value="Modern Slavery">Modern Slavery</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label for="edit-dbs-expiry">Expiry Date</label>
           <input type="date" id="edit-dbs-expiry" name="edit-dbs-expiry" required>
         </div>
         <div class="form-actions">
@@ -182,10 +208,24 @@
           </select>
         </div>
         <div class="filter-row">
+          <label for="compliance-type-filter">Compliance Type</label>
+          <select id="compliance-type-filter">
+            <option value="all">All Types</option>
+            <option value="DBS">DBS</option>
+            <option value="Basic Awareness">Basic Awareness</option>
+            <option value="Foundations">Foundations</option>
+            <option value="Leadership">Leadership</option>
+            <option value="Senior Leadership">Senior Leadership</option>
+            <option value="Domestic Abuse">Domestic Abuse</option>
+            <option value="Safer Recruitment">Safer Recruitment</option>
+            <option value="Modern Slavery">Modern Slavery</option>
+          </select>
+        </div>
+        <div class="filter-row">
           <label for="sort-by">Sort by</label>
           <select id="sort-by">
             <option value="name">Name</option>
-            <option value="dbsExpiry">DBS Expiry Date</option>
+            <option value="dbsExpiry">Expiry Date</option>
             <option value="status">Status</option>
           </select>
         </div>
@@ -203,7 +243,8 @@
             <tr>
               <th>Name</th>
               <th>Role</th>
-              <th>DBS Expiry Date</th>
+              <th>Compliance Type</th>
+              <th>Expiry Date</th>
               <th>Days Remaining</th>
               <th>Status</th>
               <th>Notes</th>

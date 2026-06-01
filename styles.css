@@ -529,7 +529,7 @@ button[type="submit"]:hover {
 
 @media (min-width: 900px) {
   .filter-controls {
-    grid-template-columns: 2fr 1fr 1fr 1fr 1fr;
+    grid-template-columns: 2fr 1fr 1fr 1fr 1fr 1fr;
   }
 }
 
@@ -573,6 +573,11 @@ td.days-remaining {
 
 td.days-remaining.expired-text {
   color: #c0392b;
+}
+
+.compliance-type-cell {
+  font-size: 0.85rem;
+  white-space: nowrap;
 }
 
 .notes-cell {

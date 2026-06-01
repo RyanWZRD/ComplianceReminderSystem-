@@ -33,6 +33,17 @@ let people = [];
 let nextId = 21;
 
 const DUE_SOON_DAYS = 90;
+const COMPLIANCE_TYPES = [
+  "DBS",
+  "Basic Awareness",
+  "Foundations",
+  "Leadership",
+  "Senior Leadership",
+  "Domestic Abuse",
+  "Safer Recruitment",
+  "Modern Slavery",
+];
+const DEFAULT_COMPLIANCE_TYPE = "DBS";
 const REMINDER_LABELS = {
   30: "30 Day Reminder",
   14: "14 Day Reminder",
@@ -57,6 +68,7 @@ const emptyMessage = document.getElementById("empty-message");
 const noResultsMessage = document.getElementById("no-results-message");
 const searchInput = document.getElementById("search-input");
 const statusFilter = document.getElementById("status-filter");
+const complianceTypeFilter = document.getElementById("compliance-type-filter");
 const sortBySelect = document.getElementById("sort-by");
 const sortOrderSelect = document.getElementById("sort-order");
 const exportCsvBtn = document.getElementById("export-csv-btn");
@@ -114,6 +126,7 @@ function getDateDaysFromToday(daysFromToday) {
 function applySampleData() {
   people = samplePeople.map((person) => ({
     ...person,
+    complianceType: normalizeComplianceType(person.complianceType),
     notes: person.notes || "",
   }));
 
@@ -222,11 +235,20 @@ function isValidExpiryDate(dateString) {
   );
 }
 
-// Validate name, role, and DBS expiry date from a form or CSV row
-function validatePersonInput(name, role, dbsExpiry) {
+// Validate name, role, compliance type, and expiry date from a form or CSV row
+function normalizeComplianceType(value) {
+  if (COMPLIANCE_TYPES.includes(value)) {
+    return value;
+  }
+
+  return DEFAULT_COMPLIANCE_TYPE;
+}
+
+function validatePersonInput(name, role, complianceType, dbsExpiry) {
   const errors = [];
   const trimmedName = name.trim();
   const trimmedRole = role.trim();
+  const normalizedType = normalizeComplianceType(complianceType);
 
   if (!trimmedName) {
     errors.push("Name cannot be blank.");
@@ -237,9 +259,9 @@ function validatePersonInput(name, role, dbsExpiry) {
   }
 
   if (!dbsExpiry) {
-    errors.push("DBS expiry date is required.");
+    errors.push("Expiry date is required.");
   } else if (!isValidExpiryDate(dbsExpiry)) {
-    errors.push("DBS expiry date must be a valid date (YYYY-MM-DD).");
+    errors.push("Expiry date must be a valid date (YYYY-MM-DD).");
   }
 
   return {
@@ -247,6 +269,7 @@ function validatePersonInput(name, role, dbsExpiry) {
     errors: errors,
     name: trimmedName,
     role: trimmedRole,
+    complianceType: normalizedType,
     dbsExpiry: dbsExpiry,
   };
 }
@@ -279,7 +302,9 @@ function isValidStoredData(data) {
       person.role.trim() !== "" &&
       typeof person.dbsExpiry === "string" &&
       isValidExpiryDate(person.dbsExpiry) &&
-      (person.notes === undefined || typeof person.notes === "string")
+      (person.notes === undefined || typeof person.notes === "string") &&
+      (person.complianceType === undefined ||
+        COMPLIANCE_TYPES.includes(person.complianceType))
   );
 }
 
@@ -305,6 +330,7 @@ function loadPeople() {
     people = data.people.map((person) => ({
       ...person,
       dbsExpiry: normalizeExpiryDate(person.dbsExpiry),
+      complianceType: normalizeComplianceType(person.complianceType),
       notes: typeof person.notes === "string" ? person.notes : "",
     }));
     nextId = data.nextId;
@@ -514,6 +540,7 @@ function getActiveReminders() {
 function getFilteredPeople() {
   const searchTerm = searchInput.value.trim().toLowerCase();
   const selectedStatus = statusFilter.value;
+  const selectedComplianceType = complianceTypeFilter.value;
 
   return people.filter((person) => {
     const matchesSearch =
@@ -525,6 +552,11 @@ function getFilteredPeople() {
     const matchesStatus =
       selectedStatus === "all" || status.key === selectedStatus;
 
+    const personType = normalizeComplianceType(person.complianceType);
+    const matchesComplianceType =
+      selectedComplianceType === "all" ||
+      personType === selectedComplianceType;
+
     let matchesExpiryWindow = true;
     if (expiryWindowFilter !== null) {
       const daysUntilExpiry = getDaysUntilExpiry(person.dbsExpiry);
@@ -532,7 +564,12 @@ function getFilteredPeople() {
         daysUntilExpiry >= 0 && daysUntilExpiry <= expiryWindowFilter;
     }
 
-    return matchesSearch && matchesStatus && matchesExpiryWindow;
+    return (
+      matchesSearch &&
+      matchesStatus &&
+      matchesComplianceType &&
+      matchesExpiryWindow
+    );
   });
 }
 
@@ -664,6 +701,7 @@ function updateFilterActiveState() {
 function clearAllFilters() {
   searchInput.value = "";
   statusFilter.value = "all";
+  complianceTypeFilter.value = "all";
   expiryWindowFilter = null;
   updateFilterActiveState();
 }
@@ -680,6 +718,7 @@ function filterByExpiryWindow(days) {
   expiryWindowFilter = days;
   searchInput.value = "";
   statusFilter.value = "all";
+  complianceTypeFilter.value = "all";
   sortBySelect.value = "dbsExpiry";
   sortOrderSelect.value = "asc";
   updateFilterActiveState();
@@ -692,6 +731,7 @@ function filterByStatus(statusKey) {
   expiryWindowFilter = null;
   searchInput.value = "";
   statusFilter.value = statusKey;
+  complianceTypeFilter.value = "all";
   updateFilterActiveState();
   renderTable();
   peopleSection.scrollIntoView({ behavior: "smooth" });
@@ -705,6 +745,9 @@ function startEdit(id) {
   editIdInput.value = person.id;
   document.getElementById("edit-name").value = person.name;
   document.getElementById("edit-role").value = person.role;
+  document.getElementById("edit-compliance-type").value = normalizeComplianceType(
+    person.complianceType
+  );
   document.getElementById("edit-dbs-expiry").value = person.dbsExpiry;
 
   hideMessage(editFormMessage);
@@ -720,8 +763,8 @@ function hideEditForm() {
 }
 
 // Save updated details for one person
-function updatePerson(id, name, role, dbsExpiry) {
-  const validation = validatePersonInput(name, role, dbsExpiry);
+function updatePerson(id, name, role, complianceType, dbsExpiry) {
+  const validation = validatePersonInput(name, role, complianceType, dbsExpiry);
 
   if (!validation.valid) {
     showMessage(editFormMessage, validation.errors.join(" "), "error");
@@ -733,6 +776,7 @@ function updatePerson(id, name, role, dbsExpiry) {
 
   person.name = validation.name;
   person.role = validation.role;
+  person.complianceType = validation.complianceType;
   person.dbsExpiry = normalizeExpiryDate(validation.dbsExpiry);
 
   savePeople();
@@ -788,6 +832,7 @@ function renderTable() {
     row.innerHTML = `
       <td>${person.name}</td>
       <td>${person.role}</td>
+      <td class="compliance-type-cell">${normalizeComplianceType(person.complianceType)}</td>
       <td>${formatDate(person.dbsExpiry)}</td>
       <td class="${daysClass}">${formatDaysRemaining(person.dbsExpiry)}</td>
       <td><span class="status ${status.className}">${status.label}</span></td>
@@ -1009,6 +1054,7 @@ function importPeopleFromCsv(csvText) {
       id: nextId,
       name: name,
       role: role,
+      complianceType: DEFAULT_COMPLIANCE_TYPE,
       dbsExpiry: normalizeExpiryDate(dbsExpiry),
       notes: "",
     });
@@ -1109,9 +1155,10 @@ editForm.addEventListener("submit", (event) => {
   const id = Number(editIdInput.value);
   const name = document.getElementById("edit-name").value.trim();
   const role = document.getElementById("edit-role").value.trim();
+  const complianceType = document.getElementById("edit-compliance-type").value;
   const dbsExpiry = document.getElementById("edit-dbs-expiry").value;
 
-  updatePerson(id, name, role, dbsExpiry);
+  updatePerson(id, name, role, complianceType, dbsExpiry);
 });
 
 cancelEditBtn.addEventListener("click", hideEditForm);
@@ -1122,11 +1169,13 @@ form.addEventListener("submit", (event) => {
 
   const nameInput = document.getElementById("name");
   const roleInput = document.getElementById("role");
+  const complianceTypeInput = document.getElementById("compliance-type");
   const expiryInput = document.getElementById("dbs-expiry");
 
   const validation = validatePersonInput(
     nameInput.value,
     roleInput.value,
+    complianceTypeInput.value,
     expiryInput.value
   );
 
@@ -1141,6 +1190,7 @@ form.addEventListener("submit", (event) => {
     id: nextId,
     name: validation.name,
     role: validation.role,
+    complianceType: validation.complianceType,
     dbsExpiry: normalizeExpiryDate(validation.dbsExpiry),
     notes: "",
   };
@@ -1218,6 +1268,13 @@ statusFilter.addEventListener("change", () => {
   updateFilterActiveState();
   renderTable();
 });
+
+complianceTypeFilter.addEventListener("change", () => {
+  expiryWindowFilter = null;
+  updateFilterActiveState();
+  renderTable();
+});
+
 sortBySelect.addEventListener("change", renderTable);
 sortOrderSelect.addEventListener("change", renderTable);
 exportCsvBtn.addEventListener("click", exportToCsv);

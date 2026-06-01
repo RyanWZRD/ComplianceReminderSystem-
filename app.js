@@ -1,5 +1,5 @@
-// Compliance Reminder System v1.4 — Compliance Analytics
-console.log("Compliance Reminder System v1.4 — app.js loaded");
+// Compliance Reminder System v1.5.0
+console.log("Compliance Reminder System v1.5.0 — app.js loaded");
 
 // Fake sample data — used only on the very first visit
 const samplePeople = [
@@ -71,6 +71,7 @@ const noResultsMessage = document.getElementById("no-results-message");
 const searchInput = document.getElementById("search-input");
 const statusFilter = document.getElementById("status-filter");
 const complianceTypeFilter = document.getElementById("compliance-type-filter");
+const expiryWindowFilterSelect = document.getElementById("expiry-window-filter");
 const sortBySelect = document.getElementById("sort-by");
 const sortOrderSelect = document.getElementById("sort-order");
 const exportCsvBtn = document.getElementById("export-csv-btn");
@@ -121,6 +122,15 @@ const analyticsExpiring30 = document.getElementById("analytics-expiring-30");
 const analyticsExpiring60 = document.getElementById("analytics-expiring-60");
 const analyticsExpiring90 = document.getElementById("analytics-expiring-90");
 const analyticsExpired = document.getElementById("analytics-expired");
+const activeFilterChips = document.getElementById("active-filter-chips");
+const clearFiltersBtn = document.getElementById("clear-filters-btn");
+const analyticsCards = document.querySelectorAll("[data-analytics-filter]");
+
+const STATUS_FILTER_LABELS = {
+  valid: "Valid",
+  dueSoon: "Due Soon",
+  expired: "Expired",
+};
 
 // Copy the 20 sample people into the working people list
 function getDateDaysFromToday(daysFromToday) {
@@ -787,6 +797,99 @@ function filterVisibleActionRequiredReminders(activeReminders) {
   });
 }
 
+// Sync the expiry-window dropdown with expiryWindowFilter
+function syncExpiryWindowFilterToUI() {
+  if (!expiryWindowFilterSelect) {
+    return;
+  }
+
+  expiryWindowFilterSelect.value =
+    expiryWindowFilter === null ? "all" : String(expiryWindowFilter);
+}
+
+function setExpiryWindowFilter(days) {
+  expiryWindowFilter = days;
+  syncExpiryWindowFilterToUI();
+}
+
+// Expiry windows only apply to non-expired records; Due Soon can combine with them
+function areStatusAndExpiryCompatible(statusKey, expiryDays) {
+  if (expiryDays === null || statusKey === "all") {
+    return true;
+  }
+
+  return statusKey === "dueSoon";
+}
+
+function getActiveTableFilters() {
+  return {
+    search: searchInput.value.trim(),
+    status: statusFilter.value,
+    complianceType: complianceTypeFilter.value,
+    expiryWindow: expiryWindowFilter,
+  };
+}
+
+function hasExtraTableFilters(filters) {
+  return filters.search !== "" || filters.complianceType !== "all";
+}
+
+// Resolve status/expiry conflicts by clearing the filter the user did not just change
+function reconcileStatusExpiryFilters(changedBy) {
+  const status = statusFilter.value;
+  const expiry = expiryWindowFilter;
+
+  if (areStatusAndExpiryCompatible(status, expiry)) {
+    return;
+  }
+
+  if (changedBy === "status") {
+    setExpiryWindowFilter(null);
+    showMessage(
+      appMessage,
+      "Expiry window filter cleared — it can't be combined with the selected status.",
+      "error"
+    );
+    return;
+  }
+
+  if (changedBy === "expiry") {
+    statusFilter.value = "all";
+    showMessage(
+      appMessage,
+      "Status filter cleared — it can't be combined with an expiry window.",
+      "error"
+    );
+  }
+}
+
+// Search across name, role, type, notes, and expiry date
+function matchesSearchTerm(row, searchTerm) {
+  if (!searchTerm) {
+    return true;
+  }
+
+  const term = searchTerm.toLowerCase();
+
+  return (
+    row.name.toLowerCase().includes(term) ||
+    row.role.toLowerCase().includes(term) ||
+    row.complianceType.toLowerCase().includes(term) ||
+    (row.notes || "").toLowerCase().includes(term) ||
+    row.expiryDate.toLowerCase().includes(term) ||
+    formatDate(row.expiryDate).toLowerCase().includes(term)
+  );
+}
+
+function matchesExpiryWindow(row, days) {
+  if (days === null) {
+    return true;
+  }
+
+  const daysUntilExpiry = getDaysUntilExpiry(row.expiryDate);
+  return daysUntilExpiry >= 0 && daysUntilExpiry <= days;
+}
+
 // Return only the compliance rows that match the current filters
 function getFilteredComplianceRows() {
   const searchTerm = searchInput.value.trim().toLowerCase();
@@ -794,10 +897,9 @@ function getFilteredComplianceRows() {
   const selectedComplianceType = complianceTypeFilter.value;
 
   return getAllComplianceRows().filter((row) => {
-    const matchesSearch =
-      searchTerm === "" ||
-      row.name.toLowerCase().includes(searchTerm) ||
-      row.role.toLowerCase().includes(searchTerm);
+    if (!matchesSearchTerm(row, searchTerm)) {
+      return false;
+    }
 
     const status = getStatus(row.expiryDate);
     const matchesStatus =
@@ -807,20 +909,80 @@ function getFilteredComplianceRows() {
       selectedComplianceType === "all" ||
       row.complianceType === selectedComplianceType;
 
-    let matchesExpiryWindow = true;
-    if (expiryWindowFilter !== null) {
-      const daysUntilExpiry = getDaysUntilExpiry(row.expiryDate);
-      matchesExpiryWindow =
-        daysUntilExpiry >= 0 && daysUntilExpiry <= expiryWindowFilter;
+    if (!matchesExpiryWindow(row, expiryWindowFilter)) {
+      return false;
     }
 
-    return (
-      matchesSearch &&
-      matchesStatus &&
-      matchesComplianceType &&
-      matchesExpiryWindow
-    );
+    return matchesStatus && matchesComplianceType;
   });
+}
+
+// Build the list of active table filters for display
+function getActiveFilterChips() {
+  const chips = [];
+  const searchTerm = searchInput.value.trim();
+
+  if (searchTerm) {
+    chips.push({ id: "search", label: `Search: ${searchTerm}` });
+  }
+
+  if (statusFilter.value !== "all") {
+    chips.push({
+      id: "status",
+      label: `Status: ${STATUS_FILTER_LABELS[statusFilter.value] || statusFilter.value}`,
+    });
+  }
+
+  if (complianceTypeFilter.value !== "all") {
+    chips.push({
+      id: "type",
+      label: `Type: ${complianceTypeFilter.value}`,
+    });
+  }
+
+  if (expiryWindowFilter !== null) {
+    chips.push({
+      id: "expiry",
+      label: `Expiring within: ${expiryWindowFilter} days`,
+    });
+  }
+
+  return chips;
+}
+
+function clearActiveFilter(filterId) {
+  if (filterId === "search") {
+    searchInput.value = "";
+  } else if (filterId === "status") {
+    statusFilter.value = "all";
+  } else if (filterId === "type") {
+    complianceTypeFilter.value = "all";
+  } else if (filterId === "expiry") {
+    setExpiryWindowFilter(null);
+  }
+
+  updateFilterActiveState();
+  renderTable();
+}
+
+function renderActiveFilters() {
+  if (!activeFilterChips || !clearFiltersBtn) {
+    return;
+  }
+
+  const chips = getActiveFilterChips();
+  activeFilterChips.innerHTML = "";
+
+  chips.forEach((chip) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "active-filter-chip";
+    button.dataset.filterId = chip.id;
+    button.textContent = `${chip.label} ×`;
+    activeFilterChips.appendChild(button);
+  });
+
+  clearFiltersBtn.classList.toggle("hidden", chips.length === 0);
 }
 
 // Sort compliance rows by the selected column and order
@@ -1017,27 +1179,99 @@ function renderReminders() {
 
 // Highlight the active summary card
 function updateSummaryActiveState() {
+  const filters = getActiveTableFilters();
+  const extraFilters = hasExtraTableFilters(filters);
+
   summaryCards.forEach((card) => {
     const cardStatus = card.dataset.status;
-    const isActive =
-      expiryWindowFilter === null && statusFilter.value === cardStatus;
+    let isActive = false;
+
+    if (cardStatus === "all") {
+      isActive =
+        !extraFilters &&
+        filters.status === "all" &&
+        filters.expiryWindow === null;
+    } else if (cardStatus === "dueSoon") {
+      isActive =
+        !extraFilters &&
+        filters.status === "dueSoon" &&
+        areStatusAndExpiryCompatible("dueSoon", filters.expiryWindow);
+    } else {
+      isActive =
+        !extraFilters &&
+        filters.status === cardStatus &&
+        filters.expiryWindow === null;
+    }
+
     card.classList.toggle("active", isActive);
   });
 }
 
 // Highlight the active dashboard card
 function updateDashboardActiveState() {
+  const filters = getActiveTableFilters();
+  const extraFilters = hasExtraTableFilters(filters);
+
   dashboardCards.forEach((card) => {
     const days = Number(card.dataset.days);
-    const isActive = expiryWindowFilter === days;
+    const isActive =
+      !extraFilters &&
+      filters.expiryWindow === days &&
+      areStatusAndExpiryCompatible(filters.status, days);
+
     card.classList.toggle("active", isActive);
   });
 }
 
-// Update highlights on summary and dashboard cards
+// Update highlights on summary, dashboard, and analytics cards
 function updateFilterActiveState() {
   updateSummaryActiveState();
   updateDashboardActiveState();
+  updateAnalyticsActiveState();
+}
+
+function updateAnalyticsActiveState() {
+  const filters = getActiveTableFilters();
+  const extraFilters = hasExtraTableFilters(filters);
+
+  analyticsCards.forEach((card) => {
+    const filter = card.dataset.analyticsFilter;
+    let isActive = false;
+
+    if (filter === "all") {
+      isActive =
+        !extraFilters &&
+        filters.status === "all" &&
+        filters.expiryWindow === null;
+    } else if (filter === "valid") {
+      isActive =
+        !extraFilters &&
+        filters.status === "valid" &&
+        filters.expiryWindow === null;
+    } else if (filter === "expired") {
+      isActive =
+        !extraFilters &&
+        filters.status === "expired" &&
+        filters.expiryWindow === null;
+    } else if (filter === "expiring-30") {
+      isActive =
+        !extraFilters &&
+        filters.expiryWindow === 30 &&
+        areStatusAndExpiryCompatible(filters.status, 30);
+    } else if (filter === "expiring-60") {
+      isActive =
+        !extraFilters &&
+        filters.expiryWindow === 60 &&
+        areStatusAndExpiryCompatible(filters.status, 60);
+    } else if (filter === "expiring-90") {
+      isActive =
+        !extraFilters &&
+        filters.expiryWindow === 90 &&
+        areStatusAndExpiryCompatible(filters.status, 90);
+    }
+
+    card.classList.toggle("active", isActive);
+  });
 }
 
 // Clear search, status, and expiry window filters
@@ -1045,7 +1279,7 @@ function clearAllFilters() {
   searchInput.value = "";
   statusFilter.value = "all";
   complianceTypeFilter.value = "all";
-  expiryWindowFilter = null;
+  setExpiryWindowFilter(null);
   updateFilterActiveState();
 }
 
@@ -1058,7 +1292,7 @@ function showAllPeople() {
 
 // Filter the table to people expiring within a set number of days
 function filterByExpiryWindow(days) {
-  expiryWindowFilter = days;
+  setExpiryWindowFilter(days);
   searchInput.value = "";
   statusFilter.value = "all";
   complianceTypeFilter.value = "all";
@@ -1071,13 +1305,45 @@ function filterByExpiryWindow(days) {
 
 // Filter the table by status (used by summary cards and quick actions)
 function filterByStatus(statusKey) {
-  expiryWindowFilter = null;
+  setExpiryWindowFilter(null);
   searchInput.value = "";
   statusFilter.value = statusKey;
   complianceTypeFilter.value = "all";
   updateFilterActiveState();
   renderTable();
   peopleSection.scrollIntoView({ behavior: "smooth" });
+}
+
+// Phase D: apply a filter from an analytics card
+function filterByAnalyticsCard(filterKey) {
+  if (filterKey === "all") {
+    showAllPeople();
+    return;
+  }
+
+  if (filterKey === "valid") {
+    filterByStatus("valid");
+    return;
+  }
+
+  if (filterKey === "expired") {
+    filterByStatus("expired");
+    return;
+  }
+
+  if (filterKey === "expiring-30") {
+    filterByExpiryWindow(30);
+    return;
+  }
+
+  if (filterKey === "expiring-60") {
+    filterByExpiryWindow(60);
+    return;
+  }
+
+  if (filterKey === "expiring-90") {
+    filterByExpiryWindow(90);
+  }
 }
 
 // Show the edit form for one compliance record
@@ -1285,6 +1551,7 @@ function renderTable() {
   emptyMessage.classList.toggle("hidden", totalCount > 0);
   noResultsMessage.classList.toggle("hidden", displayedCount > 0 || totalCount === 0);
 
+  renderActiveFilters();
   renderSummary();
   renderAnalytics();
   renderDashboard();
@@ -1747,21 +2014,53 @@ document.getElementById("action-add-person").addEventListener("click", () => {
 document.getElementById("action-export-csv").addEventListener("click", exportToCsv);
 
 searchInput.addEventListener("input", () => {
-  expiryWindowFilter = null;
   updateFilterActiveState();
   renderTable();
 });
 
 statusFilter.addEventListener("change", () => {
-  expiryWindowFilter = null;
+  reconcileStatusExpiryFilters("status");
   updateFilterActiveState();
   renderTable();
 });
 
 complianceTypeFilter.addEventListener("change", () => {
-  expiryWindowFilter = null;
+  setExpiryWindowFilter(null);
   updateFilterActiveState();
   renderTable();
+});
+
+if (expiryWindowFilterSelect) {
+  expiryWindowFilterSelect.addEventListener("change", () => {
+    const value = expiryWindowFilterSelect.value;
+    setExpiryWindowFilter(value === "all" ? null : Number(value));
+    reconcileStatusExpiryFilters("expiry");
+    updateFilterActiveState();
+    renderTable();
+  });
+}
+
+if (activeFilterChips) {
+  activeFilterChips.addEventListener("click", (event) => {
+    const chip = event.target.closest(".active-filter-chip");
+    if (!chip) {
+      return;
+    }
+
+    clearActiveFilter(chip.dataset.filterId);
+  });
+}
+
+if (clearFiltersBtn) {
+  clearFiltersBtn.addEventListener("click", () => {
+    showAllPeople();
+  });
+}
+
+analyticsCards.forEach((card) => {
+  card.addEventListener("click", () => {
+    filterByAnalyticsCard(card.dataset.analyticsFilter);
+  });
 });
 
 sortBySelect.addEventListener("change", renderTable);

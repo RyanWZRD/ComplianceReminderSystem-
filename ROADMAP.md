@@ -2,7 +2,7 @@
 
 ## Current Version
 
-**v1.4 — Compliance Analytics** (latest release)
+**v1.5.0** (in development)
 
 A local-first safeguarding compliance tracker. All data is stored in the browser (localStorage). No backend, login, or email sending.
 
@@ -10,7 +10,7 @@ A local-first safeguarding compliance tracker. All data is stored in the browser
 
 ## Version Roadmap
 
-Versions are listed **oldest to newest**. Everything through **v1.4** is shipped. **v1.5** and above are planned.
+Versions are listed **oldest to newest**. Everything through **v1.4** is shipped. **v1.5.0** is in active development.
 
 ### v1.0 — Working prototype · Shipped
 
@@ -44,17 +44,18 @@ Versions are listed **oldest to newest**. Everything through **v1.4** is shipped
 * Hide reminders already sent (expired records always show)
 * Renew compliance (new expiry date + audit note)
 
-### v1.4 — Compliance analytics · Shipped · Current
+### v1.4 — Compliance analytics · Shipped
 
 * Compliance analytics dashboard (above the records table)
 * Compliance health score (% of records with more than 90 days until expiry)
 * Total Records, Compliant, Expiring 30/60/90, Expired metrics
 
-### v1.5 — Reporting and bulk actions · Planned
+### v1.5.0 — Reporting, filtering, and bulk actions · In development · Current
 
+* Advanced filtering and search (records table)
+* Clickable analytics cards (filter the table from analytics)
 * Email reminder simulation
 * Reminder history
-* Clickable analytics cards (filter the table from analytics)
 * Bulk actions
 * Better reporting and CSV templates
 

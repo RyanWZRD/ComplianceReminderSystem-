@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Compliance Reminder System v1.4</title>
-  <link rel="stylesheet" href="styles.css?v=1.4">
+  <title>Compliance Reminder System v1.5.0</title>
+  <link rel="stylesheet" href="styles.css?v=1.5.0">
 </head>
 <body>
   <div class="container">
     <header>
       <h1>Compliance Reminder System</h1>
-      <p class="version-badge">Version 1.4 — Compliance Analytics</p>
+      <p class="version-badge">Version 1.5.0</p>
       <p class="subtitle">Track safeguarding compliance, training renewals and DBS expiry dates</p>
       <button type="button" id="reset-sample-btn" class="reset-btn">Reset sample data</button>
     </header>
@@ -196,32 +196,32 @@
         <span class="analytics-health-label">Compliance Health</span>
         <span id="analytics-health-score" class="analytics-health-score">0%</span>
       </div>
-      <p class="settings-hint">Percentage of records with more than 90 days until expiry. Based on all compliance records.</p>
+      <p class="settings-hint">Percentage of records with more than 90 days until expiry. Based on all compliance records. Click a card to filter the records table below.</p>
       <div class="analytics-cards">
-        <div class="analytics-card">
+        <button type="button" class="analytics-card" data-analytics-filter="all">
           <p class="analytics-label">Total Records</p>
           <p id="analytics-total" class="analytics-number">0</p>
-        </div>
-        <div class="analytics-card analytics-compliant">
+        </button>
+        <button type="button" class="analytics-card analytics-compliant" data-analytics-filter="valid">
           <p class="analytics-label">Compliant</p>
           <p id="analytics-compliant" class="analytics-number">0</p>
-        </div>
-        <div class="analytics-card analytics-expiring-30">
+        </button>
+        <button type="button" class="analytics-card analytics-expiring-30" data-analytics-filter="expiring-30">
           <p class="analytics-label">Expiring in 30 Days</p>
           <p id="analytics-expiring-30" class="analytics-number">0</p>
-        </div>
-        <div class="analytics-card analytics-expiring-60">
+        </button>
+        <button type="button" class="analytics-card analytics-expiring-60" data-analytics-filter="expiring-60">
           <p class="analytics-label">Expiring in 60 Days</p>
           <p id="analytics-expiring-60" class="analytics-number">0</p>
-        </div>
-        <div class="analytics-card analytics-expiring-90">
+        </button>
+        <button type="button" class="analytics-card analytics-expiring-90" data-analytics-filter="expiring-90">
           <p class="analytics-label">Expiring in 90 Days</p>
           <p id="analytics-expiring-90" class="analytics-number">0</p>
-        </div>
-        <div class="analytics-card analytics-expired">
+        </button>
+        <button type="button" class="analytics-card analytics-expired" data-analytics-filter="expired">
           <p class="analytics-label">Expired</p>
           <p id="analytics-expired" class="analytics-number">0</p>
-        </div>
+        </button>
       </div>
     </section>
 
@@ -239,7 +239,7 @@
       <div class="filter-controls">
         <div class="filter-row">
           <label for="search-input">Search</label>
-          <input type="text" id="search-input" placeholder="Search by name or role...">
+          <input type="text" id="search-input" placeholder="Search name, role, type, notes, or date...">
         </div>
         <div class="filter-row">
           <label for="status-filter">Status</label>
@@ -265,6 +265,15 @@
           </select>
         </div>
         <div class="filter-row">
+          <label for="expiry-window-filter">Expiring within</label>
+          <select id="expiry-window-filter">
+            <option value="all">All</option>
+            <option value="30">30 days</option>
+            <option value="60">60 days</option>
+            <option value="90">90 days</option>
+          </select>
+        </div>
+        <div class="filter-row">
           <label for="sort-by">Sort by</label>
           <select id="sort-by">
             <option value="name">Name</option>
@@ -279,6 +288,11 @@
             <option value="desc">Descending</option>
           </select>
         </div>
+      </div>
+      <div class="active-filters" id="active-filters">
+        <span class="active-filters-label">Active filters:</span>
+        <span id="active-filter-chips" class="active-filter-chips"></span>
+        <button type="button" id="clear-filters-btn" class="clear-filters-btn hidden">Clear all</button>
       </div>
       <div class="table-wrapper">
         <table>
@@ -304,6 +318,6 @@
     </section>
   </div>
 
-  <script src="app.js?v=1.4"></script>
+  <script src="app.js?v=1.5.0"></script>
 </body>
 </html>

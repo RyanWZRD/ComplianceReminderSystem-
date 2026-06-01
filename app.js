@@ -112,7 +112,10 @@ function getDateDaysFromToday(daysFromToday) {
 }
 
 function applySampleData() {
-  people = samplePeople.map((person) => ({ ...person }));
+  people = samplePeople.map((person) => ({
+    ...person,
+    notes: person.notes || "",
+  }));
 
   // Demo: Jane Smith is in the 30-day reminder window
   if (people.length > 0) {
@@ -275,7 +278,8 @@ function isValidStoredData(data) {
       typeof person.role === "string" &&
       person.role.trim() !== "" &&
       typeof person.dbsExpiry === "string" &&
-      isValidExpiryDate(person.dbsExpiry)
+      isValidExpiryDate(person.dbsExpiry) &&
+      (person.notes === undefined || typeof person.notes === "string")
   );
 }
 
@@ -301,6 +305,7 @@ function loadPeople() {
     people = data.people.map((person) => ({
       ...person,
       dbsExpiry: normalizeExpiryDate(person.dbsExpiry),
+      notes: typeof person.notes === "string" ? person.notes : "",
     }));
     nextId = data.nextId;
   } catch (error) {
@@ -737,6 +742,17 @@ function updatePerson(id, name, role, dbsExpiry) {
   return true;
 }
 
+// Save notes for one person (called when the notes field loses focus)
+function updatePersonNotes(id, notes) {
+  const person = people.find((p) => p.id === id);
+  if (!person) return;
+
+  if ((person.notes || "") === notes) return;
+
+  person.notes = notes;
+  savePeople();
+}
+
 // Remove a person by their id
 function deletePerson(id) {
   const index = people.findIndex((person) => person.id === id);
@@ -775,6 +791,9 @@ function renderTable() {
       <td>${formatDate(person.dbsExpiry)}</td>
       <td class="${daysClass}">${formatDaysRemaining(person.dbsExpiry)}</td>
       <td><span class="status ${status.className}">${status.label}</span></td>
+      <td class="notes-cell">
+        <textarea class="notes-input" data-id="${person.id}" rows="2" placeholder="Add follow-up notes...">${escapeHtml(person.notes || "")}</textarea>
+      </td>
       <td>
         <div class="action-buttons">
           <button type="button" class="edit-btn" data-id="${person.id}">Edit</button>
@@ -801,6 +820,14 @@ function renderTable() {
 }
 
 // Wrap a value in quotes if it contains a comma or quote (keeps CSV valid)
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
 function escapeCsvValue(value) {
   const text = String(value);
 
@@ -983,6 +1010,7 @@ function importPeopleFromCsv(csvText) {
       name: name,
       role: role,
       dbsExpiry: normalizeExpiryDate(dbsExpiry),
+      notes: "",
     });
 
     nextId += 1;
@@ -1053,7 +1081,7 @@ function handleCsvImport(event) {
   reader.readAsText(file);
 }
 
-// Handle Edit and Delete button clicks in the table
+// Handle Edit, Delete, and Notes in the table
 tableBody.addEventListener("click", (event) => {
   const button = event.target;
   if (!button.matches("button")) return;
@@ -1066,6 +1094,13 @@ tableBody.addEventListener("click", (event) => {
     deletePerson(id);
   }
 });
+
+tableBody.addEventListener("blur", (event) => {
+  if (!event.target.classList.contains("notes-input")) return;
+
+  const id = Number(event.target.dataset.id);
+  updatePersonNotes(id, event.target.value);
+}, true);
 
 // Handle the edit-person form
 editForm.addEventListener("submit", (event) => {
@@ -1107,6 +1142,7 @@ form.addEventListener("submit", (event) => {
     name: validation.name,
     role: validation.role,
     dbsExpiry: normalizeExpiryDate(validation.dbsExpiry),
+    notes: "",
   };
 
   people.push(newPerson);

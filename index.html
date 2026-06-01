@@ -40,6 +40,25 @@
       <h2>Reminder Engine</h2>
       <p class="reminders-hint">Reminders appear on the day someone hits 30, 14, or 7 days before their DBS expiry.</p>
 
+      <div class="reminder-settings">
+        <h3 class="reminders-subheading">Reminder Settings</h3>
+        <p class="settings-hint">Choose which reminder periods are active.</p>
+        <div class="reminder-settings-options">
+          <label class="checkbox-row">
+            <input type="checkbox" id="reminder-days-30" checked>
+            30 days before expiry
+          </label>
+          <label class="checkbox-row">
+            <input type="checkbox" id="reminder-days-14" checked>
+            14 days before expiry
+          </label>
+          <label class="checkbox-row">
+            <input type="checkbox" id="reminder-days-7" checked>
+            7 days before expiry
+          </label>
+        </div>
+      </div>
+
       <button type="button" class="action-required-banner" id="action-required-card">
         <span class="action-required-label">Action Required Today</span>
         <span id="dashboard-action-count" class="action-required-count">0</span>

@@ -33,12 +33,20 @@ let people = [];
 let nextId = 21;
 
 const DUE_SOON_DAYS = 90;
-const REMINDER_DAYS = [30, 14, 7];
 const REMINDER_LABELS = {
   30: "30 Day Reminder",
   14: "14 Day Reminder",
   7: "7 Day Reminder",
 };
+const REMINDER_SETTINGS_KEY = "complianceReminderSettings";
+
+const DEFAULT_REMINDER_SETTINGS = {
+  days30: true,
+  days14: true,
+  days7: true,
+};
+
+let reminderSettings = { ...DEFAULT_REMINDER_SETTINGS };
 
 const form = document.getElementById("add-person-form");
 const tableBody = document.getElementById("people-table-body");
@@ -83,6 +91,9 @@ const actionRequiredCard = document.getElementById("action-required-card");
 const remindersTableBody = document.getElementById("reminders-table-body");
 const remindersEmpty = document.getElementById("reminders-empty");
 const remindersSection = document.getElementById("reminders-section");
+const reminderDays30 = document.getElementById("reminder-days-30");
+const reminderDays14 = document.getElementById("reminder-days-14");
+const reminderDays7 = document.getElementById("reminder-days-7");
 const peopleSection = document.getElementById("people-section");
 const addPersonSection = document.getElementById("add-person-section");
 
@@ -117,6 +128,77 @@ function savePeople() {
   };
 
   localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+}
+
+// Load reminder period settings from localStorage
+function loadReminderSettings() {
+  const saved = localStorage.getItem(REMINDER_SETTINGS_KEY);
+
+  if (saved === null) {
+    reminderSettings = { ...DEFAULT_REMINDER_SETTINGS };
+    saveReminderSettings();
+    syncReminderSettingsUI();
+    return;
+  }
+
+  try {
+    const data = JSON.parse(saved);
+    reminderSettings = {
+      days30: data.days30 !== false,
+      days14: data.days14 !== false,
+      days7: data.days7 !== false,
+    };
+  } catch (error) {
+    reminderSettings = { ...DEFAULT_REMINDER_SETTINGS };
+    saveReminderSettings();
+  }
+
+  syncReminderSettingsUI();
+}
+
+// Save reminder period settings to localStorage
+function saveReminderSettings() {
+  localStorage.setItem(REMINDER_SETTINGS_KEY, JSON.stringify(reminderSettings));
+}
+
+// Update checkboxes to match saved settings
+function syncReminderSettingsUI() {
+  if (!reminderDays30 || !reminderDays14 || !reminderDays7) {
+    return;
+  }
+
+  reminderDays30.checked = reminderSettings.days30;
+  reminderDays14.checked = reminderSettings.days14;
+  reminderDays7.checked = reminderSettings.days7;
+}
+
+// Read checkboxes and refresh reminders
+function handleReminderSettingsChange() {
+  reminderSettings = {
+    days30: reminderDays30.checked,
+    days14: reminderDays14.checked,
+    days7: reminderDays7.checked,
+  };
+
+  saveReminderSettings();
+  renderReminders();
+}
+
+// Return only the reminder periods that are turned on
+function getActiveReminderDays() {
+  const activeDays = [];
+
+  if (reminderSettings.days30) {
+    activeDays.push(30);
+  }
+  if (reminderSettings.days14) {
+    activeDays.push(14);
+  }
+  if (reminderSettings.days7) {
+    activeDays.push(7);
+  }
+
+  return activeDays;
 }
 
 // Check that a date string is a real calendar date in YYYY-MM-DD format
@@ -367,7 +449,7 @@ function getRemindersDueToday() {
       return;
     }
 
-    REMINDER_DAYS.forEach((daysBefore) => {
+    getActiveReminderDays().forEach((daysBefore) => {
       if (daysRemaining === daysBefore) {
         reminders.push({
           id: person.id,
@@ -479,6 +561,19 @@ function renderReminders() {
   if (!dashboardActionCount || !remindersTableBody || !remindersEmpty) {
     return;
   }
+
+  const activeDays = getActiveReminderDays();
+
+  if (activeDays.length === 0) {
+    dashboardActionCount.textContent = "0";
+    remindersTableBody.innerHTML = "";
+    remindersEmpty.textContent =
+      "All reminder periods are turned off. Turn on a setting above to see reminders.";
+    remindersEmpty.classList.remove("hidden");
+    return;
+  }
+
+  remindersEmpty.textContent = "No reminders due today.";
 
   const reminders = getRemindersDueToday();
 
@@ -1007,6 +1102,16 @@ if (actionRequiredCard && remindersSection) {
   });
 }
 
+if (reminderDays30) {
+  reminderDays30.addEventListener("change", handleReminderSettingsChange);
+}
+if (reminderDays14) {
+  reminderDays14.addEventListener("change", handleReminderSettingsChange);
+}
+if (reminderDays7) {
+  reminderDays7.addEventListener("change", handleReminderSettingsChange);
+}
+
 summaryCards.forEach((card) => {
   card.addEventListener("click", () => {
     const status = card.dataset.status;
@@ -1054,5 +1159,6 @@ importCsvBtn.addEventListener("click", () => csvFileInput.click());
 csvFileInput.addEventListener("change", handleCsvImport);
 
 // Load saved data, then show the table
+loadReminderSettings();
 loadPeople();
 renderTable();

@@ -2,7 +2,7 @@
 
 ## Current Version
 
-**v1.5.0** (in development)
+**v1.9.0** (current)
 
 A local-first safeguarding compliance tracker. All data is stored in the browser (localStorage). No backend, login, or email sending.
 
@@ -10,7 +10,7 @@ A local-first safeguarding compliance tracker. All data is stored in the browser
 
 ## Version Roadmap
 
-Versions are listed **oldest to newest**. Everything through **v1.4** is shipped. **v1.5.0** is in active development.
+Versions are listed **oldest to newest**. Everything through **v1.8.1** is shipped. **v1.9.0** is the current release.
 
 ### v1.0 — Working prototype · Shipped
 
@@ -50,14 +50,49 @@ Versions are listed **oldest to newest**. Everything through **v1.4** is shipped
 * Compliance health score (% of records with more than 90 days until expiry)
 * Total Records, Compliant, Expiring 30/60/90, Expired metrics
 
-### v1.5.0 — Reporting, filtering, and bulk actions · In development · Current
+### v1.5.0 — Advanced filtering · Shipped
 
-* Advanced filtering and search (records table)
+* Extended search (name, role, type, notes, dates)
+* Expiry window filter dropdown
+* Active filter chips and clear-all
 * Clickable analytics cards (filter the table from analytics)
-* Email reminder simulation
-* Reminder history
-* Bulk actions
-* Better reporting and CSV templates
+* Compatible status/expiry filter handling
+
+### v1.6.0 — Record management and UX · Shipped
+
+* Edit compliance record (name, role, type, expiry, notes)
+* Delete confirmation
+* Renew UX improvements (clearer dates and feedback)
+* Friendly empty states
+
+### v1.7.0 — Audit log and backup · Shipped
+
+* Compliance history log per record
+* CSV export with reminder status
+* JSON backup export and import
+
+### v1.8.0 — Register usability · Shipped
+
+* Unified table sort control
+* Pagination (25 per page)
+* Status badges (Valid / Expiring Soon / Expired)
+* All Records dashboard card
+* Filtered summary strip above the table
+
+### v1.8.1 — QA patch · Shipped
+
+* Safe legacy backup import record counting
+* Inline notes history logging
+* Skip no-change edit history entries
+* Reject empty backups
+* Lighter re-renders on pagination and history toggle
+
+### v1.9.0 — Renewal cycles · Current
+
+* Renewal cycle field per compliance record
+* Smart renew with suggested dates from current expiry
+* Renewal cycle column in register and CSV export
+* Backup compatibility for renewalCycle
 
 ### v2.0 — Accounts and sync · Planned
 

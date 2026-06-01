@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Compliance Reminder System v1.5.0</title>
-  <link rel="stylesheet" href="styles.css?v=1.5.0">
+  <title>Compliance Reminder System v1.9.0</title>
+  <link rel="stylesheet" href="styles.css?v=1.9.3">
 </head>
 <body>
   <div class="container">
     <header>
       <h1>Compliance Reminder System</h1>
-      <p class="version-badge">Version 1.5.0</p>
+      <p class="version-badge">Version 1.9.0</p>
       <p class="subtitle">Track safeguarding compliance, training renewals and DBS expiry dates</p>
       <button type="button" id="reset-sample-btn" class="reset-btn">Reset sample data</button>
     </header>
@@ -70,7 +70,7 @@
       </button>
 
       <h3 class="reminders-subheading">Action Required</h3>
-      <p id="reminders-empty" class="empty-message">No action required at this time.</p>
+      <p id="reminders-empty" class="empty-message">No action required right now.</p>
       <div class="table-wrapper">
         <table class="reminders-table">
           <thead>
@@ -93,6 +93,10 @@
       <h2>Compliance Dashboard</h2>
       <p class="dashboard-hint">Click a card to filter the table by expiry window.</p>
       <div class="dashboard-cards">
+        <button type="button" class="dashboard-card dashboard-all" id="dashboard-all-card">
+          <p class="dashboard-label">All Records</p>
+          <p id="dashboard-all-count" class="dashboard-number">0</p>
+        </button>
         <button type="button" class="dashboard-card dashboard-30" data-days="30">
           <p class="dashboard-label">Expiring in 30 days</p>
           <p id="dashboard-30-count" class="dashboard-number">0</p>
@@ -144,6 +148,17 @@
           </select>
         </div>
         <div class="form-row">
+          <label for="renewal-cycle">Renewal Cycle</label>
+          <select id="renewal-cycle" name="renewal-cycle" required>
+            <option value="manual">Manual</option>
+            <option value="6-months">6 Months</option>
+            <option value="1-year">1 Year</option>
+            <option value="2-years">2 Years</option>
+            <option value="3-years" selected>3 Years</option>
+            <option value="5-years">5 Years</option>
+          </select>
+        </div>
+        <div class="form-row">
           <label for="dbs-expiry">Expiry Date</label>
           <input type="date" id="dbs-expiry" name="dbs-expiry" required>
         </div>
@@ -153,7 +168,7 @@
     </section>
 
     <section class="card hidden" id="edit-person-section">
-      <h2>Edit Person</h2>
+      <h2>Edit Compliance Record</h2>
       <form id="edit-person-form">
         <input type="hidden" id="edit-id">
         <input type="hidden" id="edit-record-id">
@@ -179,8 +194,23 @@
           </select>
         </div>
         <div class="form-row">
+          <label for="edit-renewal-cycle">Renewal Cycle</label>
+          <select id="edit-renewal-cycle" name="edit-renewal-cycle" required>
+            <option value="manual">Manual</option>
+            <option value="6-months">6 Months</option>
+            <option value="1-year">1 Year</option>
+            <option value="2-years">2 Years</option>
+            <option value="3-years">3 Years</option>
+            <option value="5-years">5 Years</option>
+          </select>
+        </div>
+        <div class="form-row">
           <label for="edit-dbs-expiry">Expiry Date</label>
           <input type="date" id="edit-dbs-expiry" name="edit-dbs-expiry" required>
+        </div>
+        <div class="form-row">
+          <label for="edit-notes">Notes</label>
+          <textarea id="edit-notes" name="edit-notes" rows="3" placeholder="Follow-up notes and audit trail..."></textarea>
         </div>
         <div class="form-actions">
           <button type="submit">Save Changes</button>
@@ -230,11 +260,15 @@
         <h2>People</h2>
         <div class="table-header-actions">
           <input type="file" id="csv-file-input" accept=".csv,text/csv" class="hidden">
+          <input type="file" id="backup-file-input" accept=".json,application/json" class="hidden">
           <button type="button" id="import-csv-btn" class="import-btn">Import CSV</button>
           <button type="button" id="export-csv-btn" class="export-btn">Export CSV</button>
+          <button type="button" id="import-backup-btn" class="backup-btn">Import Backup</button>
+          <button type="button" id="export-backup-btn" class="backup-btn">Export Backup</button>
           <span id="person-count" class="badge">0 records</span>
         </div>
       </div>
+      <p class="settings-hint">Export CSV downloads all records. Export Backup saves a JSON file with full record history.</p>
       <p id="import-message" class="import-message hidden"></p>
       <div class="filter-controls">
         <div class="filter-row">
@@ -273,26 +307,31 @@
             <option value="90">90 days</option>
           </select>
         </div>
-        <div class="filter-row">
-          <label for="sort-by">Sort by</label>
-          <select id="sort-by">
-            <option value="name">Name</option>
-            <option value="dbsExpiry">Expiry Date</option>
-            <option value="status">Status</option>
-          </select>
-        </div>
-        <div class="filter-row">
-          <label for="sort-order">Order</label>
-          <select id="sort-order">
-            <option value="asc">Ascending</option>
-            <option value="desc">Descending</option>
-          </select>
-        </div>
       </div>
       <div class="active-filters" id="active-filters">
         <span class="active-filters-label">Active filters:</span>
         <span id="active-filter-chips" class="active-filter-chips"></span>
         <button type="button" id="clear-filters-btn" class="clear-filters-btn hidden">Clear all</button>
+      </div>
+      <div class="register-summary-strip" id="register-summary-strip">
+        <span class="register-summary-item">Total Records: <strong id="strip-total">0</strong></span>
+        <span class="register-summary-item register-summary-valid">Valid: <strong id="strip-valid">0</strong></span>
+        <span class="register-summary-item register-summary-due-soon">Expiring Soon: <strong id="strip-due-soon">0</strong></span>
+        <span class="register-summary-item register-summary-expired">Expired: <strong id="strip-expired">0</strong></span>
+      </div>
+      <div class="table-toolbar">
+        <div class="filter-row table-sort-row">
+          <label for="table-sort">Sort by</label>
+          <select id="table-sort">
+            <option value="expiry-asc">Expiry Date (Soonest First)</option>
+            <option value="expiry-desc">Expiry Date (Latest First)</option>
+            <option value="name-asc">Name (A-Z)</option>
+            <option value="name-desc">Name (Z-A)</option>
+            <option value="category-asc">Category (A-Z)</option>
+            <option value="category-desc">Category (Z-A)</option>
+          </select>
+        </div>
+        <p id="pagination-summary" class="pagination-summary"></p>
       </div>
       <div class="table-wrapper">
         <table>
@@ -301,6 +340,7 @@
               <th>Name</th>
               <th>Role</th>
               <th>Compliance Type</th>
+              <th>Renewal Cycle</th>
               <th>Expiry Date</th>
               <th>Days Remaining</th>
               <th>Status</th>
@@ -313,11 +353,53 @@
           </tbody>
         </table>
       </div>
+      <div class="pagination-controls hidden" id="pagination-controls">
+        <button type="button" id="pagination-prev" class="pagination-btn">Previous</button>
+        <button type="button" id="pagination-next" class="pagination-btn">Next</button>
+      </div>
       <p id="empty-message" class="empty-message hidden">No compliance records added yet.</p>
-      <p id="no-results-message" class="empty-message hidden">No records match your search or filter.</p>
+      <p id="no-results-message" class="empty-message hidden">No compliance records match your current filters.</p>
     </section>
   </div>
 
-  <script src="app.js?v=1.5.0"></script>
+  <div id="renew-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="renew-modal-title">
+    <div class="modal-dialog renew-modal">
+      <div class="renew-modal-header">
+        <h2 id="renew-modal-title" class="renew-modal-title">Renew Compliance</h2>
+        <button type="button" id="renew-modal-close-btn" class="renew-modal-close" aria-label="Close renewal dialog">&times;</button>
+      </div>
+      <p id="renew-modal-record-label" class="renew-modal-record"></p>
+
+      <div class="renew-modal-details">
+        <div class="renew-detail-block">
+          <span class="renew-detail-label">Current Expiry:</span>
+          <span id="renew-current-expiry" class="renew-detail-value"></span>
+        </div>
+        <div class="renew-detail-block" id="renew-cycle-row">
+          <span class="renew-detail-label">Renewal Cycle:</span>
+          <span id="renew-cycle-label" class="renew-detail-value"></span>
+        </div>
+        <div class="renew-detail-block renew-suggested-block" id="renew-suggested-section">
+          <span class="renew-detail-label">Suggested New Expiry:</span>
+          <span id="renew-suggested-expiry" class="renew-detail-value renew-suggested-date"></span>
+        </div>
+      </div>
+
+      <div class="form-row renew-custom-date-row">
+        <label for="renew-custom-date">Custom Expiry Date</label>
+        <input type="date" id="renew-custom-date" name="renew-custom-date">
+      </div>
+
+      <p id="renew-modal-message" class="form-message hidden"></p>
+
+      <div class="modal-actions">
+        <button type="button" id="renew-use-suggested-btn" class="renew-primary-btn">Use Suggested Date</button>
+        <button type="button" id="renew-save-custom-btn" class="renew-secondary-btn">Save Custom Date</button>
+        <button type="button" id="renew-cancel-btn" class="cancel-btn">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js?v=1.9.3"></script>
 </body>
 </html>

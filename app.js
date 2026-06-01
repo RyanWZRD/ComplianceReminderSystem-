@@ -1,5 +1,5 @@
-// Compliance Reminder System v1.5.0
-console.log("Compliance Reminder System v1.5.0 — app.js loaded");
+// Compliance Reminder System v1.9.0
+console.log("Compliance Reminder System v1.9.0 — app.js loaded");
 
 // Fake sample data — used only on the very first visit
 const samplePeople = [
@@ -32,8 +32,12 @@ const STORAGE_KEY = "complianceReminderPeople";
 let people = [];
 let nextPersonId = 21;
 let nextRecordId = 1000;
+let nextHistoryEntryId = 1;
+let deletedRecordHistory = [];
+const expandedHistoryRows = new Set();
 
 const DUE_SOON_DAYS = 90;
+const RECORDS_PER_PAGE = 25;
 const COMPLIANCE_TYPES = [
   "DBS",
   "Basic Awareness",
@@ -45,6 +49,16 @@ const COMPLIANCE_TYPES = [
   "Modern Slavery",
 ];
 const DEFAULT_COMPLIANCE_TYPE = "DBS";
+const RENEWAL_CYCLE_MANUAL = "manual";
+const RENEWAL_CYCLE_OPTIONS = [
+  { value: "manual", label: "Manual" },
+  { value: "6-months", label: "6 Months" },
+  { value: "1-year", label: "1 Year" },
+  { value: "2-years", label: "2 Years" },
+  { value: "3-years", label: "3 Years" },
+  { value: "5-years", label: "5 Years" },
+];
+const DEFAULT_RENEWAL_CYCLE = "3-years";
 const REMINDER_LABELS = {
   30: "30 Day Reminder",
   14: "14 Day Reminder",
@@ -53,6 +67,23 @@ const REMINDER_LABELS = {
 };
 const REMINDER_URGENCY = { expired: 0, 7: 1, 14: 2, 30: 3 };
 const REMINDER_SETTINGS_KEY = "complianceReminderSettings";
+const BACKUP_VERSION = 1;
+
+const HISTORY_ACTIONS = {
+  CREATED: "created",
+  EDITED: "edited",
+  REMINDER_SENT: "reminder_sent",
+  RENEWED: "renewed",
+  DELETED: "deleted",
+};
+
+const HISTORY_ACTION_LABELS = {
+  created: "Created",
+  edited: "Edited",
+  reminder_sent: "Reminder sent",
+  renewed: "Renewed",
+  deleted: "Deleted",
+};
 
 const DEFAULT_REMINDER_SETTINGS = {
   days30: true,
@@ -72,18 +103,25 @@ const searchInput = document.getElementById("search-input");
 const statusFilter = document.getElementById("status-filter");
 const complianceTypeFilter = document.getElementById("compliance-type-filter");
 const expiryWindowFilterSelect = document.getElementById("expiry-window-filter");
-const sortBySelect = document.getElementById("sort-by");
-const sortOrderSelect = document.getElementById("sort-order");
+const sortBySelect = document.getElementById("table-sort");
+const paginationSummary = document.getElementById("pagination-summary");
+const paginationControls = document.getElementById("pagination-controls");
+const paginationPrevBtn = document.getElementById("pagination-prev");
+const paginationNextBtn = document.getElementById("pagination-next");
+const stripTotal = document.getElementById("strip-total");
+const stripValid = document.getElementById("strip-valid");
+const stripDueSoon = document.getElementById("strip-due-soon");
+const stripExpired = document.getElementById("strip-expired");
 const exportCsvBtn = document.getElementById("export-csv-btn");
 const importCsvBtn = document.getElementById("import-csv-btn");
 const csvFileInput = document.getElementById("csv-file-input");
+const exportBackupBtn = document.getElementById("export-backup-btn");
+const importBackupBtn = document.getElementById("import-backup-btn");
+const backupFileInput = document.getElementById("backup-file-input");
 const importMessage = document.getElementById("import-message");
 const appMessage = document.getElementById("app-message");
 const addFormMessage = document.getElementById("add-form-message");
 const editFormMessage = document.getElementById("edit-form-message");
-
-// Used to sort status in a sensible order (Valid → Due Soon → Expired)
-const STATUS_SORT_ORDER = { valid: 1, dueSoon: 2, expired: 3 };
 
 const summaryTotal = document.getElementById("summary-total");
 const summaryValid = document.getElementById("summary-valid");
@@ -96,15 +134,31 @@ const editForm = document.getElementById("edit-person-form");
 const cancelEditBtn = document.getElementById("cancel-edit-btn");
 const editIdInput = document.getElementById("edit-id");
 const editRecordIdInput = document.getElementById("edit-record-id");
+const renewModal = document.getElementById("renew-modal");
+const renewModalRecordLabel = document.getElementById("renew-modal-record-label");
+const renewCurrentExpiry = document.getElementById("renew-current-expiry");
+const renewCycleLabel = document.getElementById("renew-cycle-label");
+const renewSuggestedSection = document.getElementById("renew-suggested-section");
+const renewSuggestedExpiry = document.getElementById("renew-suggested-expiry");
+const renewCustomDateInput = document.getElementById("renew-custom-date");
+const renewModalMessage = document.getElementById("renew-modal-message");
+const renewUseSuggestedBtn = document.getElementById("renew-use-suggested-btn");
+const renewSaveCustomBtn = document.getElementById("renew-save-custom-btn");
+const renewCancelBtn = document.getElementById("renew-cancel-btn");
+
+let renewModalContext = null;
 
 // Tracks which dashboard expiry window is active (30, 60, 90, or null)
 let expiryWindowFilter = null;
+let currentTablePage = 1;
 
 const dashboard30Count = document.getElementById("dashboard-30-count");
 const dashboard60Count = document.getElementById("dashboard-60-count");
 const dashboard90Count = document.getElementById("dashboard-90-count");
 const dashboardActionCount = document.getElementById("dashboard-action-count");
 const dashboardCards = document.querySelectorAll(".dashboard-card[data-days]");
+const dashboardAllCard = document.getElementById("dashboard-all-card");
+const dashboardAllCount = document.getElementById("dashboard-all-count");
 const actionRequiredCard = document.getElementById("action-required-card");
 const remindersTableBody = document.getElementById("reminders-table-body");
 const remindersEmpty = document.getElementById("reminders-empty");
@@ -158,12 +212,24 @@ function applySampleData() {
             ? getDateDaysFromToday(30)
             : normalizeExpiryDate(person.dbsExpiry),
         notes: "",
+        renewalCycle: DEFAULT_RENEWAL_CYCLE,
       },
     ],
   }));
 
   nextPersonId = 21;
   nextRecordId = 1000;
+  deletedRecordHistory = [];
+
+  people.forEach((person) => {
+    person.complianceRecords.forEach((record) => {
+      appendHistoryEntry(
+        record,
+        HISTORY_ACTIONS.CREATED,
+        `Record created (${record.complianceType}, expires ${formatDate(record.expiryDate)}).`
+      );
+    });
+  });
 }
 
 // Save the current people list and IDs to localStorage
@@ -172,6 +238,8 @@ function savePeople() {
     people: people,
     nextPersonId: nextPersonId,
     nextRecordId: nextRecordId,
+    deletedRecordHistory: deletedRecordHistory,
+    nextHistoryEntryId: nextHistoryEntryId,
   };
 
   localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
@@ -187,12 +255,221 @@ function isLegacyPerson(person) {
 
 // Build one compliance record object
 function createComplianceRecord(data, recordId) {
+  const complianceType = normalizeComplianceType(data.complianceType);
+
   return {
     id: recordId,
-    complianceType: normalizeComplianceType(data.complianceType),
+    complianceType,
     expiryDate: normalizeExpiryDate(data.expiryDate || data.dbsExpiry),
     notes: typeof data.notes === "string" ? data.notes : "",
+    renewalCycle: normalizeRenewalCycle(
+      data.renewalCycle !== undefined ? data.renewalCycle : RENEWAL_CYCLE_MANUAL
+    ),
+    history: Array.isArray(data.history) ? data.history : [],
   };
+}
+
+function normalizeRenewalCycle(value) {
+  const normalized = String(value || RENEWAL_CYCLE_MANUAL).trim().toLowerCase();
+  const match = RENEWAL_CYCLE_OPTIONS.find(
+    (option) =>
+      option.value === normalized ||
+      option.label.toLowerCase() === normalized ||
+      option.label.toLowerCase().replace(/\s+/g, "-") === normalized
+  );
+
+  return match ? match.value : RENEWAL_CYCLE_MANUAL;
+}
+
+function getDefaultRenewalCycleForType() {
+  return DEFAULT_RENEWAL_CYCLE;
+}
+
+function getRenewalCycleLabel(cycleValue) {
+  const match = RENEWAL_CYCLE_OPTIONS.find((option) => option.value === cycleValue);
+  return match ? match.label : "Manual";
+}
+
+function getRenewalCycleRenewalText(cycleValue) {
+  if (cycleValue === "6-months") {
+    return "6 Month";
+  }
+  if (cycleValue === "1-year") {
+    return "1 Year";
+  }
+  if (cycleValue === "2-years") {
+    return "2 Year";
+  }
+  if (cycleValue === "3-years") {
+    return "3 Year";
+  }
+  if (cycleValue === "5-years") {
+    return "5 Year";
+  }
+  return getRenewalCycleLabel(cycleValue);
+}
+
+function isActiveRenewalCycle(cycleValue) {
+  return normalizeRenewalCycle(cycleValue) !== RENEWAL_CYCLE_MANUAL;
+}
+
+function dateToISOString(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function calculateRenewalExpiryDate(expiryDate, renewalCycle) {
+  const cycle = normalizeRenewalCycle(renewalCycle);
+  const base = parseDateAtMidnight(expiryDate);
+
+  if (!isActiveRenewalCycle(cycle) || Number.isNaN(base.getTime())) {
+    return null;
+  }
+
+  const date = new Date(base.getTime());
+
+  if (cycle === "6-months") {
+    date.setMonth(date.getMonth() + 6);
+  } else if (cycle === "1-year") {
+    date.setFullYear(date.getFullYear() + 1);
+  } else if (cycle === "2-years") {
+    date.setFullYear(date.getFullYear() + 2);
+  } else if (cycle === "3-years") {
+    date.setFullYear(date.getFullYear() + 3);
+  } else if (cycle === "5-years") {
+    date.setFullYear(date.getFullYear() + 5);
+  }
+
+  return dateToISOString(date);
+}
+
+function syncAddFormRenewalCycleDefault() {
+  const complianceTypeInput = document.getElementById("compliance-type");
+  const renewalCycleInput = document.getElementById("renewal-cycle");
+
+  if (complianceTypeInput && renewalCycleInput) {
+    renewalCycleInput.value = getDefaultRenewalCycleForType(complianceTypeInput.value);
+  }
+}
+
+function normalizeHistoryEntry(entry) {
+  return {
+    id: typeof entry.id === "number" ? entry.id : nextHistoryEntryId++,
+    action:
+      typeof entry.action === "string" ? entry.action : HISTORY_ACTIONS.EDITED,
+    timestamp:
+      typeof entry.timestamp === "string"
+        ? entry.timestamp
+        : new Date().toISOString(),
+    description: typeof entry.description === "string" ? entry.description : "",
+  };
+}
+
+function appendHistoryEntry(record, action, description) {
+  if (!Array.isArray(record.history)) {
+    record.history = [];
+  }
+
+  record.history.unshift({
+    id: nextHistoryEntryId++,
+    action,
+    timestamp: new Date().toISOString(),
+    description,
+  });
+}
+
+function formatHistoryTimestamp(timestamp) {
+  const date = new Date(timestamp);
+
+  if (Number.isNaN(date.getTime())) {
+    return String(timestamp);
+  }
+
+  return date.toLocaleString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function historyRowKey(personId, recordId) {
+  return `${personId}:${recordId}`;
+}
+
+function isHistoryExpanded(personId, recordId) {
+  return expandedHistoryRows.has(historyRowKey(personId, recordId));
+}
+
+function toggleHistoryRow(personId, recordId) {
+  const key = historyRowKey(personId, recordId);
+
+  if (expandedHistoryRows.has(key)) {
+    expandedHistoryRows.delete(key);
+  } else {
+    expandedHistoryRows.add(key);
+  }
+
+  renderTable({ refreshDashboards: false });
+}
+
+function buildHistoryPanelHtml(personId, recordId) {
+  const result = findPersonAndRecord(personId, recordId);
+  if (!result) {
+    return '<p class="history-empty">Record not found.</p>';
+  }
+
+  const entries = result.record.history || [];
+
+  if (entries.length === 0) {
+    return '<p class="history-empty">No history recorded yet.</p>';
+  }
+
+  const items = entries
+    .map((entry) => {
+      const actionLabel =
+        HISTORY_ACTION_LABELS[entry.action] || entry.action || "Action";
+
+      return `
+        <li class="history-entry">
+          <span class="history-entry-action">${escapeHtml(actionLabel)}</span>
+          <span class="history-entry-time">${escapeHtml(formatHistoryTimestamp(entry.timestamp))}</span>
+          <span class="history-entry-desc">${escapeHtml(entry.description)}</span>
+        </li>
+      `;
+    })
+    .join("");
+
+  return `<ul class="history-list">${items}</ul>`;
+}
+
+function syncNextHistoryEntryId() {
+  let maxId = 0;
+
+  people.forEach((person) => {
+    person.complianceRecords.forEach((record) => {
+      (record.history || []).forEach((entry) => {
+        if (typeof entry.id === "number" && entry.id > maxId) {
+          maxId = entry.id;
+        }
+      });
+    });
+  });
+
+  deletedRecordHistory.forEach((item) => {
+    (item.record?.history || []).forEach((entry) => {
+      if (typeof entry.id === "number" && entry.id > maxId) {
+        maxId = entry.id;
+      }
+    });
+  });
+
+  if (maxId >= nextHistoryEntryId) {
+    nextHistoryEntryId = maxId + 1;
+  }
 }
 
 // Convert an old flat person row into the new nested format
@@ -222,6 +499,8 @@ function normalizePerson(person) {
       complianceType: normalizeComplianceType(record.complianceType),
       expiryDate: normalizeExpiryDate(record.expiryDate || record.dbsExpiry),
       notes: typeof record.notes === "string" ? record.notes : "",
+      renewalCycle: normalizeRenewalCycle(record.renewalCycle),
+      history: (record.history || []).map((entry) => normalizeHistoryEntry(entry)),
     })),
   };
 }
@@ -239,7 +518,9 @@ function getAllComplianceRows() {
         role: person.role,
         complianceType: record.complianceType,
         expiryDate: record.expiryDate,
+        renewalCycle: record.renewalCycle || RENEWAL_CYCLE_MANUAL,
         notes: record.notes || "",
+        history: record.history || [],
       });
     });
   });
@@ -432,7 +713,6 @@ function isValidStoredData(data) {
 
   const hasPersonIds =
     typeof data.nextPersonId === "number" || typeof data.nextId === "number";
-  const hasRecordIds = typeof data.nextRecordId === "number";
 
   if (!hasPersonIds) {
     return false;
@@ -490,6 +770,12 @@ function loadPeople() {
     nextRecordId = data.nextRecordId || 1000;
 
     people = data.people.map((person) => normalizePerson(person));
+    deletedRecordHistory = Array.isArray(data.deletedRecordHistory)
+      ? data.deletedRecordHistory
+      : [];
+    nextHistoryEntryId =
+      typeof data.nextHistoryEntryId === "number" ? data.nextHistoryEntryId : 1;
+    syncNextHistoryEntryId();
     savePeople();
   } catch (error) {
     applySampleData();
@@ -514,6 +800,7 @@ function resetSampleData() {
   hideEditForm();
   hideMessage(editFormMessage);
   clearAllFilters();
+  expandedHistoryRows.clear();
   showMessage(appMessage, "Sample data has been restored.", "success");
   renderTable();
 }
@@ -613,6 +900,98 @@ function getStatus(expiryDate) {
     return { label: "Due Soon", className: "status-due-soon", key: "dueSoon" };
   }
   return { label: "Valid", className: "status-valid", key: "valid" };
+}
+
+function getStatusBadgeLabel(statusKey) {
+  if (statusKey === "dueSoon") {
+    return "Expiring Soon";
+  }
+  if (statusKey === "valid") {
+    return "Valid";
+  }
+  return "Expired";
+}
+
+function resetTablePage() {
+  currentTablePage = 1;
+}
+
+function clampTablePage(filteredCount) {
+  const totalPages = Math.max(1, Math.ceil(filteredCount / RECORDS_PER_PAGE));
+
+  if (currentTablePage > totalPages) {
+    currentTablePage = totalPages;
+  }
+
+  if (currentTablePage < 1) {
+    currentTablePage = 1;
+  }
+}
+
+function paginateRows(rows) {
+  const startIndex = (currentTablePage - 1) * RECORDS_PER_PAGE;
+  return rows.slice(startIndex, startIndex + RECORDS_PER_PAGE);
+}
+
+function getFilteredSummaryCounts(rows) {
+  const counts = { total: 0, valid: 0, dueSoon: 0, expired: 0 };
+
+  rows.forEach((row) => {
+    counts.total += 1;
+    const status = getStatus(row.expiryDate);
+    counts[status.key] += 1;
+  });
+
+  return counts;
+}
+
+function renderRegisterSummaryStrip(filteredRows) {
+  if (!stripTotal) {
+    return;
+  }
+
+  const counts = getFilteredSummaryCounts(filteredRows);
+
+  stripTotal.textContent = counts.total;
+  stripValid.textContent = counts.valid;
+  stripDueSoon.textContent = counts.dueSoon;
+  stripExpired.textContent = counts.expired;
+}
+
+function renderPagination(filteredCount, visibleCount) {
+  if (!paginationSummary) {
+    return;
+  }
+
+  if (filteredCount === 0) {
+    paginationSummary.textContent = "";
+    if (paginationControls) {
+      paginationControls.classList.add("hidden");
+    }
+    return;
+  }
+
+  const startIndex = (currentTablePage - 1) * RECORDS_PER_PAGE + 1;
+  const endIndex = startIndex + visibleCount - 1;
+  paginationSummary.textContent = `Showing ${startIndex}-${endIndex} of ${filteredCount} records`;
+
+  if (!paginationControls || !paginationPrevBtn || !paginationNextBtn) {
+    return;
+  }
+
+  const showPagination = filteredCount > RECORDS_PER_PAGE;
+  paginationControls.classList.toggle("hidden", !showPagination);
+  paginationPrevBtn.disabled = currentTablePage <= 1;
+  paginationNextBtn.disabled =
+    currentTablePage >= Math.ceil(filteredCount / RECORDS_PER_PAGE);
+}
+
+function refreshRegisterView({ resetPage = false } = {}) {
+  if (resetPage) {
+    resetTablePage();
+  }
+
+  renderTable();
 }
 
 // Count compliance records expiring within a number of days (today through N days)
@@ -724,6 +1103,12 @@ function markReminderSent(personId, recordId, reminderType) {
 
   const auditLine = `${formatAuditDate()} - ${sentText}`;
   result.record.notes = existingNotes ? `${existingNotes}\n${auditLine}` : auditLine;
+
+  appendHistoryEntry(
+    result.record,
+    HISTORY_ACTIONS.REMINDER_SENT,
+    `${sentText} recorded.`
+  );
 
   savePeople();
   syncNotesInTable(personId, recordId, result.record.notes);
@@ -875,6 +1260,7 @@ function matchesSearchTerm(row, searchTerm) {
     row.name.toLowerCase().includes(term) ||
     row.role.toLowerCase().includes(term) ||
     row.complianceType.toLowerCase().includes(term) ||
+    getRenewalCycleLabel(row.renewalCycle).toLowerCase().includes(term) ||
     (row.notes || "").toLowerCase().includes(term) ||
     row.expiryDate.toLowerCase().includes(term) ||
     formatDate(row.expiryDate).toLowerCase().includes(term)
@@ -962,7 +1348,7 @@ function clearActiveFilter(filterId) {
   }
 
   updateFilterActiveState();
-  renderTable();
+  refreshRegisterView({ resetPage: true });
 }
 
 function renderActiveFilters() {
@@ -985,27 +1371,33 @@ function renderActiveFilters() {
   clearFiltersBtn.classList.toggle("hidden", chips.length === 0);
 }
 
-// Sort compliance rows by the selected column and order
+// Sort compliance rows by the selected table sort option
 function sortComplianceRows(list) {
-  const sortBy = sortBySelect.value;
-  const sortOrder = sortOrderSelect.value;
-  const direction = sortOrder === "asc" ? 1 : -1;
+  const sortValue = sortBySelect ? sortBySelect.value : "expiry-asc";
   const sorted = [...list];
 
   sorted.sort((a, b) => {
     let comparison = 0;
 
-    if (sortBy === "name") {
+    if (sortValue === "name-asc" || sortValue === "name-desc") {
       comparison = a.name.localeCompare(b.name);
-    } else if (sortBy === "dbsExpiry") {
+    } else if (sortValue === "category-asc" || sortValue === "category-desc") {
+      comparison =
+        a.complianceType.localeCompare(b.complianceType) ||
+        a.name.localeCompare(b.name);
+    } else {
       comparison = a.expiryDate.localeCompare(b.expiryDate);
-    } else if (sortBy === "status") {
-      const statusA = getStatus(a.expiryDate).key;
-      const statusB = getStatus(b.expiryDate).key;
-      comparison = STATUS_SORT_ORDER[statusA] - STATUS_SORT_ORDER[statusB];
     }
 
-    return comparison * direction;
+    if (
+      sortValue === "name-desc" ||
+      sortValue === "category-desc" ||
+      sortValue === "expiry-desc"
+    ) {
+      comparison *= -1;
+    }
+
+    return comparison;
   });
 
   return sorted;
@@ -1110,15 +1502,15 @@ function renderAnalytics() {
 
 // Update the compliance dashboard counts
 function renderDashboard() {
+  if (dashboardAllCount) {
+    dashboardAllCount.textContent = getTotalRecordCount();
+  }
+
   dashboard30Count.textContent = countExpiringWithinDays(30);
   dashboard60Count.textContent = countExpiringWithinDays(60);
   dashboard90Count.textContent = countExpiringWithinDays(90);
   renderReminders();
   updateFilterActiveState();
-}
-
-function getTotalActiveReminders() {
-  return buildActiveReminders().length;
 }
 
 // Update the Action Required count and table
@@ -1143,7 +1535,7 @@ function renderReminders() {
       remindersEmpty.textContent =
         "All active reminders have been marked as sent.";
     } else {
-      remindersEmpty.textContent = "No action required at this time.";
+      remindersEmpty.textContent = "No action required right now.";
     }
     remindersEmpty.classList.remove("hidden");
     return;
@@ -1223,10 +1615,27 @@ function updateDashboardActiveState() {
   });
 }
 
+function updateDashboardAllActiveState() {
+  if (!dashboardAllCard) {
+    return;
+  }
+
+  const filters = getActiveTableFilters();
+  const extraFilters = hasExtraTableFilters(filters);
+  const isActive =
+    !extraFilters &&
+    filters.status === "all" &&
+    filters.complianceType === "all" &&
+    filters.expiryWindow === null;
+
+  dashboardAllCard.classList.toggle("active", isActive);
+}
+
 // Update highlights on summary, dashboard, and analytics cards
 function updateFilterActiveState() {
   updateSummaryActiveState();
   updateDashboardActiveState();
+  updateDashboardAllActiveState();
   updateAnalyticsActiveState();
 }
 
@@ -1280,6 +1689,7 @@ function clearAllFilters() {
   statusFilter.value = "all";
   complianceTypeFilter.value = "all";
   setExpiryWindowFilter(null);
+  resetTablePage();
   updateFilterActiveState();
 }
 
@@ -1296,10 +1706,11 @@ function filterByExpiryWindow(days) {
   searchInput.value = "";
   statusFilter.value = "all";
   complianceTypeFilter.value = "all";
-  sortBySelect.value = "dbsExpiry";
-  sortOrderSelect.value = "asc";
+  if (sortBySelect) {
+    sortBySelect.value = "expiry-asc";
+  }
   updateFilterActiveState();
-  renderTable();
+  refreshRegisterView({ resetPage: true });
   peopleSection.scrollIntoView({ behavior: "smooth" });
 }
 
@@ -1310,7 +1721,7 @@ function filterByStatus(statusKey) {
   statusFilter.value = statusKey;
   complianceTypeFilter.value = "all";
   updateFilterActiveState();
-  renderTable();
+  refreshRegisterView({ resetPage: true });
   peopleSection.scrollIntoView({ behavior: "smooth" });
 }
 
@@ -1359,6 +1770,8 @@ function startEdit(personId, recordId) {
   document.getElementById("edit-role").value = person.role;
   document.getElementById("edit-compliance-type").value = record.complianceType;
   document.getElementById("edit-dbs-expiry").value = record.expiryDate;
+  document.getElementById("edit-renewal-cycle").value = record.renewalCycle || RENEWAL_CYCLE_MANUAL;
+  document.getElementById("edit-notes").value = record.notes || "";
 
   hideMessage(editFormMessage);
   editSection.classList.remove("hidden");
@@ -1373,7 +1786,16 @@ function hideEditForm() {
 }
 
 // Save updated details for one person and compliance record
-function updatePerson(personId, recordId, name, role, complianceType, expiryDate) {
+function updatePerson(
+  personId,
+  recordId,
+  name,
+  role,
+  complianceType,
+  expiryDate,
+  notes,
+  renewalCycle
+) {
   const validation = validatePersonInput(name, role, complianceType, expiryDate);
 
   if (!validation.valid) {
@@ -1384,14 +1806,68 @@ function updatePerson(personId, recordId, name, role, complianceType, expiryDate
   const result = findPersonAndRecord(personId, recordId);
   if (!result) return false;
 
-  result.person.name = validation.name;
-  result.person.role = validation.role;
-  result.record.complianceType = validation.complianceType;
-  result.record.expiryDate = normalizeExpiryDate(validation.dbsExpiry);
+  const { person, record } = result;
+  const normalizedCycle = normalizeRenewalCycle(renewalCycle);
+  const previousCycle = normalizeRenewalCycle(record.renewalCycle);
+  const changes = [];
+  let cycleChanged = false;
+
+  if (person.name !== validation.name) {
+    changes.push(`name to "${validation.name}"`);
+  }
+  if (person.role !== validation.role) {
+    changes.push(`role to "${validation.role}"`);
+  }
+  if (record.complianceType !== validation.complianceType) {
+    changes.push(`type to ${validation.complianceType}`);
+  }
+  const normalizedExpiry = normalizeExpiryDate(validation.dbsExpiry);
+  if (record.expiryDate !== normalizedExpiry) {
+    changes.push(`expiry to ${formatDate(normalizedExpiry)}`);
+  }
+  if ((record.notes || "") !== notes) {
+    changes.push("notes updated");
+  }
+  if (previousCycle !== normalizedCycle) {
+    cycleChanged = true;
+  }
+
+  if (changes.length === 0 && !cycleChanged) {
+    hideEditForm();
+    showMessage(appMessage, "No changes made.", "error");
+    return false;
+  }
+
+  person.name = validation.name;
+  person.role = validation.role;
+  record.complianceType = validation.complianceType;
+  record.expiryDate = normalizedExpiry;
+  record.notes = notes;
+  record.renewalCycle = normalizedCycle;
+
+  if (cycleChanged) {
+    appendHistoryEntry(
+      record,
+      HISTORY_ACTIONS.EDITED,
+      `Renewal cycle changed from ${getRenewalCycleLabel(previousCycle)} to ${getRenewalCycleLabel(normalizedCycle)}.`
+    );
+  }
+
+  if (changes.length > 0) {
+    appendHistoryEntry(
+      record,
+      HISTORY_ACTIONS.EDITED,
+      `Record updated (${changes.join("; ")}).`
+    );
+  }
 
   savePeople();
   hideEditForm();
-  showMessage(appMessage, "Record updated successfully.", "success");
+  showMessage(
+    appMessage,
+    `Record updated: ${validation.name} — ${validation.complianceType}.`,
+    "success"
+  );
   renderTable();
   return true;
 }
@@ -1413,13 +1889,42 @@ function updateRecordNotes(personId, recordId, notes) {
   }
 
   result.record.notes = notes;
+  appendHistoryEntry(result.record, HISTORY_ACTIONS.EDITED, "Notes updated.");
   savePeople();
 }
 
 // Remove one compliance record (and the person if it was their last record)
 function deleteComplianceRecord(personId, recordId) {
-  const person = findPersonById(personId);
-  if (!person) return;
+  const result = findPersonAndRecord(personId, recordId);
+  if (!result) return;
+
+  const { person, record } = result;
+  const confirmed = confirm(
+    `Delete this compliance record?\n\n${person.name} — ${record.complianceType}\nExpires: ${formatDate(record.expiryDate)}\n\nThis cannot be undone.`
+  );
+  if (!confirmed) return;
+
+  appendHistoryEntry(
+    record,
+    HISTORY_ACTIONS.DELETED,
+    `Record deleted (${record.complianceType}, expires ${formatDate(record.expiryDate)}).`
+  );
+
+  deletedRecordHistory.unshift({
+    deletedAt: new Date().toISOString(),
+    personName: person.name,
+    personRole: person.role,
+    record: {
+      id: record.id,
+      complianceType: record.complianceType,
+      expiryDate: record.expiryDate,
+      renewalCycle: record.renewalCycle || RENEWAL_CYCLE_MANUAL,
+      notes: record.notes || "",
+      history: [...(record.history || [])],
+    },
+  });
+
+  expandedHistoryRows.delete(historyRowKey(personId, recordId));
 
   if (
     Number(editIdInput.value) === personId &&
@@ -1437,6 +1942,11 @@ function deleteComplianceRecord(personId, recordId) {
   }
 
   savePeople();
+  showMessage(
+    appMessage,
+    `Deleted: ${person.name} — ${record.complianceType}.`,
+    "success"
+  );
   renderTable();
 }
 
@@ -1450,67 +1960,181 @@ function formatExpiryDateForAuditNote(dateString) {
   return formatAuditDate(date);
 }
 
-// Renew one compliance record with a new expiry date and audit note
+// Open the renewal dialog for one compliance record
 function renewComplianceRecord(personId, recordId) {
+  openRenewModal(personId, recordId);
+}
+
+function setRenewSuggestedControlsVisible(visible) {
+  [renewSuggestedSection, renewUseSuggestedBtn].forEach((element) => {
+    if (!element) {
+      return;
+    }
+
+    element.classList.remove("hidden", "renew-control-hidden");
+    element.hidden = false;
+
+    if (!visible) {
+      element.classList.add("renew-control-hidden");
+    }
+  });
+}
+
+function openRenewModal(personId, recordId) {
   const result = findPersonAndRecord(personId, recordId);
   if (!result) {
     return;
   }
 
-  const input = prompt("Enter new expiry date (YYYY-MM-DD):");
-  if (input === null) {
+  const { person, record } = result;
+  const renewalCycle = normalizeRenewalCycle(record.renewalCycle);
+  const hasActiveCycle = isActiveRenewalCycle(renewalCycle);
+  const suggestedExpiryDate = hasActiveCycle
+    ? calculateRenewalExpiryDate(record.expiryDate, renewalCycle)
+    : null;
+
+  renewModalContext = {
+    personId,
+    recordId,
+    recordLabel: `${person.name} — ${record.complianceType}`,
+    renewalCycle,
+    suggestedExpiryDate,
+  };
+
+  renewModalRecordLabel.textContent = renewModalContext.recordLabel;
+  renewCurrentExpiry.textContent = formatExpiryDateForAuditNote(record.expiryDate);
+  renewCycleLabel.textContent = getRenewalCycleLabel(renewalCycle);
+  hideMessage(renewModalMessage);
+
+  const showSuggestedControls = hasActiveCycle && Boolean(suggestedExpiryDate);
+  setRenewSuggestedControlsVisible(showSuggestedControls);
+
+  if (showSuggestedControls) {
+    renewSuggestedExpiry.textContent = formatExpiryDateForAuditNote(suggestedExpiryDate);
+    renewCustomDateInput.value = suggestedExpiryDate;
+  } else {
+    renewSuggestedExpiry.textContent = "";
+    renewCustomDateInput.value = "";
+  }
+
+  renewModal.classList.remove("hidden");
+  renewModal.setAttribute("aria-hidden", "false");
+
+  if (showSuggestedControls && renewUseSuggestedBtn) {
+    renewUseSuggestedBtn.focus();
+  } else if (renewSaveCustomBtn) {
+    renewSaveCustomBtn.focus();
+  }
+}
+
+function closeRenewModal() {
+  if (!renewModal) {
+    renewModalContext = null;
     return;
   }
 
-  const trimmed = input.trim();
-  if (!trimmed) {
-    showMessage(appMessage, "Renewal cancelled. Expiry date cannot be blank.", "error");
+  renewModal.classList.add("hidden");
+  renewModal.setAttribute("aria-hidden", "true");
+  renewModalContext = null;
+
+  if (renewModalMessage) {
+    hideMessage(renewModalMessage);
+  }
+}
+
+function applyRenewal(newExpiryDate, mode) {
+  if (!renewModalContext) {
     return;
   }
 
-  if (!isValidExpiryDate(trimmed)) {
-    showMessage(
-      appMessage,
-      "Invalid date. Please enter a valid date in YYYY-MM-DD format.",
-      "error"
+  const { personId, recordId, recordLabel, renewalCycle } = renewModalContext;
+  const result = findPersonAndRecord(personId, recordId);
+
+  if (!result) {
+    closeRenewModal();
+    return;
+  }
+
+  const { record } = result;
+  const newExpiryDisplay = formatExpiryDateForAuditNote(newExpiryDate);
+  const existingNotes = record.notes || "";
+  const auditLine = `${formatAuditDate()} - Compliance renewed. New expiry date: ${newExpiryDisplay}`;
+
+  record.expiryDate = newExpiryDate;
+  record.notes = existingNotes ? `${existingNotes}\n${auditLine}` : auditLine;
+
+  if (mode === "suggested") {
+    appendHistoryEntry(
+      record,
+      HISTORY_ACTIONS.RENEWED,
+      `Compliance renewed using ${getRenewalCycleRenewalText(renewalCycle)} cycle. New expiry date: ${newExpiryDisplay}.`
     );
-    return;
+  } else {
+    appendHistoryEntry(
+      record,
+      HISTORY_ACTIONS.RENEWED,
+      `Compliance renewed using custom expiry date: ${newExpiryDisplay}.`
+    );
   }
-
-  const newExpiryDate = normalizeExpiryDate(trimmed);
-  const existingNotes = result.record.notes || "";
-  const auditLine = `${formatAuditDate()} - Compliance renewed. New expiry date: ${formatExpiryDateForAuditNote(newExpiryDate)}`;
-
-  result.record.expiryDate = newExpiryDate;
-  result.record.notes = existingNotes ? `${existingNotes}\n${auditLine}` : auditLine;
 
   savePeople();
+  closeRenewModal();
 
-  if (
-    Number(editIdInput.value) === personId &&
-    Number(editRecordIdInput.value) === recordId
-  ) {
+  if (Number(editIdInput.value) === personId && Number(editRecordIdInput.value) === recordId) {
     document.getElementById("edit-dbs-expiry").value = newExpiryDate;
   }
 
   showMessage(
     appMessage,
-    `Compliance renewed. New expiry date: ${formatDate(newExpiryDate)}.`,
+    `Renewed: ${recordLabel}. New expiry date: ${newExpiryDisplay}.`,
     "success"
   );
   renderTable();
 }
 
-// Draw the table — one row per compliance record
-function renderTable() {
+function handleRenewUseSuggested() {
+  if (!renewModalContext?.suggestedExpiryDate) {
+    return;
+  }
+
+  applyRenewal(renewModalContext.suggestedExpiryDate, "suggested");
+}
+
+function handleRenewSaveCustom() {
+  const trimmed = renewCustomDateInput.value.trim();
+
+  if (!trimmed) {
+    showMessage(renewModalMessage, "Please enter an expiry date.", "error");
+    return;
+  }
+
+  if (!isValidExpiryDate(trimmed)) {
+    showMessage(
+      renewModalMessage,
+      "Invalid date. Please enter a valid date.",
+      "error"
+    );
+    return;
+  }
+
+  applyRenewal(normalizeExpiryDate(trimmed), "custom");
+}
+
+function renderTable({ refreshDashboards = true } = {}) {
   tableBody.innerHTML = "";
 
   const filteredRows = getFilteredComplianceRows();
-  const displayedRows = sortComplianceRows(filteredRows);
+  const sortedRows = sortComplianceRows(filteredRows);
   const totalCount = getTotalRecordCount();
-  const displayedCount = displayedRows.length;
+  const filteredCount = sortedRows.length;
 
-  displayedRows.forEach((row) => {
+  clampTablePage(filteredCount);
+  renderRegisterSummaryStrip(sortedRows);
+
+  const pageRows = paginateRows(sortedRows);
+  const visibleCount = pageRows.length;
+
+  pageRows.forEach((row) => {
     const status = getStatus(row.expiryDate);
     const daysRemaining = getDaysUntilExpiry(row.expiryDate);
     const daysClass =
@@ -1523,14 +2147,16 @@ function renderTable() {
       <td>${row.name}</td>
       <td>${row.role}</td>
       <td class="compliance-type-cell">${row.complianceType}</td>
+      <td class="renewal-cycle-cell">${getRenewalCycleLabel(row.renewalCycle)}</td>
       <td>${formatDate(row.expiryDate)}</td>
       <td class="${daysClass}">${formatDaysRemaining(row.expiryDate)}</td>
-      <td><span class="status ${status.className}">${status.label}</span></td>
+      <td><span class="status status-badge ${status.className}">${getStatusBadgeLabel(status.key)}</span></td>
       <td class="notes-cell">
         <textarea class="notes-input" data-person-id="${row.personId}" data-record-id="${row.recordId}" rows="2" placeholder="Add follow-up notes...">${escapeHtml(row.notes || "")}</textarea>
       </td>
       <td>
         <div class="action-buttons">
+          <button type="button" class="history-btn" data-person-id="${row.personId}" data-record-id="${row.recordId}">${isHistoryExpanded(row.personId, row.recordId) ? "Hide history" : "View history"}</button>
           <button type="button" class="edit-btn" data-person-id="${row.personId}" data-record-id="${row.recordId}">Edit</button>
           <button type="button" class="renew-btn" data-person-id="${row.personId}" data-record-id="${row.recordId}">Renew</button>
           <button type="button" class="delete-btn" data-person-id="${row.personId}" data-record-id="${row.recordId}">Delete</button>
@@ -1539,22 +2165,41 @@ function renderTable() {
     `;
 
     tableBody.appendChild(tableRow);
+
+    if (isHistoryExpanded(row.personId, row.recordId)) {
+      const historyRow = document.createElement("tr");
+      historyRow.className = "history-row";
+      historyRow.innerHTML = `
+        <td colspan="9">
+          <div class="history-panel">
+            <h4 class="history-panel-title">Compliance history</h4>
+            ${buildHistoryPanelHtml(row.personId, row.recordId)}
+          </div>
+        </td>
+      `;
+      tableBody.appendChild(historyRow);
+    }
   });
 
-  if (displayedCount === totalCount) {
+  if (filteredCount === totalCount) {
     personCount.textContent =
-      displayedCount === 1 ? "1 record" : `${displayedCount} records`;
+      filteredCount === 1 ? "1 record" : `${filteredCount} records`;
   } else {
-    personCount.textContent = `Showing ${displayedCount} of ${totalCount} records`;
+    personCount.textContent = `Showing ${filteredCount} of ${totalCount} records`;
   }
 
+  renderPagination(filteredCount, visibleCount);
+
   emptyMessage.classList.toggle("hidden", totalCount > 0);
-  noResultsMessage.classList.toggle("hidden", displayedCount > 0 || totalCount === 0);
+  noResultsMessage.classList.toggle("hidden", filteredCount > 0 || totalCount === 0);
 
   renderActiveFilters();
-  renderSummary();
-  renderAnalytics();
-  renderDashboard();
+
+  if (refreshDashboards) {
+    renderSummary();
+    renderAnalytics();
+    renderDashboard();
+  }
 }
 
 // Wrap a value in quotes if it contains a comma or quote (keeps CSV valid)
@@ -1576,9 +2221,41 @@ function escapeCsvValue(value) {
   return text;
 }
 
+function getReminderStatusLabel(expiryDate, notes) {
+  const reminder = getReminderForRecord({ expiryDate });
+
+  if (!reminder) {
+    return "None";
+  }
+
+  if (isReminderTypeMarkedSent(notes, reminder.reminderType)) {
+    return `Sent: ${reminder.reminderType}`;
+  }
+
+  return `Action required: ${reminder.reminderType}`;
+}
+
+function downloadFile(content, filename, mimeType) {
+  const blob = new Blob([content], { type: mimeType });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(link.href);
+}
+
 // Build a CSV file from all compliance records and download it
 function exportToCsv() {
-  const headers = ["Name", "Role", "Compliance Type", "Expiry Date", "Status", "Notes"];
+  const headers = [
+    "Name",
+    "Role",
+    "Compliance Type",
+    "Renewal Cycle",
+    "Expiry Date",
+    "Status",
+    "Reminder Status",
+    "Notes",
+  ];
 
   const rows = getAllComplianceRows().map((row) => {
     const status = getStatus(row.expiryDate);
@@ -1587,21 +2264,159 @@ function exportToCsv() {
       escapeCsvValue(row.name),
       escapeCsvValue(row.role),
       escapeCsvValue(row.complianceType),
+      escapeCsvValue(getRenewalCycleLabel(row.renewalCycle)),
       escapeCsvValue(formatDate(row.expiryDate)),
       escapeCsvValue(status.label),
+      escapeCsvValue(getReminderStatusLabel(row.expiryDate, row.notes)),
       escapeCsvValue(row.notes || ""),
     ].join(",");
   });
 
   const csvContent = [headers.join(","), ...rows].join("\n");
+  downloadFile(csvContent, "compliance-reminder-data.csv", "text/csv");
+}
 
-  const blob = new Blob([csvContent], { type: "text/csv" });
-  const link = document.createElement("a");
-  link.href = URL.createObjectURL(blob);
-  link.download = "compliance-reminder-data.csv";
-  link.click();
+function buildBackupData() {
+  return {
+    backupVersion: BACKUP_VERSION,
+    appVersion: "1.9.0",
+    exportedAt: new Date().toISOString(),
+    people,
+    nextPersonId,
+    nextRecordId,
+    nextHistoryEntryId,
+    deletedRecordHistory,
+  };
+}
 
-  URL.revokeObjectURL(link.href);
+function exportBackup() {
+  const backup = buildBackupData();
+  downloadFile(
+    JSON.stringify(backup, null, 2),
+    "compliance-reminder-backup.json",
+    "application/json"
+  );
+  showMessage(appMessage, "Backup downloaded successfully.", "success");
+}
+
+function countBackupRecords(backupPeople) {
+  if (!Array.isArray(backupPeople)) {
+    return 0;
+  }
+
+  return backupPeople.reduce((total, person) => {
+    if (Array.isArray(person.complianceRecords)) {
+      return total + person.complianceRecords.length;
+    }
+
+    if (isLegacyPerson(person)) {
+      return total + 1;
+    }
+
+    return total;
+  }, 0);
+}
+
+function isValidBackupData(data) {
+  if (!data || typeof data !== "object") {
+    return false;
+  }
+
+  if (typeof data.backupVersion !== "number" && typeof data.appVersion !== "string") {
+    return false;
+  }
+
+  if (!Array.isArray(data.people) || data.people.length === 0) {
+    return false;
+  }
+
+  return isValidStoredData({
+    people: data.people,
+    nextPersonId: data.nextPersonId || data.nextId,
+    nextRecordId: data.nextRecordId || 1000,
+  });
+}
+
+function applyBackupData(data) {
+  nextPersonId = data.nextPersonId || data.nextId || 1;
+  nextRecordId = data.nextRecordId || 1000;
+  nextHistoryEntryId =
+    typeof data.nextHistoryEntryId === "number" ? data.nextHistoryEntryId : 1;
+  deletedRecordHistory = Array.isArray(data.deletedRecordHistory)
+    ? data.deletedRecordHistory
+    : [];
+  people = data.people.map((person) => normalizePerson(person));
+  syncNextHistoryEntryId();
+  expandedHistoryRows.clear();
+  hideEditForm();
+  savePeople();
+}
+
+function handleBackupImport(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+
+  reader.onload = (loadEvent) => {
+    try {
+      const data = JSON.parse(loadEvent.target.result);
+
+      if (!Array.isArray(data.people) || data.people.length === 0) {
+        showMessage(
+          importMessage,
+          "Backup has no compliance records to import.",
+          "error"
+        );
+        backupFileInput.value = "";
+        return;
+      }
+
+      if (!isValidBackupData(data)) {
+        showMessage(
+          importMessage,
+          "Invalid backup file. Please choose a compliance reminder JSON backup.",
+          "error"
+        );
+        backupFileInput.value = "";
+        return;
+      }
+
+      const recordCount = countBackupRecords(data.people);
+      const confirmed = confirm(
+        `Import backup?\n\nThis will replace all ${getTotalRecordCount()} current record(s) with ${recordCount} record(s) from the backup.\n\nYour current data will be overwritten. Continue?`
+      );
+
+      if (!confirmed) {
+        backupFileInput.value = "";
+        return;
+      }
+
+      applyBackupData(data);
+      clearAllFilters();
+      renderTable();
+      showMessage(
+        importMessage,
+        `Backup imported successfully (${recordCount} record${recordCount === 1 ? "" : "s"}).`,
+        "success"
+      );
+    } catch (error) {
+      showMessage(
+        importMessage,
+        "Could not read the backup file. Please check the file and try again.",
+        "error"
+      );
+    }
+
+    backupFileInput.value = "";
+  };
+
+  reader.onerror = () => {
+    showMessage(importMessage, "Could not read the backup file. Please try again.", "error");
+    backupFileInput.value = "";
+  };
+
+  reader.readAsText(file);
 }
 
 // Split one CSV line into values (handles commas inside quotes)
@@ -1683,9 +2498,17 @@ function formatSkipReasons(skipReasons) {
 }
 
 // Add a compliance record — reuse an existing person when the name matches
-function addComplianceRecord(name, role, complianceType, expiryDate) {
+function addComplianceRecord(name, role, complianceType, expiryDate, renewalCycle) {
   const record = createComplianceRecord(
-    { complianceType, expiryDate, notes: "" },
+    {
+      complianceType,
+      expiryDate,
+      notes: "",
+      renewalCycle:
+        renewalCycle !== undefined
+          ? renewalCycle
+          : getDefaultRenewalCycleForType(complianceType),
+    },
     nextRecordId
   );
   nextRecordId += 1;
@@ -1696,7 +2519,12 @@ function addComplianceRecord(name, role, complianceType, expiryDate) {
     existingPerson.name = name;
     existingPerson.role = role;
     existingPerson.complianceRecords.push(record);
-    return { isNewPerson: false };
+    appendHistoryEntry(
+      record,
+      HISTORY_ACTIONS.CREATED,
+      `Record created (${record.complianceType}, expires ${formatDate(record.expiryDate)}).`
+    );
+    return { isNewPerson: false, record };
   }
 
   people.push({
@@ -1707,7 +2535,13 @@ function addComplianceRecord(name, role, complianceType, expiryDate) {
   });
   nextPersonId += 1;
 
-  return { isNewPerson: true };
+  appendHistoryEntry(
+    record,
+    HISTORY_ACTIONS.CREATED,
+    `Record created (${record.complianceType}, expires ${formatDate(record.expiryDate)}).`
+  );
+
+  return { isNewPerson: true, record };
 }
 
 // Read CSV text and add valid rows as compliance records
@@ -1727,6 +2561,7 @@ function importPeopleFromCsv(csvText) {
     expiryIndex = findColumnIndex(headers, "dbs expiry date");
   }
   const complianceTypeIndex = findColumnIndex(headers, "compliance type");
+  const renewalCycleIndex = findColumnIndex(headers, "renewal cycle");
 
   if (nameIndex === -1 || roleIndex === -1 || expiryIndex === -1) {
     return {
@@ -1754,6 +2589,10 @@ function importPeopleFromCsv(csvText) {
       complianceTypeIndex === -1
         ? DEFAULT_COMPLIANCE_TYPE
         : columns[complianceTypeIndex]?.trim() ?? DEFAULT_COMPLIANCE_TYPE;
+    const renewalCycle =
+      renewalCycleIndex === -1
+        ? getDefaultRenewalCycleForType(complianceType)
+        : columns[renewalCycleIndex]?.trim() ?? getDefaultRenewalCycleForType(complianceType);
 
     if (!name) {
       skipped += 1;
@@ -1785,7 +2624,8 @@ function importPeopleFromCsv(csvText) {
       name,
       role,
       normalizeComplianceType(complianceType),
-      normalizeExpiryDate(expiryDate)
+      normalizeExpiryDate(expiryDate),
+      renewalCycle
     );
 
     imported += 1;
@@ -1863,7 +2703,9 @@ tableBody.addEventListener("click", (event) => {
   const personId = Number(button.dataset.personId);
   const recordId = Number(button.dataset.recordId);
 
-  if (button.classList.contains("edit-btn")) {
+  if (button.classList.contains("history-btn")) {
+    toggleHistoryRow(personId, recordId);
+  } else if (button.classList.contains("edit-btn")) {
     startEdit(personId, recordId);
   } else if (button.classList.contains("renew-btn")) {
     renewComplianceRecord(personId, recordId);
@@ -1894,11 +2736,65 @@ editForm.addEventListener("submit", (event) => {
   const role = document.getElementById("edit-role").value.trim();
   const complianceType = document.getElementById("edit-compliance-type").value;
   const expiryDate = document.getElementById("edit-dbs-expiry").value;
+  const notes = document.getElementById("edit-notes").value;
+  const renewalCycle = document.getElementById("edit-renewal-cycle").value;
 
-  updatePerson(personId, recordId, name, role, complianceType, expiryDate);
+  updatePerson(
+    personId,
+    recordId,
+    name,
+    role,
+    complianceType,
+    expiryDate,
+    notes,
+    renewalCycle
+  );
 });
 
 cancelEditBtn.addEventListener("click", hideEditForm);
+
+function setupRenewModalListeners() {
+  if (!renewModal) {
+    return;
+  }
+
+  renewModal.addEventListener("click", (event) => {
+    const target = event.target instanceof Element ? event.target : event.target.parentElement;
+
+    if (!target) {
+      return;
+    }
+
+    if (target === renewModal) {
+      closeRenewModal();
+      return;
+    }
+
+    const actionButton = target.closest(
+      "#renew-use-suggested-btn, #renew-save-custom-btn, #renew-cancel-btn, #renew-modal-close-btn"
+    );
+
+    if (!actionButton) {
+      return;
+    }
+
+    event.preventDefault();
+
+    if (actionButton.id === "renew-use-suggested-btn") {
+      handleRenewUseSuggested();
+    } else if (actionButton.id === "renew-save-custom-btn") {
+      handleRenewSaveCustom();
+    } else {
+      closeRenewModal();
+    }
+  });
+}
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && renewModalContext) {
+    closeRenewModal();
+  }
+});
 
 // Handle the add-person form
 form.addEventListener("submit", (event) => {
@@ -1908,6 +2804,7 @@ form.addEventListener("submit", (event) => {
   const roleInput = document.getElementById("role");
   const complianceTypeInput = document.getElementById("compliance-type");
   const expiryInput = document.getElementById("dbs-expiry");
+  const renewalCycleInput = document.getElementById("renewal-cycle");
 
   const validation = validatePersonInput(
     nameInput.value,
@@ -1927,11 +2824,13 @@ form.addEventListener("submit", (event) => {
     validation.name,
     validation.role,
     validation.complianceType,
-    normalizeExpiryDate(validation.dbsExpiry)
+    normalizeExpiryDate(validation.dbsExpiry),
+    renewalCycleInput.value
   );
 
   savePeople();
   form.reset();
+  syncAddFormRenewalCycleDefault();
   showMessage(
     appMessage,
     result.isNewPerson
@@ -1949,6 +2848,12 @@ dashboardCards.forEach((card) => {
     filterByExpiryWindow(Number(card.dataset.days));
   });
 });
+
+if (dashboardAllCard) {
+  dashboardAllCard.addEventListener("click", () => {
+    showAllPeople();
+  });
+}
 
 if (actionRequiredCard && remindersSection) {
   actionRequiredCard.addEventListener("click", () => {
@@ -2015,19 +2920,19 @@ document.getElementById("action-export-csv").addEventListener("click", exportToC
 
 searchInput.addEventListener("input", () => {
   updateFilterActiveState();
-  renderTable();
+  refreshRegisterView({ resetPage: true });
 });
 
 statusFilter.addEventListener("change", () => {
   reconcileStatusExpiryFilters("status");
   updateFilterActiveState();
-  renderTable();
+  refreshRegisterView({ resetPage: true });
 });
 
 complianceTypeFilter.addEventListener("change", () => {
   setExpiryWindowFilter(null);
   updateFilterActiveState();
-  renderTable();
+  refreshRegisterView({ resetPage: true });
 });
 
 if (expiryWindowFilterSelect) {
@@ -2036,7 +2941,7 @@ if (expiryWindowFilterSelect) {
     setExpiryWindowFilter(value === "all" ? null : Number(value));
     reconcileStatusExpiryFilters("expiry");
     updateFilterActiveState();
-    renderTable();
+    refreshRegisterView({ resetPage: true });
   });
 }
 
@@ -2063,13 +2968,57 @@ analyticsCards.forEach((card) => {
   });
 });
 
-sortBySelect.addEventListener("change", renderTable);
-sortOrderSelect.addEventListener("change", renderTable);
+if (sortBySelect) {
+  sortBySelect.addEventListener("change", () => {
+    refreshRegisterView({ resetPage: true });
+  });
+}
+
+if (paginationPrevBtn) {
+  paginationPrevBtn.addEventListener("click", () => {
+    if (currentTablePage > 1) {
+      currentTablePage -= 1;
+      renderTable({ refreshDashboards: false });
+      peopleSection.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+  });
+}
+
+if (paginationNextBtn) {
+  paginationNextBtn.addEventListener("click", () => {
+    const filteredCount = getFilteredComplianceRows().length;
+    const totalPages = Math.ceil(filteredCount / RECORDS_PER_PAGE);
+
+    if (currentTablePage < totalPages) {
+      currentTablePage += 1;
+      renderTable({ refreshDashboards: false });
+      peopleSection.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+  });
+}
+
 exportCsvBtn.addEventListener("click", exportToCsv);
 importCsvBtn.addEventListener("click", () => csvFileInput.click());
 csvFileInput.addEventListener("change", handleCsvImport);
 
+if (exportBackupBtn) {
+  exportBackupBtn.addEventListener("click", exportBackup);
+}
+
+if (importBackupBtn && backupFileInput) {
+  importBackupBtn.addEventListener("click", () => backupFileInput.click());
+  backupFileInput.addEventListener("change", handleBackupImport);
+}
+
 // Load saved data, then show the table
+setupRenewModalListeners();
 loadReminderSettings();
 loadPeople();
+syncAddFormRenewalCycleDefault();
+
+const complianceTypeInput = document.getElementById("compliance-type");
+if (complianceTypeInput) {
+  complianceTypeInput.addEventListener("change", syncAddFormRenewalCycleDefault);
+}
+
 renderTable();

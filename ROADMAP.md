@@ -6,31 +6,28 @@ A local-first safeguarding compliance tracker. All data is stored in the browser
 
 # Current Release
 
-## v1.9.0
+## v2.3.0
 
-- Renewal cycles
-- Smart renewal workflow
-- Suggested renewal dates
-- Renewal modal
-- Backup compatibility
-- History integration
+- Compliance Record Workspace (detail view per record)
+- Simplified main register table with Details button
+- Evidence, actions, history, and notes managed in workspace
+- Live sync with dashboards, reports, and reminders
 
 ---
 
 # Next Planned Release
 
-## v2.0.0
+## v2.4.0
 
-- File attachments
-- Certificate uploads
-- Compliance documents
-- Renewal evidence storage
+- Database integration
+- User accounts and login
+- Multi-device data storage
 
 ---
 
 ## Version Roadmap
 
-Versions are listed **oldest to newest**. Everything through **v1.8.1** is shipped. **v1.9.0** is the current release.
+Versions are listed **oldest to newest**. Everything through **v2.2.0** is shipped. **v2.3.0** is the current release.
 
 ### v1.0 — Working prototype · Shipped
 
@@ -107,7 +104,7 @@ Versions are listed **oldest to newest**. Everything through **v1.8.1** is shipp
 * Reject empty backups
 * Lighter re-renders on pagination and history toggle
 
-### v1.9.0 — Renewal cycles · Current
+### v1.9.0 — Renewal cycles · Shipped
 
 - Renewal cycles
 - Smart renewal workflow
@@ -117,14 +114,42 @@ Versions are listed **oldest to newest**. Everything through **v1.8.1** is shipp
 - History integration
 - Renewal cycle column in register and CSV export
 
-### v2.0.0 — Compliance documents · Planned
+### v2.0.0 — Compliance documents · Shipped
 
-- File attachments
-- Certificate uploads
-- Compliance documents
-- Renewal evidence storage
+- Evidence/document storage per compliance record
+- Add Evidence modal with optional local file upload
+- View Evidence expandable panel
+- Delete evidence with confirmation
+- History integration for evidence add/delete
+- CSV evidence summary columns
+- Backup compatibility for evidence metadata
 
-### v2.1 — Accounts and sync · Planned
+### v2.1.0 — Reports & audit pack · Shipped
+
+- Reports & Audit Pack dashboard
+- Full Compliance, Expired, Expiring in 30 Days reports
+- Missing Evidence and Evidence Coverage Summary reports
+- On-screen report preview with Export CSV and Print
+
+### v2.2.0 — Action tracking · Shipped
+
+- Compliance action/task tracking per record
+- Add, complete, reopen, and delete actions
+- Default action templates (manual add)
+- Action summary dashboard cards
+- Open Actions reports in Audit Pack
+- CSV and backup support for actions
+
+### v2.3.0 — Record workspace · Current
+
+- Compliance Record Workspace detail view
+- Details button on each register row
+- Simplified table (essential columns only)
+- Evidence, actions, history, and notes in workspace
+- Close workspace / Escape to return to table
+- Live UI sync without page refresh
+
+### v2.4 — Accounts and sync · Planned
 
 - Database integration
 - User accounts and login

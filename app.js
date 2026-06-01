@@ -1,5 +1,5 @@
-// Compliance Reminder System v1.9.0
-console.log("Compliance Reminder System v1.9.0 — app.js loaded");
+// Compliance Reminder System v2.3.0
+console.log("Compliance Reminder System v2.3.0 — app.js loaded");
 
 // Fake sample data — used only on the very first visit
 const samplePeople = [
@@ -33,8 +33,12 @@ let people = [];
 let nextPersonId = 21;
 let nextRecordId = 1000;
 let nextHistoryEntryId = 1;
+let nextEvidenceId = 1;
+let nextActionId = 1;
 let deletedRecordHistory = [];
 const expandedHistoryRows = new Set();
+const expandedEvidenceRows = new Set();
+const expandedActionRows = new Set();
 
 const DUE_SOON_DAYS = 90;
 const RECORDS_PER_PAGE = 25;
@@ -59,6 +63,23 @@ const RENEWAL_CYCLE_OPTIONS = [
   { value: "5-years", label: "5 Years" },
 ];
 const DEFAULT_RENEWAL_CYCLE = "3-years";
+// localStorage is typically ~5MB per origin. Keep per-file uploads small.
+const MAX_EVIDENCE_FILE_BYTES = 512 * 1024;
+const EVIDENCE_TYPES = [
+  "DBS Certificate",
+  "Training Certificate",
+  "Policy Acknowledgement",
+  "ID Check",
+  "Right to Work",
+  "Other",
+];
+const DEFAULT_ACTION_TEMPLATES = [
+  "Reminder sent",
+  "Renewal chased",
+  "Certificate received",
+  "Evidence uploaded",
+  "Renewal verified",
+];
 const REMINDER_LABELS = {
   30: "30 Day Reminder",
   14: "14 Day Reminder",
@@ -75,6 +96,12 @@ const HISTORY_ACTIONS = {
   REMINDER_SENT: "reminder_sent",
   RENEWED: "renewed",
   DELETED: "deleted",
+  EVIDENCE_ADDED: "evidence_added",
+  EVIDENCE_DELETED: "evidence_deleted",
+  ACTION_ADDED: "action_added",
+  ACTION_COMPLETED: "action_completed",
+  ACTION_REOPENED: "action_reopened",
+  ACTION_DELETED: "action_deleted",
 };
 
 const HISTORY_ACTION_LABELS = {
@@ -83,6 +110,12 @@ const HISTORY_ACTION_LABELS = {
   reminder_sent: "Reminder sent",
   renewed: "Renewed",
   deleted: "Deleted",
+  evidence_added: "Evidence added",
+  evidence_deleted: "Evidence deleted",
+  action_added: "Action added",
+  action_completed: "Action completed",
+  action_reopened: "Action reopened",
+  action_deleted: "Action deleted",
 };
 
 const DEFAULT_REMINDER_SETTINGS = {
@@ -146,7 +179,29 @@ const renewUseSuggestedBtn = document.getElementById("renew-use-suggested-btn");
 const renewSaveCustomBtn = document.getElementById("renew-save-custom-btn");
 const renewCancelBtn = document.getElementById("renew-cancel-btn");
 
+const evidenceModal = document.getElementById("evidence-modal");
+const evidenceModalRecordLabel = document.getElementById("evidence-modal-record-label");
+const evidenceNameInput = document.getElementById("evidence-name");
+const evidenceTypeInput = document.getElementById("evidence-type");
+const evidenceNotesInput = document.getElementById("evidence-notes");
+const evidenceFileInput = document.getElementById("evidence-file");
+const evidenceModalMessage = document.getElementById("evidence-modal-message");
+const evidenceSaveBtn = document.getElementById("evidence-save-btn");
+const evidenceCancelBtn = document.getElementById("evidence-cancel-btn");
+const evidenceModalCloseBtn = document.getElementById("evidence-modal-close-btn");
+
+const actionModal = document.getElementById("action-modal");
+const actionModalRecordLabel = document.getElementById("action-modal-record-label");
+const actionTitleInput = document.getElementById("action-title");
+const actionNotesInput = document.getElementById("action-notes");
+const actionModalMessage = document.getElementById("action-modal-message");
+const actionSummaryOpen = document.getElementById("action-summary-open");
+const actionSummaryCompleted = document.getElementById("action-summary-completed");
+const actionSummaryExpiredOpen = document.getElementById("action-summary-expired-open");
+
 let renewModalContext = null;
+let evidenceModalContext = null;
+let actionModalContext = null;
 
 // Tracks which dashboard expiry window is active (30, 60, 90, or null)
 let expiryWindowFilter = null;
@@ -179,6 +234,43 @@ const analyticsExpired = document.getElementById("analytics-expired");
 const activeFilterChips = document.getElementById("active-filter-chips");
 const clearFiltersBtn = document.getElementById("clear-filters-btn");
 const analyticsCards = document.querySelectorAll("[data-analytics-filter]");
+
+const reportPreview = document.getElementById("report-preview");
+const reportTitle = document.getElementById("report-title");
+const reportMeta = document.getElementById("report-meta");
+const reportSummaryStats = document.getElementById("report-summary-stats");
+const reportTableHead = document.getElementById("report-table-head");
+const reportTableBody = document.getElementById("report-table-body");
+const reportEmptyHint = document.getElementById("report-empty-hint");
+const exportReportCsvBtn = document.getElementById("export-report-csv-btn");
+const printReportBtn = document.getElementById("print-report-btn");
+const reportCards = document.querySelectorAll("[data-report]");
+
+const recordWorkspace = document.getElementById("record-workspace");
+const recordWorkspaceBackdrop = document.getElementById("record-workspace-backdrop");
+const workspaceTitle = document.getElementById("workspace-title");
+const workspaceSubtitle = document.getElementById("workspace-subtitle");
+const workspaceContent = document.getElementById("workspace-content");
+const workspaceCloseBtn = document.getElementById("workspace-close-btn");
+const workspaceCloseFooterBtn = document.getElementById("workspace-close-footer-btn");
+const workspaceDeleteBtn = document.getElementById("workspace-delete-btn");
+const workspaceEditBtn = document.getElementById("workspace-edit-btn");
+const workspaceRenewBtn = document.getElementById("workspace-renew-btn");
+
+let workspaceContext = null;
+
+const REPORT_TYPES = {
+  FULL: "full-compliance",
+  EXPIRED: "expired",
+  EXPIRING_30: "expiring-30",
+  MISSING_EVIDENCE: "missing-evidence",
+  EVIDENCE_COVERAGE: "evidence-coverage",
+  OPEN_ACTIONS: "open-actions",
+  RECORDS_WITH_OPEN_ACTIONS: "records-with-open-actions",
+  EXPIRED_WITH_OPEN_ACTIONS: "expired-with-open-actions",
+};
+
+let currentReport = null;
 
 const STATUS_FILTER_LABELS = {
   valid: "Valid",
@@ -220,6 +312,8 @@ function applySampleData() {
   nextPersonId = 21;
   nextRecordId = 1000;
   deletedRecordHistory = [];
+  nextEvidenceId = 1;
+  nextActionId = 1;
 
   people.forEach((person) => {
     person.complianceRecords.forEach((record) => {
@@ -240,6 +334,8 @@ function savePeople() {
     nextRecordId: nextRecordId,
     deletedRecordHistory: deletedRecordHistory,
     nextHistoryEntryId: nextHistoryEntryId,
+    nextEvidenceId: nextEvidenceId,
+    nextActionId: nextActionId,
   };
 
   localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
@@ -266,6 +362,8 @@ function createComplianceRecord(data, recordId) {
       data.renewalCycle !== undefined ? data.renewalCycle : RENEWAL_CYCLE_MANUAL
     ),
     history: Array.isArray(data.history) ? data.history : [],
+    evidence: Array.isArray(data.evidence) ? data.evidence : [],
+    actions: Array.isArray(data.actions) ? data.actions : [],
   };
 }
 
@@ -472,6 +570,1044 @@ function syncNextHistoryEntryId() {
   }
 }
 
+function normalizeDocumentType(value) {
+  const text = String(value || "").trim();
+  const match = EVIDENCE_TYPES.find(
+    (type) => type.toLowerCase() === text.toLowerCase()
+  );
+
+  return match || EVIDENCE_TYPES[0];
+}
+
+function normalizeEvidenceItem(item) {
+  return {
+    id: typeof item.id === "number" ? item.id : nextEvidenceId++,
+    name: typeof item.name === "string" ? item.name.trim() : "",
+    documentType: normalizeDocumentType(item.documentType),
+    addedDate:
+      normalizeExpiryDate(item.addedDate) ||
+      dateToISOString(getTodayAtMidnight()),
+    notes: typeof item.notes === "string" ? item.notes : "",
+    fileName:
+      typeof item.fileName === "string" && item.fileName.trim()
+        ? item.fileName.trim()
+        : null,
+    // Base64 data URL stored locally only — subject to browser storage limits.
+    fileData:
+      typeof item.fileData === "string" && item.fileData.trim()
+        ? item.fileData.trim()
+        : null,
+  };
+}
+
+function normalizeEvidenceList(evidence) {
+  if (!Array.isArray(evidence)) {
+    return [];
+  }
+
+  return evidence.map((item) => normalizeEvidenceItem(item));
+}
+
+function syncNextEvidenceId() {
+  let maxId = 0;
+
+  people.forEach((person) => {
+    person.complianceRecords.forEach((record) => {
+      (record.evidence || []).forEach((item) => {
+        if (typeof item.id === "number" && item.id > maxId) {
+          maxId = item.id;
+        }
+      });
+    });
+  });
+
+  deletedRecordHistory.forEach((item) => {
+    (item.record?.evidence || []).forEach((evidenceItem) => {
+      if (typeof evidenceItem.id === "number" && evidenceItem.id > maxId) {
+        maxId = evidenceItem.id;
+      }
+    });
+  });
+
+  if (maxId >= nextEvidenceId) {
+    nextEvidenceId = maxId + 1;
+  }
+}
+
+function getEvidenceSummary(evidence) {
+  const items = Array.isArray(evidence) ? evidence : [];
+
+  if (items.length === 0) {
+    return { count: 0, latestAdded: "" };
+  }
+
+  const latest = items.reduce((newest, item) => {
+    if (!newest || item.addedDate > newest.addedDate) {
+      return item;
+    }
+
+    return newest;
+  }, null);
+
+  return {
+    count: items.length,
+    latestAdded: latest ? formatDate(latest.addedDate) : "",
+  };
+}
+
+function evidenceRowKey(personId, recordId) {
+  return `${personId}:${recordId}`;
+}
+
+function isEvidenceExpanded(personId, recordId) {
+  return expandedEvidenceRows.has(evidenceRowKey(personId, recordId));
+}
+
+function toggleEvidenceRow(personId, recordId) {
+  const key = evidenceRowKey(personId, recordId);
+
+  if (expandedEvidenceRows.has(key)) {
+    expandedEvidenceRows.delete(key);
+  } else {
+    expandedEvidenceRows.add(key);
+  }
+
+  renderTable({ refreshDashboards: false });
+}
+
+function buildEvidencePanelHtml(personId, recordId) {
+  const result = findPersonAndRecord(personId, recordId);
+  if (!result) {
+    return '<p class="evidence-empty">Record not found.</p>';
+  }
+
+  const items = result.record.evidence || [];
+
+  if (items.length === 0) {
+    return '<p class="evidence-empty">No evidence added yet.</p>';
+  }
+
+  const sortedItems = [...items].sort((a, b) => b.addedDate.localeCompare(a.addedDate));
+
+  const cards = sortedItems
+    .map((item) => {
+      const fileLine = item.fileName
+        ? `<p class="evidence-item-file">File: ${escapeHtml(item.fileName)}</p>`
+        : "";
+      const notesLine = item.notes
+        ? `<p class="evidence-item-notes">${escapeHtml(item.notes)}</p>`
+        : "";
+      const downloadButton = item.fileData
+        ? `<button type="button" class="evidence-download-btn" data-person-id="${personId}" data-record-id="${recordId}" data-evidence-id="${item.id}">Download file</button>`
+        : "";
+
+      return `
+        <li class="evidence-item">
+          <div class="evidence-item-header">
+            <strong class="evidence-item-name">${escapeHtml(item.name)}</strong>
+            <span class="evidence-item-type">${escapeHtml(item.documentType)}</span>
+          </div>
+          <p class="evidence-item-date">Added: ${escapeHtml(formatDate(item.addedDate))}</p>
+          ${fileLine}
+          ${notesLine}
+          <div class="evidence-item-actions">
+            ${downloadButton}
+            <button type="button" class="delete-evidence-btn" data-person-id="${personId}" data-record-id="${recordId}" data-evidence-id="${item.id}">Delete</button>
+          </div>
+        </li>
+      `;
+    })
+    .join("");
+
+  return `<ul class="evidence-list">${cards}</ul>`;
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error("Could not read file"));
+    reader.readAsDataURL(file);
+  });
+}
+
+function openAddEvidenceModal(personId, recordId) {
+  const result = findPersonAndRecord(personId, recordId);
+  if (!result) {
+    return;
+  }
+
+  const { person, record } = result;
+
+  evidenceModalContext = {
+    personId,
+    recordId,
+    recordLabel: `${person.name} — ${record.complianceType}`,
+  };
+
+  evidenceModalRecordLabel.textContent = evidenceModalContext.recordLabel;
+  evidenceNameInput.value = "";
+  evidenceTypeInput.value = EVIDENCE_TYPES[0];
+  evidenceNotesInput.value = "";
+  evidenceFileInput.value = "";
+  hideMessage(evidenceModalMessage);
+
+  evidenceModal.classList.remove("hidden");
+  evidenceModal.setAttribute("aria-hidden", "false");
+  evidenceNameInput.focus();
+}
+
+function closeEvidenceModal() {
+  if (!evidenceModal) {
+    evidenceModalContext = null;
+    return;
+  }
+
+  evidenceModal.classList.add("hidden");
+  evidenceModal.setAttribute("aria-hidden", "true");
+  evidenceModalContext = null;
+
+  if (evidenceModalMessage) {
+    hideMessage(evidenceModalMessage);
+  }
+}
+
+async function handleSaveEvidence() {
+  if (!evidenceModalContext) {
+    return;
+  }
+
+  const name = evidenceNameInput.value.trim();
+  const documentType = normalizeDocumentType(evidenceTypeInput.value);
+  const notes = evidenceNotesInput.value.trim();
+  const file = evidenceFileInput.files[0] || null;
+
+  if (!name) {
+    showMessage(evidenceModalMessage, "Document name is required.", "error");
+    return;
+  }
+
+  let fileName = null;
+  let fileData = null;
+
+  if (file) {
+    if (file.size > MAX_EVIDENCE_FILE_BYTES) {
+      showMessage(
+        evidenceModalMessage,
+        `File is too large. Maximum size is ${Math.round(MAX_EVIDENCE_FILE_BYTES / 1024)} KB.`,
+        "error"
+      );
+      return;
+    }
+
+    try {
+      fileData = await readFileAsDataUrl(file);
+      fileName = file.name;
+    } catch (error) {
+      showMessage(evidenceModalMessage, "Could not read the selected file.", "error");
+      return;
+    }
+  }
+
+  const { personId, recordId, recordLabel } = evidenceModalContext;
+  const result = findPersonAndRecord(personId, recordId);
+
+  if (!result) {
+    closeEvidenceModal();
+    return;
+  }
+
+  const evidenceItem = {
+    id: nextEvidenceId++,
+    name,
+    documentType,
+    addedDate: dateToISOString(getTodayAtMidnight()),
+    notes,
+    fileName,
+    fileData,
+  };
+
+  if (!Array.isArray(result.record.evidence)) {
+    result.record.evidence = [];
+  }
+
+  result.record.evidence.push(evidenceItem);
+
+  appendHistoryEntry(
+    result.record,
+    HISTORY_ACTIONS.EVIDENCE_ADDED,
+    `Evidence added: ${documentType}.`
+  );
+
+  savePeople();
+  closeEvidenceModal();
+  showMessage(appMessage, `Evidence added to ${recordLabel}.`, "success");
+  renderTable({ refreshDashboards: false });
+}
+
+function deleteEvidenceItem(personId, recordId, evidenceId) {
+  const result = findPersonAndRecord(personId, recordId);
+  if (!result) {
+    return;
+  }
+
+  const { person, record } = result;
+  const evidenceItem = (record.evidence || []).find((item) => item.id === evidenceId);
+
+  if (!evidenceItem) {
+    return;
+  }
+
+  const confirmed = confirm(
+    `Delete this evidence item?\n\n${evidenceItem.name}\n${evidenceItem.documentType}\n\nThis cannot be undone.`
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  record.evidence = (record.evidence || []).filter((item) => item.id !== evidenceId);
+
+  appendHistoryEntry(
+    record,
+    HISTORY_ACTIONS.EVIDENCE_DELETED,
+    `Evidence deleted: ${evidenceItem.documentType}.`
+  );
+
+  savePeople();
+  showMessage(
+    appMessage,
+    `Evidence deleted: ${person.name} — ${evidenceItem.documentType}.`,
+    "success"
+  );
+  renderTable({ refreshDashboards: false });
+}
+
+function downloadEvidenceFile(personId, recordId, evidenceId) {
+  const result = findPersonAndRecord(personId, recordId);
+  if (!result) {
+    return;
+  }
+
+  const evidenceItem = (result.record.evidence || []).find((item) => item.id === evidenceId);
+
+  if (!evidenceItem || !evidenceItem.fileData) {
+    showMessage(appMessage, "No file is stored for this evidence item.", "error");
+    return;
+  }
+
+  const link = document.createElement("a");
+  link.href = evidenceItem.fileData;
+  link.download = evidenceItem.fileName || "evidence-file";
+  link.click();
+}
+
+function normalizeActionItem(item) {
+  return {
+    id: typeof item.id === "number" ? item.id : nextActionId++,
+    title: typeof item.title === "string" ? item.title.trim() : "",
+    completed: item.completed === true,
+    createdAt:
+      typeof item.createdAt === "string"
+        ? item.createdAt
+        : new Date().toISOString(),
+    completedAt:
+      typeof item.completedAt === "string" && item.completedAt
+        ? item.completedAt
+        : null,
+    notes: typeof item.notes === "string" ? item.notes : "",
+  };
+}
+
+function normalizeActionsList(actions) {
+  if (!Array.isArray(actions)) {
+    return [];
+  }
+
+  return actions.map((item) => normalizeActionItem(item));
+}
+
+function syncNextActionId() {
+  let maxId = 0;
+
+  people.forEach((person) => {
+    person.complianceRecords.forEach((record) => {
+      (record.actions || []).forEach((item) => {
+        if (typeof item.id === "number" && item.id > maxId) {
+          maxId = item.id;
+        }
+      });
+    });
+  });
+
+  deletedRecordHistory.forEach((item) => {
+    (item.record?.actions || []).forEach((actionItem) => {
+      if (typeof actionItem.id === "number" && actionItem.id > maxId) {
+        maxId = actionItem.id;
+      }
+    });
+  });
+
+  if (maxId >= nextActionId) {
+    nextActionId = maxId + 1;
+  }
+}
+
+function getActionSummary(actions) {
+  const items = Array.isArray(actions) ? actions : [];
+  const openCount = items.filter((item) => !item.completed).length;
+  const completedCount = items.filter((item) => item.completed).length;
+
+  return { openCount, completedCount };
+}
+
+function getGlobalActionCounts() {
+  let openActions = 0;
+  let completedActions = 0;
+  let expiredWithOpenActions = 0;
+
+  getAllComplianceRows().forEach((row) => {
+    const summary = getActionSummary(row.actions);
+
+    openActions += summary.openCount;
+    completedActions += summary.completedCount;
+
+    if (summary.openCount > 0 && getStatus(row.expiryDate).key === "expired") {
+      expiredWithOpenActions += 1;
+    }
+  });
+
+  return { openActions, completedActions, expiredWithOpenActions };
+}
+
+function isRecordActionRequired(row) {
+  if (getStatus(row.expiryDate).key === "expired") {
+    return true;
+  }
+
+  return Boolean(getReminderForRecord(row));
+}
+
+function actionRowKey(personId, recordId) {
+  return `${personId}:${recordId}`;
+}
+
+function isActionsExpanded(personId, recordId) {
+  return expandedActionRows.has(actionRowKey(personId, recordId));
+}
+
+function toggleActionsRow(personId, recordId) {
+  const key = actionRowKey(personId, recordId);
+
+  if (expandedActionRows.has(key)) {
+    expandedActionRows.delete(key);
+  } else {
+    expandedActionRows.add(key);
+  }
+
+  renderTable({ refreshDashboards: false });
+}
+
+function buildActionItemHtml(personId, recordId, item) {
+  const statusLabel = item.completed ? "Completed" : "Open";
+  const statusClass = item.completed ? "action-status-completed" : "action-status-open";
+  const createdDisplay = formatHistoryTimestamp(item.createdAt);
+  const completedDisplay = item.completedAt
+    ? formatHistoryTimestamp(item.completedAt)
+    : "—";
+  const notesLine = item.notes
+    ? `<p class="action-item-notes">${escapeHtml(item.notes)}</p>`
+    : "";
+
+  const toggleButton = item.completed
+    ? `<button type="button" class="action-reopen-btn" data-person-id="${personId}" data-record-id="${recordId}" data-action-id="${item.id}">Reopen</button>`
+    : `<button type="button" class="action-complete-btn" data-person-id="${personId}" data-record-id="${recordId}" data-action-id="${item.id}">Mark complete</button>`;
+
+  return `
+    <li class="action-item ${item.completed ? "action-item-completed" : "action-item-open"}">
+      <div class="action-item-header">
+        <strong class="action-item-title">${escapeHtml(item.title)}</strong>
+        <span class="action-item-status ${statusClass}">${statusLabel}</span>
+      </div>
+      <p class="action-item-meta">Created: ${escapeHtml(createdDisplay)} · Completed: ${escapeHtml(completedDisplay)}</p>
+      ${notesLine}
+      <div class="action-item-actions">
+        ${toggleButton}
+        <button type="button" class="delete-action-btn" data-person-id="${personId}" data-record-id="${recordId}" data-action-id="${item.id}">Delete</button>
+      </div>
+    </li>
+  `;
+}
+
+function buildActionsPanelHtml(personId, recordId) {
+  const result = findPersonAndRecord(personId, recordId);
+  if (!result) {
+    return '<p class="action-empty">Record not found.</p>';
+  }
+
+  const row = {
+    personId,
+    recordId,
+    expiryDate: result.record.expiryDate,
+    notes: result.record.notes,
+  };
+  const items = result.record.actions || [];
+  const openItems = items.filter((item) => !item.completed);
+  const completedItems = items.filter((item) => item.completed);
+  const showDefaultButton = isRecordActionRequired(row);
+
+  const defaultButton = showDefaultButton
+    ? `<button type="button" class="action-defaults-btn" data-person-id="${personId}" data-record-id="${recordId}">Add default actions</button>`
+    : "";
+
+  if (items.length === 0) {
+    return `
+      <p class="action-empty">No actions added yet.</p>
+      <div class="action-panel-toolbar">${defaultButton}</div>
+    `;
+  }
+
+  const openSection =
+    openItems.length > 0
+      ? `
+        <h5 class="action-section-title">Open actions</h5>
+        <ul class="action-list">${openItems.map((item) => buildActionItemHtml(personId, recordId, item)).join("")}</ul>
+      `
+      : `<h5 class="action-section-title">Open actions</h5><p class="action-empty-inline">No open actions.</p>`;
+
+  const completedSection =
+    completedItems.length > 0
+      ? `
+        <h5 class="action-section-title">Completed actions</h5>
+        <ul class="action-list">${completedItems.map((item) => buildActionItemHtml(personId, recordId, item)).join("")}</ul>
+      `
+      : `<h5 class="action-section-title">Completed actions</h5><p class="action-empty-inline">No completed actions.</p>`;
+
+  return `
+    <div class="action-panel-toolbar">${defaultButton}</div>
+    ${openSection}
+    ${completedSection}
+  `;
+}
+
+function refreshActiveReportPreview() {
+  if (!currentReport?.type || !reportPreview || reportPreview.classList.contains("hidden")) {
+    return;
+  }
+
+  renderReportPreview(buildReport(currentReport.type));
+}
+
+function openRecordWorkspace(personId, recordId) {
+  const result = findPersonAndRecord(personId, recordId);
+  if (!result || !recordWorkspace) {
+    return;
+  }
+
+  workspaceContext = { personId, recordId };
+  recordWorkspace.classList.remove("hidden");
+  recordWorkspace.setAttribute("aria-hidden", "false");
+  document.body.classList.add("workspace-open");
+  renderTable({ refreshDashboards: false });
+}
+
+function closeRecordWorkspace() {
+  workspaceContext = null;
+
+  if (recordWorkspace) {
+    recordWorkspace.classList.add("hidden");
+    recordWorkspace.setAttribute("aria-hidden", "true");
+  }
+
+  document.body.classList.remove("workspace-open");
+  renderTable({ refreshDashboards: false });
+}
+
+function renderRecordWorkspace() {
+  if (!workspaceContext || !workspaceContent) {
+    return;
+  }
+
+  const result = findPersonAndRecord(workspaceContext.personId, workspaceContext.recordId);
+
+  if (!result) {
+    closeRecordWorkspace();
+    return;
+  }
+
+  const { person, record } = result;
+  const { personId, recordId } = workspaceContext;
+  const status = getStatus(record.expiryDate);
+  const daysRemaining = getDaysUntilExpiry(record.expiryDate);
+  const daysClass =
+    !Number.isNaN(daysRemaining) && daysRemaining < 0 ? " expired-text" : "";
+  const evidenceSummary = getEvidenceSummary(record.evidence);
+  const actionSummary = getActionSummary(record.actions);
+  const evidenceCountLabel =
+    evidenceSummary.count === 1 ? "1 document" : `${evidenceSummary.count} documents`;
+  const actionMeta = `Open: ${actionSummary.openCount} · Completed: ${actionSummary.completedCount}`;
+  const existingNotesInput = workspaceContent.querySelector("#workspace-notes-input");
+  const notesValue = existingNotesInput ? existingNotesInput.value : record.notes || "";
+
+  if (workspaceTitle) {
+    workspaceTitle.textContent = person.name;
+  }
+
+  if (workspaceSubtitle) {
+    workspaceSubtitle.textContent = `${record.complianceType} · ${person.role}`;
+  }
+
+  workspaceContent.innerHTML = `
+    <section class="workspace-section workspace-general" aria-labelledby="workspace-general-title">
+      <h3 id="workspace-general-title" class="workspace-section-title">General Information</h3>
+      <dl class="workspace-info-grid">
+        <div class="workspace-info-item">
+          <dt>Person Name</dt>
+          <dd>${escapeHtml(person.name)}</dd>
+        </div>
+        <div class="workspace-info-item">
+          <dt>Role</dt>
+          <dd>${escapeHtml(person.role)}</dd>
+        </div>
+        <div class="workspace-info-item">
+          <dt>Compliance Type</dt>
+          <dd>${escapeHtml(record.complianceType)}</dd>
+        </div>
+        <div class="workspace-info-item">
+          <dt>Status</dt>
+          <dd><span class="status status-badge ${status.className}">${getStatusBadgeLabel(status.key)}</span></dd>
+        </div>
+        <div class="workspace-info-item">
+          <dt>Expiry Date</dt>
+          <dd>${escapeHtml(formatDate(record.expiryDate))}</dd>
+        </div>
+        <div class="workspace-info-item">
+          <dt>Days Remaining</dt>
+          <dd class="days-remaining${daysClass}">${escapeHtml(formatDaysRemaining(record.expiryDate))}</dd>
+        </div>
+        <div class="workspace-info-item">
+          <dt>Renewal Cycle</dt>
+          <dd>${escapeHtml(getRenewalCycleLabel(record.renewalCycle))}</dd>
+        </div>
+      </dl>
+    </section>
+
+    <section class="workspace-section workspace-evidence" aria-labelledby="workspace-evidence-title">
+      <div class="workspace-section-header">
+        <h3 id="workspace-evidence-title" class="workspace-section-title">Evidence</h3>
+        <span class="workspace-section-meta">${escapeHtml(evidenceCountLabel)}</span>
+        <div class="workspace-section-actions">
+          <button type="button" class="evidence-add-btn" data-person-id="${personId}" data-record-id="${recordId}">Add Evidence</button>
+        </div>
+      </div>
+      <div class="evidence-panel">
+        ${buildEvidencePanelHtml(personId, recordId)}
+      </div>
+    </section>
+
+    <section class="workspace-section workspace-actions" aria-labelledby="workspace-actions-title">
+      <div class="workspace-section-header">
+        <h3 id="workspace-actions-title" class="workspace-section-title">Actions</h3>
+        <span class="workspace-section-meta">${escapeHtml(actionMeta)}</span>
+        <div class="workspace-section-actions">
+          <button type="button" class="actions-add-btn" data-person-id="${personId}" data-record-id="${recordId}">Add Action</button>
+        </div>
+      </div>
+      <div class="actions-panel">
+        ${buildActionsPanelHtml(personId, recordId)}
+      </div>
+    </section>
+
+    <section class="workspace-section workspace-history" aria-labelledby="workspace-history-title">
+      <h3 id="workspace-history-title" class="workspace-section-title">History</h3>
+      <div class="history-panel">
+        ${buildHistoryPanelHtml(personId, recordId)}
+      </div>
+    </section>
+
+    <section class="workspace-section workspace-notes" aria-labelledby="workspace-notes-title">
+      <h3 id="workspace-notes-title" class="workspace-section-title">Notes</h3>
+      <textarea id="workspace-notes-input" class="workspace-notes-input" rows="5" placeholder="Follow-up notes and audit trail...">${escapeHtml(notesValue)}</textarea>
+      <div class="workspace-notes-actions">
+        <button type="button" id="workspace-save-notes-btn" class="workspace-save-notes-btn">Save Notes</button>
+      </div>
+    </section>
+  `;
+}
+
+function handleWorkspaceRecordAction(event) {
+  const button = event.target.closest("button");
+  if (!button || !workspaceContext) {
+    return;
+  }
+
+  const personId = Number(button.dataset.personId) || workspaceContext.personId;
+  const recordId = Number(button.dataset.recordId) || workspaceContext.recordId;
+
+  if (button.classList.contains("evidence-add-btn")) {
+    openAddEvidenceModal(personId, recordId);
+  } else if (button.classList.contains("delete-evidence-btn")) {
+    deleteEvidenceItem(personId, recordId, Number(button.dataset.evidenceId));
+  } else if (button.classList.contains("evidence-download-btn")) {
+    downloadEvidenceFile(personId, recordId, Number(button.dataset.evidenceId));
+  } else if (button.classList.contains("actions-add-btn")) {
+    openAddActionModal(personId, recordId);
+  } else if (button.classList.contains("action-defaults-btn")) {
+    addDefaultActions(personId, recordId);
+  } else if (button.classList.contains("action-complete-btn")) {
+    completeActionItem(personId, recordId, Number(button.dataset.actionId));
+  } else if (button.classList.contains("action-reopen-btn")) {
+    reopenActionItem(personId, recordId, Number(button.dataset.actionId));
+  } else if (button.classList.contains("delete-action-btn")) {
+    deleteActionItem(personId, recordId, Number(button.dataset.actionId));
+  }
+}
+
+function handleWorkspaceNotesSave() {
+  if (!workspaceContext || !workspaceContent) {
+    return;
+  }
+
+  const textarea = workspaceContent.querySelector("#workspace-notes-input");
+  if (!textarea) {
+    return;
+  }
+
+  updateRecordNotes(workspaceContext.personId, workspaceContext.recordId, textarea.value);
+  showMessage(appMessage, "Notes saved.", "success");
+  renderRecordWorkspace();
+}
+
+function setupRecordWorkspaceListeners() {
+  if (!recordWorkspace) {
+    return;
+  }
+
+  recordWorkspaceBackdrop?.addEventListener("click", closeRecordWorkspace);
+  workspaceCloseBtn?.addEventListener("click", closeRecordWorkspace);
+  workspaceCloseFooterBtn?.addEventListener("click", closeRecordWorkspace);
+
+  workspaceEditBtn?.addEventListener("click", () => {
+    if (!workspaceContext) {
+      return;
+    }
+
+    startEdit(workspaceContext.personId, workspaceContext.recordId);
+  });
+
+  workspaceRenewBtn?.addEventListener("click", () => {
+    if (!workspaceContext) {
+      return;
+    }
+
+    renewComplianceRecord(workspaceContext.personId, workspaceContext.recordId);
+  });
+
+  workspaceDeleteBtn?.addEventListener("click", () => {
+    if (!workspaceContext) {
+      return;
+    }
+
+    deleteComplianceRecord(workspaceContext.personId, workspaceContext.recordId);
+  });
+
+  workspaceContent?.addEventListener("click", handleWorkspaceRecordAction);
+
+  workspaceContent?.addEventListener("click", (event) => {
+    if (event.target.closest("#workspace-save-notes-btn")) {
+      handleWorkspaceNotesSave();
+    }
+  });
+}
+
+function openAddActionModal(personId, recordId) {
+  const result = findPersonAndRecord(personId, recordId);
+  if (!result) {
+    return;
+  }
+
+  const { person, record } = result;
+
+  actionModalContext = {
+    personId,
+    recordId,
+    recordLabel: `${person.name} — ${record.complianceType}`,
+  };
+
+  actionModalRecordLabel.textContent = actionModalContext.recordLabel;
+  actionTitleInput.value = "";
+  actionNotesInput.value = "";
+  hideMessage(actionModalMessage);
+
+  actionModal.classList.remove("hidden");
+  actionModal.setAttribute("aria-hidden", "false");
+  actionTitleInput.focus();
+}
+
+function closeActionModal() {
+  if (!actionModal) {
+    actionModalContext = null;
+    return;
+  }
+
+  actionModal.classList.add("hidden");
+  actionModal.setAttribute("aria-hidden", "true");
+  actionModalContext = null;
+
+  if (actionModalMessage) {
+    hideMessage(actionModalMessage);
+  }
+}
+
+function handleSaveAction() {
+  if (!actionModalContext) {
+    return;
+  }
+
+  const title = actionTitleInput.value.trim();
+  const notes = actionNotesInput.value.trim();
+
+  if (!title) {
+    showMessage(actionModalMessage, "Action title is required.", "error");
+    return;
+  }
+
+  const { personId, recordId, recordLabel } = actionModalContext;
+  const result = findPersonAndRecord(personId, recordId);
+
+  if (!result) {
+    closeActionModal();
+    return;
+  }
+
+  const actionItem = {
+    id: nextActionId++,
+    title,
+    completed: false,
+    createdAt: new Date().toISOString(),
+    completedAt: null,
+    notes,
+  };
+
+  if (!Array.isArray(result.record.actions)) {
+    result.record.actions = [];
+  }
+
+  result.record.actions.push(actionItem);
+
+  appendHistoryEntry(
+    result.record,
+    HISTORY_ACTIONS.ACTION_ADDED,
+    `Action added: ${title}.`
+  );
+
+  savePeople();
+  closeActionModal();
+  showMessage(appMessage, `Action added to ${recordLabel}.`, "success");
+  renderTable({ refreshDashboards: false });
+}
+
+function addDefaultActions(personId, recordId) {
+  const result = findPersonAndRecord(personId, recordId);
+  if (!result) {
+    return;
+  }
+
+  const { person, record } = result;
+
+  if (!Array.isArray(record.actions)) {
+    record.actions = [];
+  }
+
+  const existingTitles = new Set(
+    record.actions.map((item) => item.title.trim().toLowerCase())
+  );
+  let addedCount = 0;
+
+  DEFAULT_ACTION_TEMPLATES.forEach((templateTitle) => {
+    if (existingTitles.has(templateTitle.toLowerCase())) {
+      return;
+    }
+
+    record.actions.push({
+      id: nextActionId++,
+      title: templateTitle,
+      completed: false,
+      createdAt: new Date().toISOString(),
+      completedAt: null,
+      notes: "",
+    });
+
+    appendHistoryEntry(
+      record,
+      HISTORY_ACTIONS.ACTION_ADDED,
+      `Action added: ${templateTitle}.`
+    );
+
+    existingTitles.add(templateTitle.toLowerCase());
+    addedCount += 1;
+  });
+
+  if (addedCount === 0) {
+    showMessage(
+      appMessage,
+      `All default actions already exist for ${person.name} — ${record.complianceType}.`,
+      "error"
+    );
+    return;
+  }
+
+  savePeople();
+  showMessage(
+    appMessage,
+    `Added ${addedCount} default action${addedCount === 1 ? "" : "s"} to ${person.name} — ${record.complianceType}.`,
+    "success"
+  );
+  renderTable({ refreshDashboards: false });
+}
+
+function completeActionItem(personId, recordId, actionId) {
+  const result = findPersonAndRecord(personId, recordId);
+  if (!result) {
+    return;
+  }
+
+  const actionItem = (result.record.actions || []).find((item) => item.id === actionId);
+
+  if (!actionItem || actionItem.completed) {
+    return;
+  }
+
+  actionItem.completed = true;
+  actionItem.completedAt = new Date().toISOString();
+
+  appendHistoryEntry(
+    result.record,
+    HISTORY_ACTIONS.ACTION_COMPLETED,
+    `Action completed: ${actionItem.title}.`
+  );
+
+  savePeople();
+  showMessage(appMessage, `Action completed: ${actionItem.title}.`, "success");
+  renderTable({ refreshDashboards: false });
+}
+
+function reopenActionItem(personId, recordId, actionId) {
+  const result = findPersonAndRecord(personId, recordId);
+  if (!result) {
+    return;
+  }
+
+  const actionItem = (result.record.actions || []).find((item) => item.id === actionId);
+
+  if (!actionItem || !actionItem.completed) {
+    return;
+  }
+
+  actionItem.completed = false;
+  actionItem.completedAt = null;
+
+  appendHistoryEntry(
+    result.record,
+    HISTORY_ACTIONS.ACTION_REOPENED,
+    `Action reopened: ${actionItem.title}.`
+  );
+
+  savePeople();
+  showMessage(appMessage, `Action reopened: ${actionItem.title}.`, "success");
+  renderTable({ refreshDashboards: false });
+}
+
+function deleteActionItem(personId, recordId, actionId) {
+  const result = findPersonAndRecord(personId, recordId);
+  if (!result) {
+    return;
+  }
+
+  const { person, record } = result;
+  const actionItem = (record.actions || []).find((item) => item.id === actionId);
+
+  if (!actionItem) {
+    return;
+  }
+
+  const confirmed = confirm(
+    `Delete this action?\n\n${actionItem.title}\n\nThis cannot be undone.`
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  record.actions = (record.actions || []).filter((item) => item.id !== actionId);
+
+  appendHistoryEntry(
+    record,
+    HISTORY_ACTIONS.ACTION_DELETED,
+    `Action deleted: ${actionItem.title}.`
+  );
+
+  savePeople();
+  showMessage(
+    appMessage,
+    `Action deleted: ${person.name} — ${actionItem.title}.`,
+    "success"
+  );
+  renderTable({ refreshDashboards: false });
+}
+
+function renderActionSummaryCards() {
+  const counts = getGlobalActionCounts();
+
+  if (actionSummaryOpen) {
+    actionSummaryOpen.textContent = counts.openActions;
+  }
+
+  if (actionSummaryCompleted) {
+    actionSummaryCompleted.textContent = counts.completedActions;
+  }
+
+  if (actionSummaryExpiredOpen) {
+    actionSummaryExpiredOpen.textContent = counts.expiredWithOpenActions;
+  }
+}
+
+function setupActionModalListeners() {
+  if (!actionModal) {
+    return;
+  }
+
+  actionModal.addEventListener("click", (event) => {
+    const target = event.target instanceof Element ? event.target : event.target.parentElement;
+
+    if (!target) {
+      return;
+    }
+
+    if (target === actionModal) {
+      closeActionModal();
+      return;
+    }
+
+    const actionButton = target.closest(
+      "#action-save-btn, #action-cancel-btn, #action-modal-close-btn"
+    );
+
+    if (!actionButton) {
+      return;
+    }
+
+    event.preventDefault();
+
+    if (actionButton.id === "action-save-btn") {
+      handleSaveAction();
+    } else {
+      closeActionModal();
+    }
+  });
+}
+
 // Convert an old flat person row into the new nested format
 function migrateLegacyPerson(person, recordId) {
   return {
@@ -501,6 +1637,8 @@ function normalizePerson(person) {
       notes: typeof record.notes === "string" ? record.notes : "",
       renewalCycle: normalizeRenewalCycle(record.renewalCycle),
       history: (record.history || []).map((entry) => normalizeHistoryEntry(entry)),
+      evidence: normalizeEvidenceList(record.evidence),
+      actions: normalizeActionsList(record.actions),
     })),
   };
 }
@@ -521,6 +1659,8 @@ function getAllComplianceRows() {
         renewalCycle: record.renewalCycle || RENEWAL_CYCLE_MANUAL,
         notes: record.notes || "",
         history: record.history || [],
+        evidence: record.evidence || [],
+        actions: record.actions || [],
       });
     });
   });
@@ -775,7 +1915,11 @@ function loadPeople() {
       : [];
     nextHistoryEntryId =
       typeof data.nextHistoryEntryId === "number" ? data.nextHistoryEntryId : 1;
+    nextEvidenceId = typeof data.nextEvidenceId === "number" ? data.nextEvidenceId : 1;
+    nextActionId = typeof data.nextActionId === "number" ? data.nextActionId : 1;
     syncNextHistoryEntryId();
+    syncNextEvidenceId();
+    syncNextActionId();
     savePeople();
   } catch (error) {
     applySampleData();
@@ -801,6 +1945,9 @@ function resetSampleData() {
   hideMessage(editFormMessage);
   clearAllFilters();
   expandedHistoryRows.clear();
+  expandedEvidenceRows.clear();
+  expandedActionRows.clear();
+  closeRecordWorkspace();
   showMessage(appMessage, "Sample data has been restored.", "success");
   renderTable();
 }
@@ -1470,6 +2617,7 @@ function renderSummary() {
   summaryDueSoon.textContent = counts.dueSoon;
   summaryExpired.textContent = counts.expired;
 
+  renderActionSummaryCards();
   updateSummaryActiveState();
 }
 
@@ -1921,6 +3069,8 @@ function deleteComplianceRecord(personId, recordId) {
       renewalCycle: record.renewalCycle || RENEWAL_CYCLE_MANUAL,
       notes: record.notes || "",
       history: [...(record.history || [])],
+      evidence: [...(record.evidence || [])],
+      actions: [...(record.actions || [])],
     },
   });
 
@@ -1939,6 +3089,19 @@ function deleteComplianceRecord(personId, recordId) {
 
   if (person.complianceRecords.length === 0) {
     people = people.filter((item) => item.id !== personId);
+  }
+
+  if (
+    workspaceContext &&
+    workspaceContext.personId === personId &&
+    workspaceContext.recordId === recordId
+  ) {
+    workspaceContext = null;
+    if (recordWorkspace) {
+      recordWorkspace.classList.add("hidden");
+      recordWorkspace.setAttribute("aria-hidden", "true");
+    }
+    document.body.classList.remove("workspace-open");
   }
 
   savePeople();
@@ -2136,49 +3299,32 @@ function renderTable({ refreshDashboards = true } = {}) {
 
   pageRows.forEach((row) => {
     const status = getStatus(row.expiryDate);
-    const daysRemaining = getDaysUntilExpiry(row.expiryDate);
-    const daysClass =
-      !Number.isNaN(daysRemaining) && daysRemaining < 0
-        ? "days-remaining expired-text"
-        : "days-remaining";
+    const actionSummary = getActionSummary(row.actions);
+    const openActionsClass =
+      actionSummary.openCount > 0 ? "open-actions-count has-open" : "open-actions-count";
     const tableRow = document.createElement("tr");
+
+    if (
+      workspaceContext &&
+      workspaceContext.personId === row.personId &&
+      workspaceContext.recordId === row.recordId
+    ) {
+      tableRow.classList.add("workspace-active-row");
+    }
 
     tableRow.innerHTML = `
       <td>${row.name}</td>
       <td>${row.role}</td>
       <td class="compliance-type-cell">${row.complianceType}</td>
-      <td class="renewal-cycle-cell">${getRenewalCycleLabel(row.renewalCycle)}</td>
       <td>${formatDate(row.expiryDate)}</td>
-      <td class="${daysClass}">${formatDaysRemaining(row.expiryDate)}</td>
       <td><span class="status status-badge ${status.className}">${getStatusBadgeLabel(status.key)}</span></td>
-      <td class="notes-cell">
-        <textarea class="notes-input" data-person-id="${row.personId}" data-record-id="${row.recordId}" rows="2" placeholder="Add follow-up notes...">${escapeHtml(row.notes || "")}</textarea>
-      </td>
-      <td>
-        <div class="action-buttons">
-          <button type="button" class="history-btn" data-person-id="${row.personId}" data-record-id="${row.recordId}">${isHistoryExpanded(row.personId, row.recordId) ? "Hide history" : "View history"}</button>
-          <button type="button" class="edit-btn" data-person-id="${row.personId}" data-record-id="${row.recordId}">Edit</button>
-          <button type="button" class="renew-btn" data-person-id="${row.personId}" data-record-id="${row.recordId}">Renew</button>
-          <button type="button" class="delete-btn" data-person-id="${row.personId}" data-record-id="${row.recordId}">Delete</button>
-        </div>
-      </td>
+      <td class="${openActionsClass}">${actionSummary.openCount}</td>
+      <td class="table-action-cell"><button type="button" class="details-btn" data-person-id="${row.personId}" data-record-id="${row.recordId}">Details</button></td>
+      <td class="table-action-cell"><button type="button" class="edit-btn" data-person-id="${row.personId}" data-record-id="${row.recordId}">Edit</button></td>
+      <td class="table-action-cell"><button type="button" class="renew-btn" data-person-id="${row.personId}" data-record-id="${row.recordId}">Renew</button></td>
     `;
 
     tableBody.appendChild(tableRow);
-
-    if (isHistoryExpanded(row.personId, row.recordId)) {
-      const historyRow = document.createElement("tr");
-      historyRow.className = "history-row";
-      historyRow.innerHTML = `
-        <td colspan="9">
-          <div class="history-panel">
-            <h4 class="history-panel-title">Compliance history</h4>
-            ${buildHistoryPanelHtml(row.personId, row.recordId)}
-          </div>
-        </td>
-      `;
-      tableBody.appendChild(historyRow);
-    }
   });
 
   if (filteredCount === totalCount) {
@@ -2200,6 +3346,12 @@ function renderTable({ refreshDashboards = true } = {}) {
     renderAnalytics();
     renderDashboard();
   }
+
+  if (workspaceContext) {
+    renderRecordWorkspace();
+  }
+
+  refreshActiveReportPreview();
 }
 
 // Wrap a value in quotes if it contains a comma or quote (keeps CSV valid)
@@ -2244,6 +3396,444 @@ function downloadFile(content, filename, mimeType) {
   URL.revokeObjectURL(link.href);
 }
 
+function getEvidenceCoverageStats() {
+  const allRows = getAllComplianceRows();
+  const total = allRows.length;
+  const withEvidence = allRows.filter(
+    (row) => getEvidenceSummary(row.evidence).count > 0
+  ).length;
+  const withoutEvidence = total - withEvidence;
+  const coveragePercent = total === 0 ? 0 : Math.round((withEvidence / total) * 100);
+
+  return {
+    total,
+    withEvidence,
+    withoutEvidence,
+    coveragePercent,
+  };
+}
+
+function getReportTitle(reportType) {
+  const titles = {
+    [REPORT_TYPES.FULL]: "Full Compliance Report",
+    [REPORT_TYPES.EXPIRED]: "Expired Records Report",
+    [REPORT_TYPES.EXPIRING_30]: "Expiring in 30 Days Report",
+    [REPORT_TYPES.MISSING_EVIDENCE]: "Missing Evidence Report",
+    [REPORT_TYPES.EVIDENCE_COVERAGE]: "Evidence Coverage Summary",
+    [REPORT_TYPES.OPEN_ACTIONS]: "Open Actions Report",
+    [REPORT_TYPES.RECORDS_WITH_OPEN_ACTIONS]: "Records with Open Actions",
+    [REPORT_TYPES.EXPIRED_WITH_OPEN_ACTIONS]: "Expired Records with Open Actions",
+  };
+
+  return titles[reportType] || "Compliance Report";
+}
+
+function getReportFilename(reportType) {
+  const slug = reportType.replace(/-/g, "_");
+  return `compliance-report-${slug}.csv`;
+}
+
+function getReportRowsForType(reportType) {
+  const allRows = getAllComplianceRows();
+
+  if (reportType === REPORT_TYPES.EXPIRED) {
+    return allRows.filter((row) => getStatus(row.expiryDate).key === "expired");
+  }
+
+  if (reportType === REPORT_TYPES.EXPIRING_30) {
+    return allRows.filter((row) => {
+      const daysRemaining = getDaysUntilExpiry(row.expiryDate);
+      return !Number.isNaN(daysRemaining) && daysRemaining >= 0 && daysRemaining <= 30;
+    });
+  }
+
+  if (reportType === REPORT_TYPES.MISSING_EVIDENCE) {
+    return allRows.filter((row) => getEvidenceSummary(row.evidence).count === 0);
+  }
+
+  if (reportType === REPORT_TYPES.RECORDS_WITH_OPEN_ACTIONS) {
+    return allRows.filter((row) => getActionSummary(row.actions).openCount > 0);
+  }
+
+  if (reportType === REPORT_TYPES.EXPIRED_WITH_OPEN_ACTIONS) {
+    return allRows.filter(
+      (row) =>
+        getStatus(row.expiryDate).key === "expired" &&
+        getActionSummary(row.actions).openCount > 0
+    );
+  }
+
+  return allRows;
+}
+
+function getOpenActionFlattenedRows() {
+  const flattened = [];
+
+  getAllComplianceRows().forEach((row) => {
+    (row.actions || [])
+      .filter((item) => !item.completed)
+      .forEach((action) => {
+        flattened.push({ row, action });
+      });
+  });
+
+  flattened.sort((a, b) => {
+    const dateCompare = a.action.createdAt.localeCompare(b.action.createdAt);
+
+    if (dateCompare !== 0) {
+      return dateCompare;
+    }
+
+    return a.row.name.localeCompare(b.row.name);
+  });
+
+  return flattened;
+}
+
+function sortReportRows(rows, reportType) {
+  const sorted = [...rows];
+
+  sorted.sort((a, b) => {
+    if (
+      reportType === REPORT_TYPES.FULL ||
+      reportType === REPORT_TYPES.EVIDENCE_COVERAGE ||
+      reportType === REPORT_TYPES.RECORDS_WITH_OPEN_ACTIONS ||
+      reportType === REPORT_TYPES.EXPIRED_WITH_OPEN_ACTIONS
+    ) {
+      return a.name.localeCompare(b.name) || a.complianceType.localeCompare(b.complianceType);
+    }
+
+    return a.expiryDate.localeCompare(b.expiryDate) || a.name.localeCompare(b.name);
+  });
+
+  return sorted;
+}
+
+function getReportColumns(reportType) {
+  if (reportType === REPORT_TYPES.OPEN_ACTIONS) {
+    return [
+      { key: "name", label: "Name" },
+      { key: "role", label: "Role" },
+      { key: "complianceType", label: "Compliance Type" },
+      { key: "expiryDate", label: "Expiry Date" },
+      { key: "actionTitle", label: "Action Title" },
+      { key: "createdAt", label: "Created" },
+      { key: "notes", label: "Notes" },
+    ];
+  }
+
+  if (
+    reportType === REPORT_TYPES.RECORDS_WITH_OPEN_ACTIONS ||
+    reportType === REPORT_TYPES.EXPIRED_WITH_OPEN_ACTIONS
+  ) {
+    return [
+      { key: "name", label: "Name" },
+      { key: "role", label: "Role" },
+      { key: "complianceType", label: "Compliance Type" },
+      { key: "expiryDate", label: "Expiry Date" },
+      { key: "status", label: "Status" },
+      { key: "openActionCount", label: "Open Actions" },
+    ];
+  }
+
+  if (reportType === REPORT_TYPES.EVIDENCE_COVERAGE) {
+    return [
+      { key: "name", label: "Name" },
+      { key: "role", label: "Role" },
+      { key: "complianceType", label: "Compliance Type" },
+      { key: "expiryDate", label: "Expiry Date" },
+      { key: "status", label: "Status" },
+      { key: "evidenceCount", label: "Evidence Count" },
+    ];
+  }
+
+  if (reportType === REPORT_TYPES.FULL) {
+    return [
+      { key: "name", label: "Name" },
+      { key: "role", label: "Role" },
+      { key: "complianceType", label: "Compliance Type" },
+      { key: "renewalCycle", label: "Renewal Cycle" },
+      { key: "expiryDate", label: "Expiry Date" },
+      { key: "status", label: "Status" },
+      { key: "evidenceCount", label: "Evidence Count" },
+    ];
+  }
+
+  return [
+    { key: "name", label: "Name" },
+    { key: "role", label: "Role" },
+    { key: "complianceType", label: "Compliance Type" },
+    { key: "renewalCycle", label: "Renewal Cycle" },
+    { key: "expiryDate", label: "Expiry Date" },
+    { key: "status", label: "Status" },
+    { key: "evidenceCount", label: "Evidence Count" },
+  ];
+}
+
+function buildReportRowData(row, reportType) {
+  const status = getStatus(row.expiryDate);
+  const evidenceSummary = getEvidenceSummary(row.evidence);
+  const actionSummary = getActionSummary(row.actions);
+
+  return {
+    name: row.name,
+    role: row.role,
+    complianceType: row.complianceType,
+    renewalCycle: getRenewalCycleLabel(row.renewalCycle),
+    expiryDate: formatDate(row.expiryDate),
+    status: getStatusBadgeLabel(status.key),
+    evidenceCount: String(evidenceSummary.count),
+    openActionCount: String(actionSummary.openCount),
+  };
+}
+
+function buildOpenActionReportRow(entry) {
+  return {
+    name: entry.row.name,
+    role: entry.row.role,
+    complianceType: entry.row.complianceType,
+    expiryDate: formatDate(entry.row.expiryDate),
+    actionTitle: entry.action.title,
+    createdAt: formatHistoryTimestamp(entry.action.createdAt),
+    notes: entry.action.notes || "",
+  };
+}
+
+function buildReport(reportType) {
+  const generatedAt = new Date();
+  const columns = getReportColumns(reportType);
+
+  if (reportType === REPORT_TYPES.OPEN_ACTIONS) {
+    const flattened = getOpenActionFlattenedRows();
+    const tableRows = flattened.map((entry) => buildOpenActionReportRow(entry));
+
+    return {
+      type: reportType,
+      title: getReportTitle(reportType),
+      generatedAt: generatedAt.toISOString(),
+      generatedDisplay: generatedAt.toLocaleString("en-GB", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+      totalCount: tableRows.length,
+      columns,
+      tableRows,
+      summary: null,
+      filename: getReportFilename(reportType),
+    };
+  }
+
+  const rows = sortReportRows(getReportRowsForType(reportType), reportType);
+  const tableRows = rows.map((row) => buildReportRowData(row, reportType));
+
+  const report = {
+    type: reportType,
+    title: getReportTitle(reportType),
+    generatedAt: generatedAt.toISOString(),
+    generatedDisplay: generatedAt.toLocaleString("en-GB", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    }),
+    totalCount: rows.length,
+    columns,
+    tableRows,
+    summary: null,
+    filename: getReportFilename(reportType),
+  };
+
+  if (reportType === REPORT_TYPES.EVIDENCE_COVERAGE) {
+    report.summary = getEvidenceCoverageStats();
+    report.totalCount = report.summary.total;
+  }
+
+  return report;
+}
+
+function renderReportSummaryStats(summary) {
+  if (!reportSummaryStats || !summary) {
+    return;
+  }
+
+  reportSummaryStats.innerHTML = `
+    <div class="report-stat-card">
+      <span class="report-stat-label">Total compliance records</span>
+      <strong class="report-stat-value">${summary.total}</strong>
+    </div>
+    <div class="report-stat-card">
+      <span class="report-stat-label">Records with evidence</span>
+      <strong class="report-stat-value">${summary.withEvidence}</strong>
+    </div>
+    <div class="report-stat-card">
+      <span class="report-stat-label">Records without evidence</span>
+      <strong class="report-stat-value">${summary.withoutEvidence}</strong>
+    </div>
+    <div class="report-stat-card report-stat-highlight">
+      <span class="report-stat-label">Evidence coverage</span>
+      <strong class="report-stat-value">${summary.coveragePercent}%</strong>
+    </div>
+  `;
+  reportSummaryStats.classList.remove("hidden");
+}
+
+function getReportColumnClass(columnKey) {
+  if (
+    columnKey === "evidenceCount" ||
+    columnKey === "openActionCount" ||
+    columnKey === "completedActionCount" ||
+    columnKey === "renewalCycle"
+  ) {
+    return "col-compact";
+  }
+
+  if (columnKey === "notes") {
+    return "col-notes";
+  }
+
+  if (columnKey === "name" || columnKey === "complianceType" || columnKey === "status") {
+    return "col-primary";
+  }
+
+  return "";
+}
+
+function renderReportPreview(report) {
+  if (!reportPreview || !reportTitle || !reportMeta || !reportTableHead || !reportTableBody) {
+    return;
+  }
+
+  currentReport = report;
+
+  reportTitle.textContent = report.title;
+  reportMeta.textContent = `Generated: ${report.generatedDisplay} · Total records included: ${report.totalCount}`;
+
+  if (report.type === REPORT_TYPES.EVIDENCE_COVERAGE && report.summary) {
+    renderReportSummaryStats(report.summary);
+  } else if (reportSummaryStats) {
+    reportSummaryStats.innerHTML = "";
+    reportSummaryStats.classList.add("hidden");
+  }
+
+  reportTableHead.innerHTML = `
+    <tr>
+      ${report.columns
+        .map(
+          (column) =>
+            `<th class="${getReportColumnClass(column.key)}">${escapeHtml(column.label)}</th>`
+        )
+        .join("")}
+    </tr>
+  `;
+
+  if (report.tableRows.length === 0) {
+    reportTableBody.innerHTML = `
+      <tr>
+        <td colspan="${report.columns.length}" class="report-empty-cell">No records match this report.</td>
+      </tr>
+    `;
+  } else {
+    reportTableBody.innerHTML = report.tableRows
+      .map((row) => {
+        const cells = report.columns
+          .map(
+            (column) =>
+              `<td class="${getReportColumnClass(column.key)}">${escapeHtml(row[column.key] ?? "")}</td>`
+          )
+          .join("");
+
+        return `<tr>${cells}</tr>`;
+      })
+      .join("");
+  }
+
+  reportPreview.classList.remove("hidden");
+
+  if (reportEmptyHint) {
+    reportEmptyHint.classList.add("hidden");
+  }
+
+  reportCards.forEach((card) => {
+    card.classList.toggle("report-card-active", card.dataset.report === report.type);
+  });
+
+  reportPreview.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+function generateReport(reportType) {
+  const report = buildReport(reportType);
+  renderReportPreview(report);
+}
+
+function exportReportCsv() {
+  if (!currentReport) {
+    showMessage(appMessage, "Generate a report first.", "error");
+    return;
+  }
+
+  const headerRow = currentReport.columns.map((column) => escapeCsvValue(column.label)).join(",");
+  const dataRows = currentReport.tableRows.map((row) =>
+    currentReport.columns
+      .map((column) => escapeCsvValue(row[column.key] ?? ""))
+      .join(",")
+  );
+
+  const summaryLines = [];
+
+  if (currentReport.type === REPORT_TYPES.EVIDENCE_COVERAGE && currentReport.summary) {
+    const summary = currentReport.summary;
+    summaryLines.push(
+      `"Report","${escapeCsvValue(currentReport.title)}"`,
+      `"Generated","${escapeCsvValue(currentReport.generatedDisplay)}"`,
+      `"Total compliance records","${summary.total}"`,
+      `"Records with evidence","${summary.withEvidence}"`,
+      `"Records without evidence","${summary.withoutEvidence}"`,
+      `"Evidence coverage","${summary.coveragePercent}%"`,
+      ""
+    );
+  } else {
+    summaryLines.push(
+      `"Report","${escapeCsvValue(currentReport.title)}"`,
+      `"Generated","${escapeCsvValue(currentReport.generatedDisplay)}"`,
+      `"Total records included","${currentReport.totalCount}"`,
+      ""
+    );
+  }
+
+  const csvContent = [...summaryLines, headerRow, ...dataRows].join("\n");
+  downloadFile(csvContent, currentReport.filename, "text/csv");
+  showMessage(appMessage, "Report CSV downloaded.", "success");
+}
+
+function printReport() {
+  if (!currentReport) {
+    showMessage(appMessage, "Generate a report first.", "error");
+    return;
+  }
+
+  window.print();
+}
+
+function setupReportListeners() {
+  reportCards.forEach((card) => {
+    card.addEventListener("click", () => {
+      generateReport(card.dataset.report);
+    });
+  });
+
+  if (exportReportCsvBtn) {
+    exportReportCsvBtn.addEventListener("click", exportReportCsv);
+  }
+
+  if (printReportBtn) {
+    printReportBtn.addEventListener("click", printReport);
+  }
+}
+
 // Build a CSV file from all compliance records and download it
 function exportToCsv() {
   const headers = [
@@ -2254,11 +3844,17 @@ function exportToCsv() {
     "Expiry Date",
     "Status",
     "Reminder Status",
+    "Evidence Count",
+    "Latest Evidence Added",
+    "Open Action Count",
+    "Completed Action Count",
     "Notes",
   ];
 
   const rows = getAllComplianceRows().map((row) => {
     const status = getStatus(row.expiryDate);
+    const evidenceSummary = getEvidenceSummary(row.evidence);
+    const actionSummary = getActionSummary(row.actions);
 
     return [
       escapeCsvValue(row.name),
@@ -2268,6 +3864,10 @@ function exportToCsv() {
       escapeCsvValue(formatDate(row.expiryDate)),
       escapeCsvValue(status.label),
       escapeCsvValue(getReminderStatusLabel(row.expiryDate, row.notes)),
+      escapeCsvValue(String(evidenceSummary.count)),
+      escapeCsvValue(evidenceSummary.latestAdded),
+      escapeCsvValue(String(actionSummary.openCount)),
+      escapeCsvValue(String(actionSummary.completedCount)),
       escapeCsvValue(row.notes || ""),
     ].join(",");
   });
@@ -2279,12 +3879,14 @@ function exportToCsv() {
 function buildBackupData() {
   return {
     backupVersion: BACKUP_VERSION,
-    appVersion: "1.9.0",
+    appVersion: "2.3.0",
     exportedAt: new Date().toISOString(),
     people,
     nextPersonId,
     nextRecordId,
     nextHistoryEntryId,
+    nextEvidenceId,
+    nextActionId,
     deletedRecordHistory,
   };
 }
@@ -2342,12 +3944,19 @@ function applyBackupData(data) {
   nextRecordId = data.nextRecordId || 1000;
   nextHistoryEntryId =
     typeof data.nextHistoryEntryId === "number" ? data.nextHistoryEntryId : 1;
+  nextEvidenceId = typeof data.nextEvidenceId === "number" ? data.nextEvidenceId : 1;
+  nextActionId = typeof data.nextActionId === "number" ? data.nextActionId : 1;
   deletedRecordHistory = Array.isArray(data.deletedRecordHistory)
     ? data.deletedRecordHistory
     : [];
   people = data.people.map((person) => normalizePerson(person));
   syncNextHistoryEntryId();
+  syncNextEvidenceId();
+  syncNextActionId();
   expandedHistoryRows.clear();
+  expandedEvidenceRows.clear();
+  expandedActionRows.clear();
+  closeRecordWorkspace();
   hideEditForm();
   savePeople();
 }
@@ -2695,7 +4304,7 @@ function handleCsvImport(event) {
   reader.readAsText(file);
 }
 
-// Handle Edit and Delete in the table
+// Handle Edit, Details, and Renew in the table
 tableBody.addEventListener("click", (event) => {
   const button = event.target;
   if (!button.matches("button")) return;
@@ -2703,28 +4312,14 @@ tableBody.addEventListener("click", (event) => {
   const personId = Number(button.dataset.personId);
   const recordId = Number(button.dataset.recordId);
 
-  if (button.classList.contains("history-btn")) {
-    toggleHistoryRow(personId, recordId);
+  if (button.classList.contains("details-btn")) {
+    openRecordWorkspace(personId, recordId);
   } else if (button.classList.contains("edit-btn")) {
     startEdit(personId, recordId);
   } else if (button.classList.contains("renew-btn")) {
     renewComplianceRecord(personId, recordId);
-  } else if (button.classList.contains("delete-btn")) {
-    deleteComplianceRecord(personId, recordId);
   }
 });
-
-tableBody.addEventListener("blur", (event) => {
-  if (!event.target.classList.contains("notes-input")) return;
-
-  const personId = Number(event.target.dataset.personId);
-  const recordId = Number(event.target.dataset.recordId);
-  const textarea = event.target;
-
-  setTimeout(() => {
-    updateRecordNotes(personId, recordId, textarea.value);
-  }, 0);
-}, true);
 
 // Handle the edit-person form
 editForm.addEventListener("submit", (event) => {
@@ -2791,10 +4386,53 @@ function setupRenewModalListeners() {
 }
 
 document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape" && renewModalContext) {
-    closeRenewModal();
+  if (event.key === "Escape") {
+    if (renewModalContext) {
+      closeRenewModal();
+    } else if (evidenceModalContext) {
+      closeEvidenceModal();
+    } else if (actionModalContext) {
+      closeActionModal();
+    } else if (workspaceContext) {
+      closeRecordWorkspace();
+    }
   }
 });
+
+function setupEvidenceModalListeners() {
+  if (!evidenceModal) {
+    return;
+  }
+
+  evidenceModal.addEventListener("click", (event) => {
+    const target = event.target instanceof Element ? event.target : event.target.parentElement;
+
+    if (!target) {
+      return;
+    }
+
+    if (target === evidenceModal) {
+      closeEvidenceModal();
+      return;
+    }
+
+    const actionButton = target.closest(
+      "#evidence-save-btn, #evidence-cancel-btn, #evidence-modal-close-btn"
+    );
+
+    if (!actionButton) {
+      return;
+    }
+
+    event.preventDefault();
+
+    if (actionButton.id === "evidence-save-btn") {
+      handleSaveEvidence();
+    } else {
+      closeEvidenceModal();
+    }
+  });
+}
 
 // Handle the add-person form
 form.addEventListener("submit", (event) => {
@@ -3012,6 +4650,10 @@ if (importBackupBtn && backupFileInput) {
 
 // Load saved data, then show the table
 setupRenewModalListeners();
+setupEvidenceModalListeners();
+setupActionModalListeners();
+setupRecordWorkspaceListeners();
+setupReportListeners();
 loadReminderSettings();
 loadPeople();
 syncAddFormRenewalCycleDefault();

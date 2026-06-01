@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Compliance Reminder System v1.9.0</title>
-  <link rel="stylesheet" href="styles.css?v=1.9.3">
+  <title>Compliance Reminder System v2.3.0</title>
+  <link rel="stylesheet" href="styles.css?v=2.3.0">
 </head>
 <body>
   <div class="container">
     <header>
       <h1>Compliance Reminder System</h1>
-      <p class="version-badge">Version 1.9.0</p>
+      <p class="version-badge">Version 2.3.0</p>
       <p class="subtitle">Track safeguarding compliance, training renewals and DBS expiry dates</p>
       <button type="button" id="reset-sample-btn" class="reset-btn">Reset sample data</button>
     </header>
@@ -34,6 +34,21 @@
         <p class="summary-label">Expired</p>
         <p id="summary-expired" class="summary-number">0</p>
       </button>
+    </section>
+
+    <section class="action-summary-cards" id="action-summary-section">
+      <div class="action-summary-card">
+        <p class="summary-label">Open Actions</p>
+        <p id="action-summary-open" class="summary-number">0</p>
+      </div>
+      <div class="action-summary-card action-summary-completed">
+        <p class="summary-label">Completed Actions</p>
+        <p id="action-summary-completed" class="summary-number">0</p>
+      </div>
+      <div class="action-summary-card action-summary-expired">
+        <p class="summary-label">Expired Records with Open Actions</p>
+        <p id="action-summary-expired-open" class="summary-number">0</p>
+      </div>
     </section>
 
     <section class="card reminder-engine-card" id="reminders-section">
@@ -255,6 +270,65 @@
       </div>
     </section>
 
+    <section class="card reports-section" id="reports-section">
+      <h2>Reports &amp; Audit Pack</h2>
+      <p class="settings-hint">Generate on-screen reports for audits and compliance reviews. Viewing and exporting reports does not create history entries.</p>
+      <div class="report-cards">
+        <button type="button" class="report-card" data-report="full-compliance">
+          <span class="report-card-title">Full Compliance Report</span>
+          <span class="report-card-desc">All records with status and evidence counts</span>
+        </button>
+        <button type="button" class="report-card report-card-expired" data-report="expired">
+          <span class="report-card-title">Expired Records Report</span>
+          <span class="report-card-desc">Records past their expiry date</span>
+        </button>
+        <button type="button" class="report-card report-card-expiring" data-report="expiring-30">
+          <span class="report-card-title">Expiring in 30 Days Report</span>
+          <span class="report-card-desc">Records due within the next 30 days</span>
+        </button>
+        <button type="button" class="report-card report-card-missing" data-report="missing-evidence">
+          <span class="report-card-title">Missing Evidence Report</span>
+          <span class="report-card-desc">Records with no evidence attached</span>
+        </button>
+        <button type="button" class="report-card report-card-coverage" data-report="evidence-coverage">
+          <span class="report-card-title">Evidence Coverage Summary</span>
+          <span class="report-card-desc">Overview of evidence across all records</span>
+        </button>
+        <button type="button" class="report-card report-card-actions" data-report="open-actions">
+          <span class="report-card-title">Open Actions Report</span>
+          <span class="report-card-desc">All open compliance actions across records</span>
+        </button>
+        <button type="button" class="report-card report-card-actions" data-report="records-with-open-actions">
+          <span class="report-card-title">Records with Open Actions</span>
+          <span class="report-card-desc">Compliance records that still have open tasks</span>
+        </button>
+        <button type="button" class="report-card report-card-expired-actions" data-report="expired-with-open-actions">
+          <span class="report-card-title">Expired Records with Open Actions</span>
+          <span class="report-card-desc">Expired records with outstanding actions</span>
+        </button>
+      </div>
+
+      <p id="report-empty-hint" class="settings-hint report-empty-hint">Select a report above to preview.</p>
+
+      <div id="report-preview" class="report-preview hidden">
+        <div class="report-preview-header">
+          <h3 id="report-title" class="report-preview-title"></h3>
+          <p id="report-meta" class="report-preview-meta"></p>
+        </div>
+        <div id="report-summary-stats" class="report-summary-stats hidden"></div>
+        <div class="table-wrapper report-table-wrapper">
+          <table class="report-table">
+            <thead id="report-table-head"></thead>
+            <tbody id="report-table-body"></tbody>
+          </table>
+        </div>
+        <div class="report-actions no-print">
+          <button type="button" id="export-report-csv-btn" class="export-btn">Export Report CSV</button>
+          <button type="button" id="print-report-btn" class="quick-action-btn">Print Report</button>
+        </div>
+      </div>
+    </section>
+
     <section class="card" id="people-section">
       <div class="table-header">
         <h2>People</h2>
@@ -334,18 +408,18 @@
         <p id="pagination-summary" class="pagination-summary"></p>
       </div>
       <div class="table-wrapper">
-        <table>
+        <table class="compliance-register-table">
           <thead>
             <tr>
               <th>Name</th>
               <th>Role</th>
               <th>Compliance Type</th>
-              <th>Renewal Cycle</th>
               <th>Expiry Date</th>
-              <th>Days Remaining</th>
               <th>Status</th>
-              <th>Notes</th>
-              <th></th>
+              <th>Open Actions</th>
+              <th>Details</th>
+              <th>Edit</th>
+              <th>Renew</th>
             </tr>
           </thead>
           <tbody id="people-table-body">
@@ -400,6 +474,98 @@
     </div>
   </div>
 
-  <script src="app.js?v=1.9.3"></script>
+  <div id="evidence-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="evidence-modal-title">
+    <div class="modal-dialog evidence-modal">
+      <div class="renew-modal-header">
+        <h2 id="evidence-modal-title" class="renew-modal-title">Add Evidence</h2>
+        <button type="button" id="evidence-modal-close-btn" class="renew-modal-close" aria-label="Close evidence dialog">&times;</button>
+      </div>
+      <p id="evidence-modal-record-label" class="renew-modal-record"></p>
+
+      <div class="form-row">
+        <label for="evidence-name">Document Name</label>
+        <input type="text" id="evidence-name" name="evidence-name" placeholder="e.g. DBS Certificate 2026" required>
+      </div>
+      <div class="form-row">
+        <label for="evidence-type">Document Type</label>
+        <select id="evidence-type" name="evidence-type" required>
+          <option value="DBS Certificate">DBS Certificate</option>
+          <option value="Training Certificate">Training Certificate</option>
+          <option value="Policy Acknowledgement">Policy Acknowledgement</option>
+          <option value="ID Check">ID Check</option>
+          <option value="Right to Work">Right to Work</option>
+          <option value="Other">Other</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label for="evidence-notes">Document Notes</label>
+        <textarea id="evidence-notes" name="evidence-notes" rows="3" placeholder="Optional notes about this evidence..."></textarea>
+      </div>
+      <div class="form-row">
+        <label for="evidence-file">Optional File</label>
+        <input type="file" id="evidence-file" name="evidence-file" accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.doc,.docx">
+        <p class="settings-hint">Stored locally in your browser only. Max 512 KB per file.</p>
+      </div>
+
+      <p id="evidence-modal-message" class="form-message hidden"></p>
+
+      <div class="modal-actions">
+        <button type="button" id="evidence-save-btn" class="renew-primary-btn">Save Evidence</button>
+        <button type="button" id="evidence-cancel-btn" class="cancel-btn">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="action-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="action-modal-title">
+    <div class="modal-dialog action-modal">
+      <div class="renew-modal-header">
+        <h2 id="action-modal-title" class="renew-modal-title">Add Action</h2>
+        <button type="button" id="action-modal-close-btn" class="renew-modal-close" aria-label="Close action dialog">&times;</button>
+      </div>
+      <p id="action-modal-record-label" class="renew-modal-record"></p>
+
+      <div class="form-row">
+        <label for="action-title">Action Title</label>
+        <input type="text" id="action-title" name="action-title" placeholder="e.g. Renewal chased" required>
+      </div>
+      <div class="form-row">
+        <label for="action-notes">Notes</label>
+        <textarea id="action-notes" name="action-notes" rows="3" placeholder="Optional notes about this action..."></textarea>
+      </div>
+
+      <p id="action-modal-message" class="form-message hidden"></p>
+
+      <div class="modal-actions">
+        <button type="button" id="action-save-btn" class="renew-primary-btn">Save Action</button>
+        <button type="button" id="action-cancel-btn" class="cancel-btn">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="record-workspace" class="record-workspace hidden" role="dialog" aria-modal="true" aria-labelledby="workspace-title">
+    <div class="record-workspace-backdrop" id="record-workspace-backdrop" aria-hidden="true"></div>
+    <div class="record-workspace-panel">
+      <header class="workspace-header">
+        <div class="workspace-header-text">
+          <h2 id="workspace-title" class="workspace-title">Compliance Record</h2>
+          <p id="workspace-subtitle" class="workspace-subtitle"></p>
+        </div>
+        <button type="button" id="workspace-close-btn" class="renew-modal-close workspace-close" aria-label="Close workspace">&times;</button>
+      </header>
+      <div class="workspace-quick-actions">
+        <button type="button" id="workspace-edit-btn" class="edit-btn">Edit</button>
+        <button type="button" id="workspace-renew-btn" class="renew-btn">Renew</button>
+      </div>
+      <div id="workspace-content" class="workspace-content">
+        <!-- Populated by JavaScript -->
+      </div>
+      <footer class="workspace-footer">
+        <button type="button" id="workspace-close-footer-btn" class="cancel-btn">Close Workspace</button>
+        <button type="button" id="workspace-delete-btn" class="delete-btn workspace-delete-btn">Delete Record</button>
+      </footer>
+    </div>
+  </div>
+
+  <script src="app.js?v=2.3.0"></script>
 </body>
 </html>

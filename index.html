@@ -35,7 +35,36 @@
       </div>
     </section>
 
-    <section class="card">
+    <section class="card" id="compliance-dashboard">
+      <h2>Compliance Dashboard</h2>
+      <p class="dashboard-hint">Click a card to filter the table by expiry window.</p>
+      <div class="dashboard-cards">
+        <button type="button" class="dashboard-card dashboard-30" data-days="30">
+          <p class="dashboard-label">Expiring in 30 days</p>
+          <p id="dashboard-30-count" class="dashboard-number">0</p>
+        </button>
+        <button type="button" class="dashboard-card dashboard-60" data-days="60">
+          <p class="dashboard-label">Expiring in 60 days</p>
+          <p id="dashboard-60-count" class="dashboard-number">0</p>
+        </button>
+        <button type="button" class="dashboard-card dashboard-90" data-days="90">
+          <p class="dashboard-label">Expiring in 90 days</p>
+          <p id="dashboard-90-count" class="dashboard-number">0</p>
+        </button>
+      </div>
+      <div class="quick-actions">
+        <h3>Quick Actions</h3>
+        <div class="quick-actions-buttons">
+          <button type="button" id="action-show-all" class="quick-action-btn">Show all</button>
+          <button type="button" id="action-show-expired" class="quick-action-btn">Show expired</button>
+          <button type="button" id="action-show-due-soon" class="quick-action-btn">Show due soon</button>
+          <button type="button" id="action-add-person" class="quick-action-btn">Add person</button>
+          <button type="button" id="action-export-csv" class="quick-action-btn">Export CSV</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="card" id="add-person-section">
       <h2>Add a Person</h2>
       <form id="add-person-form">
         <div class="form-row">
@@ -79,9 +108,7 @@
       <p id="edit-form-message" class="form-message hidden"></p>
     </section>
 
-    <section class="card">
-      <div class="table-header">
-        <h2>People</h2>
+    <section class="card" id="people-section">
         <div class="table-header-actions">
           <input type="file" id="csv-file-input" accept=".csv,text/csv" class="hidden">
           <button type="button" id="import-csv-btn" class="import-btn">Import CSV</button>

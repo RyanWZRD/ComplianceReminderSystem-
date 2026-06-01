@@ -61,6 +61,16 @@ const editForm = document.getElementById("edit-person-form");
 const cancelEditBtn = document.getElementById("cancel-edit-btn");
 const editIdInput = document.getElementById("edit-id");
 
+// Tracks which dashboard expiry window is active (30, 60, 90, or null)
+let expiryWindowFilter = null;
+
+const dashboard30Count = document.getElementById("dashboard-30-count");
+const dashboard60Count = document.getElementById("dashboard-60-count");
+const dashboard90Count = document.getElementById("dashboard-90-count");
+const dashboardCards = document.querySelectorAll(".dashboard-card");
+const peopleSection = document.getElementById("people-section");
+const addPersonSection = document.getElementById("add-person-section");
+
 // Copy the 20 sample people into the working people list
 function applySampleData() {
   people = samplePeople.map((person) => ({ ...person }));
@@ -196,6 +206,7 @@ function resetSampleData() {
   savePeople();
   hideEditForm();
   hideMessage(editFormMessage);
+  clearAllFilters();
   showMessage(appMessage, "Sample data has been restored.", "success");
   renderTable();
 }
@@ -210,13 +221,18 @@ function formatDate(dateString) {
   });
 }
 
-// Work out if a DBS is valid, due soon, or expired
-function getStatus(expiryDate) {
+// Calculate how many days until a DBS expiry date
+function getDaysUntilExpiry(expiryDate) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
   const expiry = new Date(expiryDate + "T00:00:00");
-  const daysUntilExpiry = Math.ceil((expiry - today) / (1000 * 60 * 60 * 24));
+  return Math.ceil((expiry - today) / (1000 * 60 * 60 * 24));
+}
+
+// Work out if a DBS is valid, due soon, or expired
+function getStatus(expiryDate) {
+  const daysUntilExpiry = getDaysUntilExpiry(expiryDate);
 
   if (daysUntilExpiry < 0) {
     return { label: "Expired", className: "status-expired", key: "expired" };
@@ -225,6 +241,14 @@ function getStatus(expiryDate) {
     return { label: "Due Soon", className: "status-due-soon", key: "dueSoon" };
   }
   return { label: "Valid", className: "status-valid", key: "valid" };
+}
+
+// Count people whose DBS expires within a number of days (not yet expired)
+function countExpiringWithinDays(days) {
+  return people.filter((person) => {
+    const daysUntilExpiry = getDaysUntilExpiry(person.dbsExpiry);
+    return daysUntilExpiry >= 0 && daysUntilExpiry <= days;
+  }).length;
 }
 
 // Return only the people that match the current search and status filter
@@ -242,7 +266,14 @@ function getFilteredPeople() {
     const matchesStatus =
       selectedStatus === "all" || status.key === selectedStatus;
 
-    return matchesSearch && matchesStatus;
+    let matchesExpiryWindow = true;
+    if (expiryWindowFilter !== null) {
+      const daysUntilExpiry = getDaysUntilExpiry(person.dbsExpiry);
+      matchesExpiryWindow =
+        daysUntilExpiry >= 0 && daysUntilExpiry <= expiryWindowFilter;
+    }
+
+    return matchesSearch && matchesStatus && matchesExpiryWindow;
   });
 }
 
@@ -294,6 +325,53 @@ function renderSummary() {
   summaryValid.textContent = counts.valid;
   summaryDueSoon.textContent = counts.dueSoon;
   summaryExpired.textContent = counts.expired;
+}
+
+// Update the compliance dashboard counts
+function renderDashboard() {
+  dashboard30Count.textContent = countExpiringWithinDays(30);
+  dashboard60Count.textContent = countExpiringWithinDays(60);
+  dashboard90Count.textContent = countExpiringWithinDays(90);
+  updateDashboardActiveState();
+}
+
+// Highlight the active dashboard card
+function updateDashboardActiveState() {
+  dashboardCards.forEach((card) => {
+    const days = Number(card.dataset.days);
+    const isActive = expiryWindowFilter === days;
+    card.classList.toggle("active", isActive);
+  });
+}
+
+// Clear search, status, and expiry window filters
+function clearAllFilters() {
+  searchInput.value = "";
+  statusFilter.value = "all";
+  expiryWindowFilter = null;
+  updateDashboardActiveState();
+}
+
+// Filter the table to people expiring within a set number of days
+function filterByExpiryWindow(days) {
+  expiryWindowFilter = days;
+  searchInput.value = "";
+  statusFilter.value = "all";
+  sortBySelect.value = "dbsExpiry";
+  sortOrderSelect.value = "asc";
+  updateDashboardActiveState();
+  renderTable();
+  peopleSection.scrollIntoView({ behavior: "smooth" });
+}
+
+// Filter the table by status (used by quick actions)
+function filterByStatus(statusKey) {
+  expiryWindowFilter = null;
+  searchInput.value = "";
+  statusFilter.value = statusKey;
+  updateDashboardActiveState();
+  renderTable();
+  peopleSection.scrollIntoView({ behavior: "smooth" });
 }
 
 // Show the edit form with a person's current details
@@ -395,6 +473,7 @@ function renderTable() {
   noResultsMessage.classList.toggle("hidden", displayedCount > 0 || totalCount === 0);
 
   renderSummary();
+  renderDashboard();
 }
 
 // Wrap a value in quotes if it contains a comma or quote (keeps CSV valid)
@@ -717,8 +796,44 @@ form.addEventListener("submit", (event) => {
 
 resetSampleBtn.addEventListener("click", resetSampleData);
 
-searchInput.addEventListener("input", renderTable);
-statusFilter.addEventListener("change", renderTable);
+dashboardCards.forEach((card) => {
+  card.addEventListener("click", () => {
+    filterByExpiryWindow(Number(card.dataset.days));
+  });
+});
+
+document.getElementById("action-show-all").addEventListener("click", () => {
+  clearAllFilters();
+  renderTable();
+  peopleSection.scrollIntoView({ behavior: "smooth" });
+});
+
+document.getElementById("action-show-expired").addEventListener("click", () => {
+  filterByStatus("expired");
+});
+
+document.getElementById("action-show-due-soon").addEventListener("click", () => {
+  filterByStatus("dueSoon");
+});
+
+document.getElementById("action-add-person").addEventListener("click", () => {
+  addPersonSection.scrollIntoView({ behavior: "smooth" });
+  document.getElementById("name").focus();
+});
+
+document.getElementById("action-export-csv").addEventListener("click", exportToCsv);
+
+searchInput.addEventListener("input", () => {
+  expiryWindowFilter = null;
+  updateDashboardActiveState();
+  renderTable();
+});
+
+statusFilter.addEventListener("change", () => {
+  expiryWindowFilter = null;
+  updateDashboardActiveState();
+  renderTable();
+});
 sortBySelect.addEventListener("change", renderTable);
 sortOrderSelect.addEventListener("change", renderTable);
 exportCsvBtn.addEventListener("click", exportToCsv);

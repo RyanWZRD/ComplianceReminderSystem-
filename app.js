@@ -1,5 +1,5 @@
-// Compliance Reminder System v1.1
-console.log("Compliance Reminder System v1.1 — app.js loaded");
+// Compliance Reminder System v1.2
+console.log("Compliance Reminder System v1.2 — app.js loaded");
 
 // Fake sample data — used only on the very first visit
 const samplePeople = [
@@ -30,7 +30,8 @@ const STORAGE_KEY = "complianceReminderPeople";
 
 // Our working copy of the data (loaded from localStorage or sample data)
 let people = [];
-let nextId = 21;
+let nextPersonId = 21;
+let nextRecordId = 1000;
 
 const DUE_SOON_DAYS = 90;
 const COMPLIANCE_TYPES = [
@@ -92,6 +93,7 @@ const editSection = document.getElementById("edit-person-section");
 const editForm = document.getElementById("edit-person-form");
 const cancelEditBtn = document.getElementById("cancel-edit-btn");
 const editIdInput = document.getElementById("edit-id");
+const editRecordIdInput = document.getElementById("edit-record-id");
 
 // Tracks which dashboard expiry window is active (30, 60, 90, or null)
 let expiryWindowFilter = null;
@@ -124,28 +126,129 @@ function getDateDaysFromToday(daysFromToday) {
 }
 
 function applySampleData() {
-  people = samplePeople.map((person) => ({
-    ...person,
-    complianceType: normalizeComplianceType(person.complianceType),
-    notes: person.notes || "",
+  people = samplePeople.map((person, index) => ({
+    id: person.id,
+    name: person.name,
+    role: person.role,
+    complianceRecords: [
+      {
+        id: index + 1,
+        complianceType: DEFAULT_COMPLIANCE_TYPE,
+        expiryDate:
+          index === 0
+            ? getDateDaysFromToday(30)
+            : normalizeExpiryDate(person.dbsExpiry),
+        notes: "",
+      },
+    ],
   }));
 
-  // Demo: Jane Smith is in the 30-day reminder window
-  if (people.length > 0) {
-    people[0].dbsExpiry = getDateDaysFromToday(30);
-  }
-
-  nextId = 21;
+  nextPersonId = 21;
+  nextRecordId = 1000;
 }
 
-// Save the current people list and nextId to localStorage
+// Save the current people list and IDs to localStorage
 function savePeople() {
   const data = {
     people: people,
-    nextId: nextId,
+    nextPersonId: nextPersonId,
+    nextRecordId: nextRecordId,
   };
 
   localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+}
+
+// Check if a stored person uses the old flat record format
+function isLegacyPerson(person) {
+  return (
+    !Array.isArray(person.complianceRecords) &&
+    (typeof person.dbsExpiry === "string" || typeof person.expiryDate === "string")
+  );
+}
+
+// Build one compliance record object
+function createComplianceRecord(data, recordId) {
+  return {
+    id: recordId,
+    complianceType: normalizeComplianceType(data.complianceType),
+    expiryDate: normalizeExpiryDate(data.expiryDate || data.dbsExpiry),
+    notes: typeof data.notes === "string" ? data.notes : "",
+  };
+}
+
+// Convert an old flat person row into the new nested format
+function migrateLegacyPerson(person, recordId) {
+  return {
+    id: person.id,
+    name: person.name,
+    role: person.role,
+    complianceRecords: [createComplianceRecord(person, recordId)],
+  };
+}
+
+// Make sure a person has the expected nested structure
+function normalizePerson(person) {
+  if (isLegacyPerson(person)) {
+    const recordId = nextRecordId;
+    nextRecordId += 1;
+    return migrateLegacyPerson(person, recordId);
+  }
+
+  return {
+    id: person.id,
+    name: person.name,
+    role: person.role,
+    complianceRecords: (person.complianceRecords || []).map((record) => ({
+      id: record.id,
+      complianceType: normalizeComplianceType(record.complianceType),
+      expiryDate: normalizeExpiryDate(record.expiryDate || record.dbsExpiry),
+      notes: typeof record.notes === "string" ? record.notes : "",
+    })),
+  };
+}
+
+// Flatten people into one table row per compliance record
+function getAllComplianceRows() {
+  const rows = [];
+
+  people.forEach((person) => {
+    person.complianceRecords.forEach((record) => {
+      rows.push({
+        personId: person.id,
+        recordId: record.id,
+        name: person.name,
+        role: person.role,
+        complianceType: record.complianceType,
+        expiryDate: record.expiryDate,
+        notes: record.notes || "",
+      });
+    });
+  });
+
+  return rows;
+}
+
+function findPersonById(personId) {
+  return people.find((person) => person.id === personId);
+}
+
+function findPersonByName(name) {
+  const trimmed = name.trim().toLowerCase();
+  return people.find((person) => person.name.trim().toLowerCase() === trimmed);
+}
+
+function findPersonAndRecord(personId, recordId) {
+  const person = findPersonById(personId);
+  if (!person) return null;
+
+  const record = person.complianceRecords.find((item) => item.id === recordId);
+  if (!record) return null;
+
+  return { person, record };
+}
+
+function getTotalRecordCount() {
+  return getAllComplianceRows().length;
 }
 
 // Load reminder period settings from localStorage
@@ -289,37 +392,59 @@ function hideMessage(element) {
 
 // Check that data loaded from localStorage has the shape we expect
 function isValidStoredData(data) {
-  if (!data || !Array.isArray(data.people) || typeof data.nextId !== "number") {
+  if (!data || !Array.isArray(data.people)) {
     return false;
   }
 
-  return data.people.every(
-    (person) =>
-      typeof person.id === "number" &&
-      typeof person.name === "string" &&
-      person.name.trim() !== "" &&
-      typeof person.role === "string" &&
-      person.role.trim() !== "" &&
-      typeof person.dbsExpiry === "string" &&
-      isValidExpiryDate(person.dbsExpiry) &&
-      (person.notes === undefined || typeof person.notes === "string") &&
-      (person.complianceType === undefined ||
-        COMPLIANCE_TYPES.includes(person.complianceType))
-  );
+  const hasPersonIds =
+    typeof data.nextPersonId === "number" || typeof data.nextId === "number";
+  const hasRecordIds = typeof data.nextRecordId === "number";
+
+  if (!hasPersonIds) {
+    return false;
+  }
+
+  return data.people.every((person) => {
+    if (
+      typeof person.id !== "number" ||
+      typeof person.name !== "string" ||
+      person.name.trim() === "" ||
+      typeof person.role !== "string" ||
+      person.role.trim() === ""
+    ) {
+      return false;
+    }
+
+    if (isLegacyPerson(person)) {
+      const expiry = person.expiryDate || person.dbsExpiry;
+      return typeof expiry === "string" && isValidExpiryDate(normalizeExpiryDate(expiry));
+    }
+
+    if (!Array.isArray(person.complianceRecords) || person.complianceRecords.length === 0) {
+      return false;
+    }
+
+    return person.complianceRecords.every(
+      (record) =>
+        typeof record.id === "number" &&
+        COMPLIANCE_TYPES.includes(normalizeComplianceType(record.complianceType)) &&
+        typeof (record.expiryDate || record.dbsExpiry) === "string" &&
+        isValidExpiryDate(normalizeExpiryDate(record.expiryDate || record.dbsExpiry)) &&
+        (record.notes === undefined || typeof record.notes === "string")
+    );
+  });
 }
 
 // Load people from localStorage, or use sample data on first visit
 function loadPeople() {
   const saved = localStorage.getItem(STORAGE_KEY);
 
-  // First visit only — nothing saved yet, so use the sample data
   if (saved === null) {
     applySampleData();
     savePeople();
     return;
   }
 
-  // Returning visit — read the saved data back into our app
   try {
     const data = JSON.parse(saved);
 
@@ -327,13 +452,11 @@ function loadPeople() {
       throw new Error("Stored data is invalid");
     }
 
-    people = data.people.map((person) => ({
-      ...person,
-      dbsExpiry: normalizeExpiryDate(person.dbsExpiry),
-      complianceType: normalizeComplianceType(person.complianceType),
-      notes: typeof person.notes === "string" ? person.notes : "",
-    }));
-    nextId = data.nextId;
+    nextPersonId = data.nextPersonId || data.nextId;
+    nextRecordId = data.nextRecordId || 1000;
+
+    people = data.people.map((person) => normalizePerson(person));
+    savePeople();
   } catch (error) {
     applySampleData();
     savePeople();
@@ -458,10 +581,10 @@ function getStatus(expiryDate) {
   return { label: "Valid", className: "status-valid", key: "valid" };
 }
 
-// Count people whose DBS expires within a number of days (today through N days)
+// Count compliance records expiring within a number of days (today through N days)
 function countExpiringWithinDays(days) {
-  return people.filter((person) => {
-    const daysRemaining = getDaysUntilExpiry(person.dbsExpiry);
+  return getAllComplianceRows().filter((row) => {
+    const daysRemaining = getDaysUntilExpiry(row.expiryDate);
 
     if (Number.isNaN(daysRemaining)) {
       return false;
@@ -471,9 +594,9 @@ function countExpiringWithinDays(days) {
   }).length;
 }
 
-// Work out the most urgent active reminder for one person (window-based)
-function getReminderForPerson(person) {
-  const daysRemaining = getDaysUntilExpiry(person.dbsExpiry);
+// Work out the most urgent active reminder for one compliance record
+function getReminderForRecord(record) {
+  const daysRemaining = getDaysUntilExpiry(record.expiryDate);
 
   if (Number.isNaN(daysRemaining)) {
     return null;
@@ -501,24 +624,28 @@ function getReminderForPerson(person) {
   return null;
 }
 
-// Build list of people who need action based on active reminder windows
+// Build list of compliance records that need action
 function getActiveReminders() {
   const reminders = [];
 
-  people.forEach((person) => {
-    const reminder = getReminderForPerson(person);
+  getAllComplianceRows().forEach((row) => {
+    const reminder = getReminderForRecord({
+      expiryDate: row.expiryDate,
+    });
 
     if (!reminder) {
       return;
     }
 
     reminders.push({
-      id: person.id,
-      name: person.name,
-      dbsExpiry: person.dbsExpiry,
+      personId: row.personId,
+      recordId: row.recordId,
+      name: row.name,
+      complianceType: row.complianceType,
+      expiryDate: row.expiryDate,
       reminderType: reminder.reminderType,
       urgencyKey: reminder.urgencyKey,
-      daysRemaining: getDaysUntilExpiry(person.dbsExpiry),
+      daysRemaining: getDaysUntilExpiry(row.expiryDate),
     });
   });
 
@@ -536,30 +663,29 @@ function getActiveReminders() {
   return reminders;
 }
 
-// Return only the people that match the current search and status filter
-function getFilteredPeople() {
+// Return only the compliance rows that match the current filters
+function getFilteredComplianceRows() {
   const searchTerm = searchInput.value.trim().toLowerCase();
   const selectedStatus = statusFilter.value;
   const selectedComplianceType = complianceTypeFilter.value;
 
-  return people.filter((person) => {
+  return getAllComplianceRows().filter((row) => {
     const matchesSearch =
       searchTerm === "" ||
-      person.name.toLowerCase().includes(searchTerm) ||
-      person.role.toLowerCase().includes(searchTerm);
+      row.name.toLowerCase().includes(searchTerm) ||
+      row.role.toLowerCase().includes(searchTerm);
 
-    const status = getStatus(person.dbsExpiry);
+    const status = getStatus(row.expiryDate);
     const matchesStatus =
       selectedStatus === "all" || status.key === selectedStatus;
 
-    const personType = normalizeComplianceType(person.complianceType);
     const matchesComplianceType =
       selectedComplianceType === "all" ||
-      personType === selectedComplianceType;
+      row.complianceType === selectedComplianceType;
 
     let matchesExpiryWindow = true;
     if (expiryWindowFilter !== null) {
-      const daysUntilExpiry = getDaysUntilExpiry(person.dbsExpiry);
+      const daysUntilExpiry = getDaysUntilExpiry(row.expiryDate);
       matchesExpiryWindow =
         daysUntilExpiry >= 0 && daysUntilExpiry <= expiryWindowFilter;
     }
@@ -573,13 +699,11 @@ function getFilteredPeople() {
   });
 }
 
-// Sort a list of people by the selected column and order
-function sortPeople(list) {
+// Sort compliance rows by the selected column and order
+function sortComplianceRows(list) {
   const sortBy = sortBySelect.value;
   const sortOrder = sortOrderSelect.value;
   const direction = sortOrder === "asc" ? 1 : -1;
-
-  // Copy the array so we don't change the original
   const sorted = [...list];
 
   sorted.sort((a, b) => {
@@ -588,10 +712,10 @@ function sortPeople(list) {
     if (sortBy === "name") {
       comparison = a.name.localeCompare(b.name);
     } else if (sortBy === "dbsExpiry") {
-      comparison = a.dbsExpiry.localeCompare(b.dbsExpiry);
+      comparison = a.expiryDate.localeCompare(b.expiryDate);
     } else if (sortBy === "status") {
-      const statusA = getStatus(a.dbsExpiry).key;
-      const statusB = getStatus(b.dbsExpiry).key;
+      const statusA = getStatus(a.expiryDate).key;
+      const statusB = getStatus(b.expiryDate).key;
       comparison = STATUS_SORT_ORDER[statusA] - STATUS_SORT_ORDER[statusB];
     }
 
@@ -601,12 +725,13 @@ function sortPeople(list) {
   return sorted;
 }
 
-// Count how many people are in each status group
+// Count compliance records in each status group
 function getSummaryCounts() {
-  const counts = { total: people.length, valid: 0, dueSoon: 0, expired: 0 };
+  const counts = { total: 0, valid: 0, dueSoon: 0, expired: 0 };
 
-  people.forEach((person) => {
-    const status = getStatus(person.dbsExpiry);
+  getAllComplianceRows().forEach((row) => {
+    counts.total += 1;
+    const status = getStatus(row.expiryDate);
     counts[status.key] += 1;
   });
 
@@ -664,7 +789,8 @@ function renderReminders() {
 
     row.innerHTML = `
       <td>${reminder.name}</td>
-      <td>${formatDate(reminder.dbsExpiry)}</td>
+      <td>${reminder.complianceType}</td>
+      <td>${formatDate(reminder.expiryDate)}</td>
       <td><span class="reminder-badge reminder-${reminder.urgencyKey}">${reminder.reminderType}</span></td>
     `;
 
@@ -737,18 +863,19 @@ function filterByStatus(statusKey) {
   peopleSection.scrollIntoView({ behavior: "smooth" });
 }
 
-// Show the edit form with a person's current details
-function startEdit(id) {
-  const person = people.find((p) => p.id === id);
-  if (!person) return;
+// Show the edit form for one compliance record
+function startEdit(personId, recordId) {
+  const result = findPersonAndRecord(personId, recordId);
+  if (!result) return;
+
+  const { person, record } = result;
 
   editIdInput.value = person.id;
+  editRecordIdInput.value = record.id;
   document.getElementById("edit-name").value = person.name;
   document.getElementById("edit-role").value = person.role;
-  document.getElementById("edit-compliance-type").value = normalizeComplianceType(
-    person.complianceType
-  );
-  document.getElementById("edit-dbs-expiry").value = person.dbsExpiry;
+  document.getElementById("edit-compliance-type").value = record.complianceType;
+  document.getElementById("edit-dbs-expiry").value = record.expiryDate;
 
   hideMessage(editFormMessage);
   editSection.classList.remove("hidden");
@@ -762,99 +889,109 @@ function hideEditForm() {
   hideMessage(editFormMessage);
 }
 
-// Save updated details for one person
-function updatePerson(id, name, role, complianceType, dbsExpiry) {
-  const validation = validatePersonInput(name, role, complianceType, dbsExpiry);
+// Save updated details for one person and compliance record
+function updatePerson(personId, recordId, name, role, complianceType, expiryDate) {
+  const validation = validatePersonInput(name, role, complianceType, expiryDate);
 
   if (!validation.valid) {
     showMessage(editFormMessage, validation.errors.join(" "), "error");
     return false;
   }
 
-  const person = people.find((p) => p.id === id);
-  if (!person) return false;
+  const result = findPersonAndRecord(personId, recordId);
+  if (!result) return false;
 
-  person.name = validation.name;
-  person.role = validation.role;
-  person.complianceType = validation.complianceType;
-  person.dbsExpiry = normalizeExpiryDate(validation.dbsExpiry);
+  result.person.name = validation.name;
+  result.person.role = validation.role;
+  result.record.complianceType = validation.complianceType;
+  result.record.expiryDate = normalizeExpiryDate(validation.dbsExpiry);
 
   savePeople();
   hideEditForm();
-  showMessage(appMessage, "Person updated successfully.", "success");
+  showMessage(appMessage, "Record updated successfully.", "success");
   renderTable();
   return true;
 }
 
-// Save notes for one person (called when the notes field loses focus)
-function updatePersonNotes(id, notes) {
-  const person = people.find((p) => p.id === id);
-  if (!person) return;
+// Save notes for one compliance record
+function updateRecordNotes(personId, recordId, notes) {
+  const result = findPersonAndRecord(personId, recordId);
+  if (!result) return;
 
-  if ((person.notes || "") === notes) return;
+  if ((result.record.notes || "") === notes) return;
 
-  person.notes = notes;
+  result.record.notes = notes;
   savePeople();
 }
 
-// Remove a person by their id
-function deletePerson(id) {
-  const index = people.findIndex((person) => person.id === id);
-  if (index === -1) return;
+// Remove one compliance record (and the person if it was their last record)
+function deleteComplianceRecord(personId, recordId) {
+  const person = findPersonById(personId);
+  if (!person) return;
 
-  if (Number(editIdInput.value) === id) {
+  if (
+    Number(editIdInput.value) === personId &&
+    Number(editRecordIdInput.value) === recordId
+  ) {
     hideEditForm();
   }
 
-  people.splice(index, 1);
+  person.complianceRecords = person.complianceRecords.filter(
+    (record) => record.id !== recordId
+  );
+
+  if (person.complianceRecords.length === 0) {
+    people = people.filter((item) => item.id !== personId);
+  }
+
   savePeople();
   renderTable();
 }
 
-// Draw the table — only shows people matching search and filter
+// Draw the table — one row per compliance record
 function renderTable() {
   tableBody.innerHTML = "";
 
-  const filteredPeople = getFilteredPeople();
-  const displayedPeople = sortPeople(filteredPeople);
-  const totalCount = people.length;
-  const displayedCount = displayedPeople.length;
+  const filteredRows = getFilteredComplianceRows();
+  const displayedRows = sortComplianceRows(filteredRows);
+  const totalCount = getTotalRecordCount();
+  const displayedCount = displayedRows.length;
 
-  displayedPeople.forEach((person) => {
-    const status = getStatus(person.dbsExpiry);
-    const daysRemaining = getDaysUntilExpiry(person.dbsExpiry);
+  displayedRows.forEach((row) => {
+    const status = getStatus(row.expiryDate);
+    const daysRemaining = getDaysUntilExpiry(row.expiryDate);
     const daysClass =
       !Number.isNaN(daysRemaining) && daysRemaining < 0
         ? "days-remaining expired-text"
         : "days-remaining";
-    const row = document.createElement("tr");
+    const tableRow = document.createElement("tr");
 
-    row.innerHTML = `
-      <td>${person.name}</td>
-      <td>${person.role}</td>
-      <td class="compliance-type-cell">${normalizeComplianceType(person.complianceType)}</td>
-      <td>${formatDate(person.dbsExpiry)}</td>
-      <td class="${daysClass}">${formatDaysRemaining(person.dbsExpiry)}</td>
+    tableRow.innerHTML = `
+      <td>${row.name}</td>
+      <td>${row.role}</td>
+      <td class="compliance-type-cell">${row.complianceType}</td>
+      <td>${formatDate(row.expiryDate)}</td>
+      <td class="${daysClass}">${formatDaysRemaining(row.expiryDate)}</td>
       <td><span class="status ${status.className}">${status.label}</span></td>
       <td class="notes-cell">
-        <textarea class="notes-input" data-id="${person.id}" rows="2" placeholder="Add follow-up notes...">${escapeHtml(person.notes || "")}</textarea>
+        <textarea class="notes-input" data-person-id="${row.personId}" data-record-id="${row.recordId}" rows="2" placeholder="Add follow-up notes...">${escapeHtml(row.notes || "")}</textarea>
       </td>
       <td>
         <div class="action-buttons">
-          <button type="button" class="edit-btn" data-id="${person.id}">Edit</button>
-          <button type="button" class="delete-btn" data-id="${person.id}">Delete</button>
+          <button type="button" class="edit-btn" data-person-id="${row.personId}" data-record-id="${row.recordId}">Edit</button>
+          <button type="button" class="delete-btn" data-person-id="${row.personId}" data-record-id="${row.recordId}">Delete</button>
         </div>
       </td>
     `;
 
-    tableBody.appendChild(row);
+    tableBody.appendChild(tableRow);
   });
 
   if (displayedCount === totalCount) {
     personCount.textContent =
-      displayedCount === 1 ? "1 person" : `${displayedCount} people`;
+      displayedCount === 1 ? "1 record" : `${displayedCount} records`;
   } else {
-    personCount.textContent = `Showing ${displayedCount} of ${totalCount} people`;
+    personCount.textContent = `Showing ${displayedCount} of ${totalCount} records`;
   }
 
   emptyMessage.classList.toggle("hidden", totalCount > 0);
@@ -883,18 +1020,20 @@ function escapeCsvValue(value) {
   return text;
 }
 
-// Build a CSV file from all people and download it
+// Build a CSV file from all compliance records and download it
 function exportToCsv() {
-  const headers = ["Name", "Role", "DBS Expiry Date", "Status"];
+  const headers = ["Name", "Role", "Compliance Type", "Expiry Date", "Status", "Notes"];
 
-  const rows = people.map((person) => {
-    const status = getStatus(person.dbsExpiry);
+  const rows = getAllComplianceRows().map((row) => {
+    const status = getStatus(row.expiryDate);
 
     return [
-      escapeCsvValue(person.name),
-      escapeCsvValue(person.role),
-      escapeCsvValue(formatDate(person.dbsExpiry)),
+      escapeCsvValue(row.name),
+      escapeCsvValue(row.role),
+      escapeCsvValue(row.complianceType),
+      escapeCsvValue(formatDate(row.expiryDate)),
       escapeCsvValue(status.label),
+      escapeCsvValue(row.notes || ""),
     ].join(",");
   });
 
@@ -987,7 +1126,35 @@ function formatSkipReasons(skipReasons) {
   return parts.join(", ");
 }
 
-// Read CSV text and add valid rows to the people list
+// Add a compliance record — reuse an existing person when the name matches
+function addComplianceRecord(name, role, complianceType, expiryDate) {
+  const record = createComplianceRecord(
+    { complianceType, expiryDate, notes: "" },
+    nextRecordId
+  );
+  nextRecordId += 1;
+
+  const existingPerson = findPersonByName(name);
+
+  if (existingPerson) {
+    existingPerson.name = name;
+    existingPerson.role = role;
+    existingPerson.complianceRecords.push(record);
+    return { isNewPerson: false };
+  }
+
+  people.push({
+    id: nextPersonId,
+    name,
+    role,
+    complianceRecords: [record],
+  });
+  nextPersonId += 1;
+
+  return { isNewPerson: true };
+}
+
+// Read CSV text and add valid rows as compliance records
 function importPeopleFromCsv(csvText) {
   const cleanedText = csvText.replace(/^\uFEFF/, "");
   const lines = cleanedText.split(/\r?\n/).filter((line) => line.trim() !== "");
@@ -999,13 +1166,17 @@ function importPeopleFromCsv(csvText) {
   const headers = parseCsvLine(lines[0]);
   const nameIndex = findColumnIndex(headers, "name");
   const roleIndex = findColumnIndex(headers, "role");
-  const expiryIndex = findColumnIndex(headers, "dbs expiry date");
+  let expiryIndex = findColumnIndex(headers, "expiry date");
+  if (expiryIndex === -1) {
+    expiryIndex = findColumnIndex(headers, "dbs expiry date");
+  }
+  const complianceTypeIndex = findColumnIndex(headers, "compliance type");
 
   if (nameIndex === -1 || roleIndex === -1 || expiryIndex === -1) {
     return {
       imported: 0,
       skipped: 0,
-      error: "CSV must include columns: Name, Role, DBS Expiry Date.",
+      error: "CSV must include columns: Name, Role, and Expiry Date (or DBS Expiry Date).",
     };
   }
 
@@ -1023,6 +1194,10 @@ function importPeopleFromCsv(csvText) {
     const name = columns[nameIndex]?.trim() ?? "";
     const role = columns[roleIndex]?.trim() ?? "";
     const rawDate = columns[expiryIndex]?.trim() ?? "";
+    const complianceType =
+      complianceTypeIndex === -1
+        ? DEFAULT_COMPLIANCE_TYPE
+        : columns[complianceTypeIndex]?.trim() ?? DEFAULT_COMPLIANCE_TYPE;
 
     if (!name) {
       skipped += 1;
@@ -1042,24 +1217,21 @@ function importPeopleFromCsv(csvText) {
       continue;
     }
 
-    const dbsExpiry = parseExpiryDate(rawDate);
+    const expiryDate = parseExpiryDate(rawDate);
 
-    if (!dbsExpiry) {
+    if (!expiryDate) {
       skipped += 1;
       skipReasons.invalidDate += 1;
       continue;
     }
 
-    people.push({
-      id: nextId,
-      name: name,
-      role: role,
-      complianceType: DEFAULT_COMPLIANCE_TYPE,
-      dbsExpiry: normalizeExpiryDate(dbsExpiry),
-      notes: "",
-    });
+    addComplianceRecord(
+      name,
+      role,
+      normalizeComplianceType(complianceType),
+      normalizeExpiryDate(expiryDate)
+    );
 
-    nextId += 1;
     imported += 1;
   }
 
@@ -1082,7 +1254,7 @@ function showImportMessage(result) {
   const reasonText = result.skipReasons ? formatSkipReasons(result.skipReasons) : "";
 
   if (result.imported === 0) {
-    let message = `No people imported. ${result.skipped} row(s) were skipped.`;
+    let message = `No records imported. ${result.skipped} row(s) were skipped.`;
     if (reasonText) {
       message += ` Reasons: ${reasonText}.`;
     }
@@ -1091,7 +1263,7 @@ function showImportMessage(result) {
   }
 
   if (result.skipped > 0) {
-    let message = `Imported ${result.imported} people. ${result.skipped} row(s) were skipped.`;
+    let message = `Imported ${result.imported} records. ${result.skipped} row(s) were skipped.`;
     if (reasonText) {
       message += ` Reasons: ${reasonText}.`;
     }
@@ -1099,7 +1271,7 @@ function showImportMessage(result) {
     return;
   }
 
-  showMessage(importMessage, `Imported ${result.imported} people successfully.`, "success");
+  showMessage(importMessage, `Imported ${result.imported} records successfully.`, "success");
 }
 
 // Handle the user choosing a CSV file to import
@@ -1127,38 +1299,41 @@ function handleCsvImport(event) {
   reader.readAsText(file);
 }
 
-// Handle Edit, Delete, and Notes in the table
+// Handle Edit and Delete in the table
 tableBody.addEventListener("click", (event) => {
   const button = event.target;
   if (!button.matches("button")) return;
 
-  const id = Number(button.dataset.id);
+  const personId = Number(button.dataset.personId);
+  const recordId = Number(button.dataset.recordId);
 
   if (button.classList.contains("edit-btn")) {
-    startEdit(id);
+    startEdit(personId, recordId);
   } else if (button.classList.contains("delete-btn")) {
-    deletePerson(id);
+    deleteComplianceRecord(personId, recordId);
   }
 });
 
 tableBody.addEventListener("blur", (event) => {
   if (!event.target.classList.contains("notes-input")) return;
 
-  const id = Number(event.target.dataset.id);
-  updatePersonNotes(id, event.target.value);
+  const personId = Number(event.target.dataset.personId);
+  const recordId = Number(event.target.dataset.recordId);
+  updateRecordNotes(personId, recordId, event.target.value);
 }, true);
 
 // Handle the edit-person form
 editForm.addEventListener("submit", (event) => {
   event.preventDefault();
 
-  const id = Number(editIdInput.value);
+  const personId = Number(editIdInput.value);
+  const recordId = Number(editRecordIdInput.value);
   const name = document.getElementById("edit-name").value.trim();
   const role = document.getElementById("edit-role").value.trim();
   const complianceType = document.getElementById("edit-compliance-type").value;
-  const dbsExpiry = document.getElementById("edit-dbs-expiry").value;
+  const expiryDate = document.getElementById("edit-dbs-expiry").value;
 
-  updatePerson(id, name, role, complianceType, dbsExpiry);
+  updatePerson(personId, recordId, name, role, complianceType, expiryDate);
 });
 
 cancelEditBtn.addEventListener("click", hideEditForm);
@@ -1186,21 +1361,22 @@ form.addEventListener("submit", (event) => {
 
   hideMessage(addFormMessage);
 
-  const newPerson = {
-    id: nextId,
-    name: validation.name,
-    role: validation.role,
-    complianceType: validation.complianceType,
-    dbsExpiry: normalizeExpiryDate(validation.dbsExpiry),
-    notes: "",
-  };
-
-  people.push(newPerson);
-  nextId += 1;
+  const result = addComplianceRecord(
+    validation.name,
+    validation.role,
+    validation.complianceType,
+    normalizeExpiryDate(validation.dbsExpiry)
+  );
 
   savePeople();
   form.reset();
-  showMessage(appMessage, "Person added successfully.", "success");
+  showMessage(
+    appMessage,
+    result.isNewPerson
+      ? "Person and compliance record added successfully."
+      : "Compliance record added for existing person.",
+    "success"
+  );
   renderTable();
 });
 

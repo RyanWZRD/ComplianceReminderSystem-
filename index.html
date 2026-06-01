@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Compliance Reminder System v1.1</title>
-  <link rel="stylesheet" href="styles.css?v=1.1">
+  <title>Compliance Reminder System v1.2</title>
+  <link rel="stylesheet" href="styles.css?v=1.2">
 </head>
 <body>
   <div class="container">
     <header>
       <h1>Compliance Reminder System</h1>
-      <p class="version-badge">Version 1.1 — Reminder Engine</p>
+      <p class="version-badge">Version 1.2 — Multiple Records</p>
       <p class="subtitle">Track DBS expiry dates for your team</p>
       <button type="button" id="reset-sample-btn" class="reset-btn">Reset sample data</button>
     </header>
@@ -19,7 +19,7 @@
 
     <section class="summary-cards">
       <button type="button" class="summary-card" data-status="all">
-        <p class="summary-label">Total People</p>
+        <p class="summary-label">Total Records</p>
         <p id="summary-total" class="summary-number">0</p>
       </button>
       <button type="button" class="summary-card summary-valid" data-status="valid">
@@ -71,6 +71,7 @@
           <thead>
             <tr>
               <th>Name</th>
+              <th>Compliance Type</th>
               <th>Expiry Date</th>
               <th>Reminder Type</th>
             </tr>
@@ -149,6 +150,7 @@
       <h2>Edit Person</h2>
       <form id="edit-person-form">
         <input type="hidden" id="edit-id">
+        <input type="hidden" id="edit-record-id">
         <div class="form-row">
           <label for="edit-name">Full Name</label>
           <input type="text" id="edit-name" name="edit-name" required>
@@ -189,7 +191,7 @@
           <input type="file" id="csv-file-input" accept=".csv,text/csv" class="hidden">
           <button type="button" id="import-csv-btn" class="import-btn">Import CSV</button>
           <button type="button" id="export-csv-btn" class="export-btn">Export CSV</button>
-          <span id="person-count" class="badge">0 people</span>
+          <span id="person-count" class="badge">0 records</span>
         </div>
       </div>
       <p id="import-message" class="import-message hidden"></p>
@@ -256,11 +258,11 @@
           </tbody>
         </table>
       </div>
-      <p id="empty-message" class="empty-message hidden">No people added yet.</p>
-      <p id="no-results-message" class="empty-message hidden">No people match your search or filter.</p>
+      <p id="empty-message" class="empty-message hidden">No compliance records added yet.</p>
+      <p id="no-results-message" class="empty-message hidden">No records match your search or filter.</p>
     </section>
   </div>
 
-  <script src="app.js?v=1.1"></script>
+  <script src="app.js?v=1.2"></script>
 </body>
 </html>

@@ -3,15 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Compliance Reminder System v2.9.0</title>
-  <link rel="stylesheet" href="styles.css?v=2.9.0">
+  <title>Compliance Reminder System v2.9.1</title>
+  <link rel="stylesheet" href="styles.css?v=2.9.1">
 </head>
 <body>
   <div class="container">
     <header>
       <h1>Compliance Reminder System</h1>
       <div class="header-badges">
-        <p class="version-badge">Version 2.9.0</p>
+        <p class="version-badge">Version 2.9.1</p>
         <p id="data-backend-badge" class="data-backend-badge">Local storage mode</p>
         <p id="auth-mode-badge" class="auth-mode-badge hidden">Local auth</p>
       </div>
@@ -272,10 +272,10 @@
     <section class="card analytics-dashboard" id="analytics-dashboard">
       <h2>Compliance Analytics</h2>
       <div class="analytics-health">
-        <span class="analytics-health-label">Compliance Health</span>
+        <span class="analytics-health-label">Register Health Score</span>
         <span id="analytics-health-score" class="analytics-health-score">0%</span>
       </div>
-      <p class="settings-hint">Percentage of records with more than 90 days until expiry. Based on all compliance records. Click a card to filter the records table below.</p>
+      <p class="settings-hint">Percentage of records valid beyond the 90-day due-soon window (more than 90 days until expiry). Based on all compliance records. Click a card to filter the records table below.</p>
       <div class="analytics-cards">
         <button type="button" class="analytics-card" data-analytics-filter="all">
           <p class="analytics-label">Total Records</p>
@@ -309,7 +309,7 @@
       <p class="settings-hint">Click an insight to preview affected records. Export Insight CSV downloads the current preview.</p>
 
       <button type="button" class="insight-card insight-card-positive insight-health-card" data-insight="health-score">
-        <p class="insight-label">Compliance Health Score</p>
+        <p class="insight-label">Evidence Health Score</p>
         <p id="insight-health-score" class="insight-health-score">0%</p>
         <p class="insight-hint">Valid records with evidence attached</p>
       </button>
@@ -367,6 +367,7 @@
 
       <div class="management-snapshot" id="management-snapshot">
         <h3 class="charts-subheading">Management Snapshot</h3>
+        <p class="chart-helper snapshot-health-hint">Health score counts records that are valid and have at least one evidence item attached.</p>
         <p id="snapshot-generated" class="snapshot-meta"></p>
         <dl class="snapshot-grid" id="snapshot-grid"></dl>
         <div class="snapshot-actions no-print">
@@ -386,6 +387,7 @@
         </div>
         <div class="chart-card">
           <h3 class="charts-subheading">Evidence Coverage</h3>
+          <p class="chart-helper">Stale evidence is a subset of records with evidence. Evidence older than 12 months is treated as stale.</p>
           <div id="evidence-coverage-chart" class="chart-bars"></div>
         </div>
         <div class="chart-card">
@@ -760,7 +762,7 @@
     </div>
   </div>
 
-  <script src="app.bundle.js?v=2.9.0"></script>
+  <script src="app.bundle.js?v=2.9.1"></script>
   <script>
     window.addEventListener("load", function () {
       window.setTimeout(function () {

@@ -724,6 +724,17 @@ header h1 {
   padding: 1rem 1.15rem;
 }
 
+.chart-helper {
+  margin: -0.35rem 0 0.75rem;
+  font-size: 0.8rem;
+  color: #5a6270;
+  line-height: 1.4;
+}
+
+.snapshot-health-hint {
+  margin: 0 0 0.5rem;
+}
+
 .chart-bars {
   display: flex;
   flex-direction: column;
@@ -2884,5 +2895,10 @@ tr:last-child td {
   .chart-bar-fill {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
+  }
+
+  html.printing-charts .chart-bars-scroll {
+    max-height: none;
+    overflow: visible;
   }
 }

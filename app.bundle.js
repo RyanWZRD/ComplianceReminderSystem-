@@ -64,7 +64,7 @@
 
   // js/data/config.js
   var DATA_BACKEND = "local";
-  var APP_VERSION = "2.9.0";
+  var APP_VERSION = "2.9.1";
 
   // js/data/constants.js
   var STORAGE_KEY = "complianceReminderPeople";
@@ -1281,7 +1281,7 @@
     savePeople();
     closeEvidenceModal();
     showMessage(appMessage, `Evidence added to ${recordLabel}.`, "success");
-    renderTable({ refreshDashboards: false });
+    renderTable();
   }
   function deleteEvidenceItem(personId, recordId, evidenceId) {
     const result = findPersonAndRecord(personId, recordId);
@@ -1316,7 +1316,7 @@ This cannot be undone.`
       `Evidence deleted: ${person.name} \u2014 ${evidenceItem.documentType}.`,
       "success"
     );
-    renderTable({ refreshDashboards: false });
+    renderTable();
   }
   function downloadEvidenceFile(personId, recordId, evidenceId) {
     const result = findPersonAndRecord(personId, recordId);
@@ -1646,7 +1646,7 @@ This cannot be undone.`
     snapshotGrid.innerHTML = `
     <dt>Total Records</dt>
     <dd>${snapshot.totalRecords}</dd>
-    <dt>Compliance Health Score</dt>
+    <dt>Health Score (valid with evidence)</dt>
     <dd>${snapshot.healthScore}%</dd>
     <dt>Open / In Progress Actions</dt>
     <dd>${snapshot.activeActions}</dd>
@@ -1663,11 +1663,12 @@ This cannot be undone.`
     renderHorizontalBarChart(actionWorkloadChart, getActionWorkloadChartData());
   }
   function exportSnapshotCsv() {
+    renderVisualInsights();
     const snapshot = getManagementSnapshot();
     const lines = [
       "Metric,Value",
       `"Total Records","${snapshot.totalRecords}"`,
-      `"Compliance Health Score (%)","${snapshot.healthScore}"`,
+      `"Health Score - valid with evidence (%)","${snapshot.healthScore}"`,
       `"Open / In Progress Actions","${snapshot.activeActions}"`,
       `"Overdue Actions","${snapshot.overdueActions}"`,
       `"Records Missing Evidence","${snapshot.missingEvidence}"`,
@@ -2471,7 +2472,7 @@ This cannot be undone.`
       `Added action "${title}" to ${addedCount} record${addedCount === 1 ? "" : "s"}.`,
       "success"
     );
-    renderTable({ refreshDashboards: false });
+    renderTable();
   }
   function handleSaveAction() {
     if (!actionModalContext) {
@@ -2503,14 +2504,14 @@ This cannot be undone.`
       savePeople();
       closeActionModal();
       showMessage(appMessage, `Action updated for ${recordLabel}.`, "success");
-      renderTable({ refreshDashboards: false });
+      renderTable();
       return;
     }
     addActionToRecord(personId, recordId, title, notes, dueDate, owner);
     savePeople();
     closeActionModal();
     showMessage(appMessage, `Action added to ${recordLabel}.`, "success");
-    renderTable({ refreshDashboards: false });
+    renderTable();
   }
   function addDefaultActions(personId, recordId) {
     const result = findPersonAndRecord(personId, recordId);
@@ -2562,7 +2563,7 @@ This cannot be undone.`
       `Added ${addedCount} default action${addedCount === 1 ? "" : "s"} to ${person.name} \u2014 ${record.complianceType}.`,
       "success"
     );
-    renderTable({ refreshDashboards: false });
+    renderTable();
   }
   function setActionInProgress(personId, recordId, actionId) {
     const result = findPersonAndRecord(personId, recordId);
@@ -2582,7 +2583,7 @@ This cannot be undone.`
     );
     savePeople();
     showMessage(appMessage, `Action in progress: ${actionItem.title}.`, "success");
-    renderTable({ refreshDashboards: false });
+    renderTable();
   }
   function completeActionItem(personId, recordId, actionId) {
     const result = findPersonAndRecord(personId, recordId);
@@ -2602,7 +2603,7 @@ This cannot be undone.`
     );
     savePeople();
     showMessage(appMessage, `Action completed: ${actionItem.title}.`, "success");
-    renderTable({ refreshDashboards: false });
+    renderTable();
   }
   function reopenActionItem(personId, recordId, actionId) {
     const result = findPersonAndRecord(personId, recordId);
@@ -2622,7 +2623,7 @@ This cannot be undone.`
     );
     savePeople();
     showMessage(appMessage, `Action reopened: ${actionItem.title}.`, "success");
-    renderTable({ refreshDashboards: false });
+    renderTable();
   }
   function deleteActionItem(personId, recordId, actionId) {
     const result = findPersonAndRecord(personId, recordId);
@@ -2656,7 +2657,7 @@ This cannot be undone.`
       `Action deleted: ${person.name} \u2014 ${actionItem.title}.`,
       "success"
     );
-    renderTable({ refreshDashboards: false });
+    renderTable();
   }
   function getActionDashboardTitle(dashboardType) {
     const titles = {
@@ -3343,7 +3344,7 @@ ${auditLine}` : auditLine;
     if (markedCount > 0) {
       savePeople();
       refreshActionRequiredUI();
-      renderTable({ refreshDashboards: false });
+      renderTable();
     }
     if (markedCount === 0 && skippedNoReminder === rows.length) {
       showMessage(

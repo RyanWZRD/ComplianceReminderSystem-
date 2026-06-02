@@ -807,7 +807,7 @@ async function handleSaveEvidence() {
   savePeople();
   closeEvidenceModal();
   showMessage(appMessage, `Evidence added to ${recordLabel}.`, "success");
-  renderTable({ refreshDashboards: false });
+  renderTable();
 }
 
 function deleteEvidenceItem(personId, recordId, evidenceId) {
@@ -845,7 +845,7 @@ function deleteEvidenceItem(personId, recordId, evidenceId) {
     `Evidence deleted: ${person.name} — ${evidenceItem.documentType}.`,
     "success"
   );
-  renderTable({ refreshDashboards: false });
+  renderTable();
 }
 
 function downloadEvidenceFile(personId, recordId, evidenceId) {
@@ -1268,7 +1268,7 @@ function renderVisualInsights() {
   snapshotGrid.innerHTML = `
     <dt>Total Records</dt>
     <dd>${snapshot.totalRecords}</dd>
-    <dt>Compliance Health Score</dt>
+    <dt>Health Score (valid with evidence)</dt>
     <dd>${snapshot.healthScore}%</dd>
     <dt>Open / In Progress Actions</dt>
     <dd>${snapshot.activeActions}</dd>
@@ -1287,11 +1287,12 @@ function renderVisualInsights() {
 }
 
 function exportSnapshotCsv() {
+  renderVisualInsights();
   const snapshot = getManagementSnapshot();
   const lines = [
     "Metric,Value",
     `"Total Records","${snapshot.totalRecords}"`,
-    `"Compliance Health Score (%)","${snapshot.healthScore}"`,
+    `"Health Score - valid with evidence (%)","${snapshot.healthScore}"`,
     `"Open / In Progress Actions","${snapshot.activeActions}"`,
     `"Overdue Actions","${snapshot.overdueActions}"`,
     `"Records Missing Evidence","${snapshot.missingEvidence}"`,
@@ -2340,7 +2341,7 @@ function handleBulkSaveAction() {
     `Added action "${title}" to ${addedCount} record${addedCount === 1 ? "" : "s"}.`,
     "success"
   );
-  renderTable({ refreshDashboards: false });
+  renderTable();
 }
 
 function handleSaveAction() {
@@ -2378,7 +2379,7 @@ function handleSaveAction() {
     savePeople();
     closeActionModal();
     showMessage(appMessage, `Action updated for ${recordLabel}.`, "success");
-    renderTable({ refreshDashboards: false });
+    renderTable();
     return;
   }
 
@@ -2387,7 +2388,7 @@ function handleSaveAction() {
   savePeople();
   closeActionModal();
   showMessage(appMessage, `Action added to ${recordLabel}.`, "success");
-  renderTable({ refreshDashboards: false });
+  renderTable();
 }
 
 function addDefaultActions(personId, recordId) {
@@ -2449,7 +2450,7 @@ function addDefaultActions(personId, recordId) {
     `Added ${addedCount} default action${addedCount === 1 ? "" : "s"} to ${person.name} — ${record.complianceType}.`,
     "success"
   );
-  renderTable({ refreshDashboards: false });
+  renderTable();
 }
 
 function setActionInProgress(personId, recordId, actionId) {
@@ -2475,7 +2476,7 @@ function setActionInProgress(personId, recordId, actionId) {
 
   savePeople();
   showMessage(appMessage, `Action in progress: ${actionItem.title}.`, "success");
-  renderTable({ refreshDashboards: false });
+  renderTable();
 }
 
 function completeActionItem(personId, recordId, actionId) {
@@ -2501,7 +2502,7 @@ function completeActionItem(personId, recordId, actionId) {
 
   savePeople();
   showMessage(appMessage, `Action completed: ${actionItem.title}.`, "success");
-  renderTable({ refreshDashboards: false });
+  renderTable();
 }
 
 function reopenActionItem(personId, recordId, actionId) {
@@ -2527,7 +2528,7 @@ function reopenActionItem(personId, recordId, actionId) {
 
   savePeople();
   showMessage(appMessage, `Action reopened: ${actionItem.title}.`, "success");
-  renderTable({ refreshDashboards: false });
+  renderTable();
 }
 
 function deleteActionItem(personId, recordId, actionId) {
@@ -2565,7 +2566,7 @@ function deleteActionItem(personId, recordId, actionId) {
     `Action deleted: ${person.name} — ${actionItem.title}.`,
     "success"
   );
-  renderTable({ refreshDashboards: false });
+  renderTable();
 }
 
 function getActionDashboardTitle(dashboardType) {
@@ -3462,7 +3463,7 @@ function bulkMarkSelectedRemindersSent() {
   if (markedCount > 0) {
     savePeople();
     refreshActionRequiredUI();
-    renderTable({ refreshDashboards: false });
+    renderTable();
   }
 
   if (markedCount === 0 && skippedNoReminder === rows.length) {

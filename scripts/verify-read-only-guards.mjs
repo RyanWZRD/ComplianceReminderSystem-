@@ -1,8 +1,14 @@
 process.env.DATA_BACKEND = "cloud";
 process.env.AUTH_MODE = "supabase";
 
-const { canMarkReminderSent, canMutateData, canMutateReminderSettings, canSetActionStatus, isCloudMode } =
-  await import("../js/app/permissions.js");
+const {
+  canMarkReminderSent,
+  canMutateData,
+  canMutateReminderSettings,
+  canRenewCompliance,
+  canSetActionStatus,
+  isCloudMode,
+} = await import("../js/app/permissions.js");
 
 if (!isCloudMode()) {
   console.error("Expected cloud mode.");
@@ -26,6 +32,11 @@ if (canMarkReminderSent()) {
 
 if (canSetActionStatus()) {
   console.error("canSetActionStatus() must be false when CLOUD_WRITES_ENABLED is not set.");
+  process.exit(1);
+}
+
+if (canRenewCompliance()) {
+  console.error("canRenewCompliance() must be false when CLOUD_WRITES_ENABLED is not set.");
   process.exit(1);
 }
 

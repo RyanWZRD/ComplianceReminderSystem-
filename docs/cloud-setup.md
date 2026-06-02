@@ -251,6 +251,19 @@ npm run verify-cloud-set-action-status
 
 See `docs/cloud-writes-step8.md`.
 
+## Phase 2 Step 9 — Renew compliance RPC
+
+- Migration: `supabase/migrations/20260203000003_renew_compliance_rpc.sql`
+- `canMutateData()` stays false; `canRenewCompliance()` enables renew modal only
+- Custom expiry must be today or later (Europe/London)
+
+```bash
+supabase db push
+npm run verify-cloud-renew-compliance
+```
+
+See `docs/cloud-writes-step9.md`.
+
 ## Rollback
 
 | Scenario | Action |

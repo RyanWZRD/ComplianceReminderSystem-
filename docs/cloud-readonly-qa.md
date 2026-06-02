@@ -117,6 +117,23 @@ Requires migration `20260203000002` and `?backend=cloud&cloudWrites=1` on **loca
 
 ---
 
+## H. Limited writes — Renew compliance (Step 9)
+
+Requires migration `20260203000003` and `?backend=cloud&cloudWrites=1` on **localhost or staging only**.
+
+| # | Check | Editor | Viewer |
+|---|--------|:------:|:------:|
+| H1 | Banner mentions renew compliance | ☐ | ☐ |
+| H2 | Renew expired record (custom date, today or later) — success, persists after refresh | ☐ | N/A |
+| H3 | Suggested date on `3-years` record — success | ☐ | N/A |
+| H4 | Manual cycle — suggested hidden; custom works | ☐ | N/A |
+| H5 | Custom date before today — error message | ☐ | N/A |
+| H6 | Edit / add / import still blocked | ☐ | ☐ |
+| H7 | Mark Sent + action complete/reopen still work | ☐ | N/A |
+| H8 | Viewer: Renew disabled | N/A | ☐ |
+
+---
+
 ## E. RLS (database — optional manual)
 
 Postgres write policies are validated in `docs/cloud-phase1-rls-checklist.md` (SQL Editor). No app write tests in Step 6.

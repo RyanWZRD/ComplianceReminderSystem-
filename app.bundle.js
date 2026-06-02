@@ -21336,6 +21336,15 @@ ${suffix}`;
     }
     return canEdit();
   }
+  function canRenewCompliance() {
+    if (!isCloudMode()) {
+      return canMutateData();
+    }
+    if (!CLOUD_WRITES_ENABLED) {
+      return false;
+    }
+    return canEdit();
+  }
   function canMutateReminderSettings() {
     return canMutateData() && canAdmin();
   }
@@ -21404,8 +21413,8 @@ ${suffix}`;
     if (!CLOUD_WRITES_ENABLED) {
       return "Cloud mode is read-only. You can view and export data; changes are not saved to the cloud yet.";
     }
-    if (canMarkReminderSent() || canSetActionStatus()) {
-      return "Cloud mode (limited writes). Mark Reminder Sent and action complete/reopen are saved to the cloud.";
+    if (canMarkReminderSent() || canSetActionStatus() || canRenewCompliance()) {
+      return "Cloud mode (limited writes). Mark Reminder Sent, renew compliance, and action complete/reopen are saved to the cloud.";
     }
     const role = getCurrentUserRole();
     if (role === "viewer") {
@@ -21714,6 +21723,47 @@ ${suffix}`;
     const [year, month, day] = dateString.split("-").map(Number);
     const date = new Date(year, month - 1, day);
     return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
+  }
+
+  // js/data/renew-compliance.js
+  var RENEWAL_MODES = {
+    SUGGESTED: "suggested",
+    CUSTOM: "custom"
+  };
+  function mapRenewalModeToRpc(mode) {
+    if (mode === RENEWAL_MODES.SUGGESTED || mode === "suggested") {
+      return RENEWAL_MODES.SUGGESTED;
+    }
+    if (mode === RENEWAL_MODES.CUSTOM || mode === "custom") {
+      return RENEWAL_MODES.CUSTOM;
+    }
+    return null;
+  }
+  function getLondonDateISOString(date = /* @__PURE__ */ new Date()) {
+    const parts = new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Europe/London",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit"
+    }).formatToParts(date);
+    const year = parts.find((part) => part.type === "year")?.value ?? "";
+    const month = parts.find((part) => part.type === "month")?.value ?? "";
+    const day = parts.find((part) => part.type === "day")?.value ?? "";
+    return `${year}-${month}-${day}`;
+  }
+  function validateCustomRenewalDate(dateString) {
+    const normalized = normalizeExpiryDate(String(dateString || "").trim());
+    if (!normalized) {
+      return { valid: false, reason: "missing" };
+    }
+    if (!isValidExpiryDate(normalized)) {
+      return { valid: false, reason: "invalid" };
+    }
+    const todayLondon = getLondonDateISOString();
+    if (normalized < todayLondon) {
+      return { valid: false, reason: "before_today" };
+    }
+    return { valid: true };
   }
 
   // js/data/local-store.js
@@ -22210,6 +22260,82 @@ ${suffix}`;
         };
       }
       return { ok: false, error: `Unexpected set_action_status status: ${String(status)}` };
+    }
+    /**
+     * @param {string} recordId
+     * @param {string} renewalMode `suggested` or `custom`
+     * @param {string} [newExpiryDate] ISO date for custom mode
+     * @returns {Promise<
+     *   | {
+     *       ok: true;
+     *       status:
+     *         | "renewed"
+     *         | "not_found"
+     *         | "invalid_date"
+     *         | "suggested_unavailable";
+     *       reason?: string;
+     *       expiryDate?: string;
+     *       notes?: string;
+     *     }
+     *   | { ok: false; error: string }
+     * >}
+     */
+    async renewCompliance(recordId, renewalMode, newExpiryDate) {
+      if (!isSupabaseConfigured()) {
+        return { ok: false, error: "Supabase is not configured." };
+      }
+      await waitForAuthReady();
+      if (!isAuthenticated()) {
+        return { ok: false, error: "Not signed in." };
+      }
+      const rpcMode = mapRenewalModeToRpc(renewalMode);
+      if (!rpcMode) {
+        return { ok: false, error: `Invalid renewal mode: ${renewalMode}` };
+      }
+      const supabase = getSupabaseClient();
+      const rpcArgs = {
+        p_record_id: recordId,
+        p_renewal_mode: rpcMode
+      };
+      if (rpcMode === "custom" && newExpiryDate) {
+        rpcArgs.p_new_expiry_date = newExpiryDate;
+      }
+      const { data, error } = await supabase.rpc("renew_compliance", rpcArgs);
+      if (error) {
+        return { ok: false, error: error.message };
+      }
+      if (!data || typeof data !== "object") {
+        return { ok: false, error: "Unexpected response from renew_compliance." };
+      }
+      const status = data.status;
+      if (status === "not_found") {
+        return { ok: true, status: "not_found" };
+      }
+      if (status === "invalid_date") {
+        return {
+          ok: true,
+          status: "invalid_date",
+          reason: typeof data.reason === "string" ? data.reason : "invalid_date"
+        };
+      }
+      if (status === "suggested_unavailable") {
+        return {
+          ok: true,
+          status: "suggested_unavailable",
+          reason: typeof data.reason === "string" ? data.reason : "suggested_unavailable"
+        };
+      }
+      if (status === "renewed") {
+        const expiryRaw = data.expiry_date;
+        const expiryDate = typeof expiryRaw === "string" ? expiryRaw.slice(0, 10) : expiryRaw instanceof Date ? expiryRaw.toISOString().slice(0, 10) : "";
+        return {
+          ok: true,
+          status: "renewed",
+          expiryDate,
+          notes: typeof data.notes === "string" ? data.notes : ""
+        };
+      }
+      return { ok: false, error: `Unexpected renew_compliance status: ${String(status)}` };
     }
     /**
      * @param {{ onLoadError?: (error: Error) => void }} [options]
@@ -22779,6 +22905,17 @@ ${suffix}`;
       showMessage(
         appMessage,
         "Your role cannot update action status in cloud mode.",
+        "error"
+      );
+      return;
+    }
+    notifyReadOnlyBlocked();
+  }
+  function notifyRenewComplianceBlocked() {
+    if (isCloudMode() && CLOUD_WRITES_ENABLED) {
+      showMessage(
+        appMessage,
+        "Your role cannot renew compliance in cloud mode.",
         "error"
       );
       return;
@@ -26077,7 +26214,8 @@ This cannot be undone.`
     });
   }
   function openRenewModal(personId, recordId) {
-    if (rejectIfReadOnly()) {
+    if (!canRenewCompliance()) {
+      notifyRenewComplianceBlocked();
       return;
     }
     const result = findPersonAndRecord(personId, recordId);
@@ -26128,18 +26266,14 @@ This cannot be undone.`
       hideMessage(renewModalMessage);
     }
   }
-  function applyRenewal(newExpiryDate, mode) {
-    if (rejectIfReadOnly()) {
-      return;
-    }
+  function applyRenewalLocal(newExpiryDate, mode) {
     if (!renewModalContext) {
-      return;
+      return { status: "no_context" };
     }
     const { personId, recordId, recordLabel, renewalCycle } = renewModalContext;
     const result = findPersonAndRecord(personId, recordId);
     if (!result) {
-      closeRenewModal();
-      return;
+      return { status: "not_found" };
     }
     const { record } = result;
     const newExpiryDisplay = formatExpiryDateForAuditNote(newExpiryDate);
@@ -26148,7 +26282,7 @@ This cannot be undone.`
     record.expiryDate = newExpiryDate;
     record.notes = existingNotes ? `${existingNotes}
 ${auditLine}` : auditLine;
-    if (mode === "suggested") {
+    if (mode === RENEWAL_MODES.SUGGESTED || mode === "suggested") {
       appendHistoryEntry(
         record,
         HISTORY_ACTIONS.RENEWED,
@@ -26162,30 +26296,112 @@ ${auditLine}` : auditLine;
       );
     }
     savePeople();
-    closeRenewModal();
     if (String(editIdInput.value) === String(personId) && String(editRecordIdInput.value) === String(recordId)) {
       document.getElementById("edit-dbs-expiry").value = newExpiryDate;
     }
+    return { status: "renewed", recordLabel, newExpiryDisplay };
+  }
+  async function persistRenewal(newExpiryDate, mode) {
+    if (!canRenewCompliance()) {
+      notifyRenewComplianceBlocked();
+      return;
+    }
+    if (!renewModalContext) {
+      return;
+    }
+    const { personId, recordId, recordLabel } = renewModalContext;
+    if (!isCloudMode()) {
+      const outcome = applyRenewalLocal(newExpiryDate, mode);
+      if (outcome.status === "not_found") {
+        closeRenewModal();
+        return;
+      }
+      if (outcome.status === "renewed") {
+        closeRenewModal();
+        showMessage(
+          appMessage,
+          `Renewed: ${outcome.recordLabel}. New expiry date: ${outcome.newExpiryDisplay}.`,
+          "success"
+        );
+        renderTable();
+      }
+      return;
+    }
+    if (typeof repository.renewCompliance !== "function") {
+      showMessage(renewModalMessage, "Cloud renew compliance is not available.", "error");
+      return;
+    }
+    const persistResult = await repository.renewCompliance(
+      String(recordId),
+      mode,
+      mode === RENEWAL_MODES.CUSTOM || mode === "custom" ? newExpiryDate : void 0
+    );
+    if (!persistResult.ok) {
+      showMessage(
+        renewModalMessage,
+        persistResult.error || "Could not save renewal to the cloud.",
+        "error"
+      );
+      return;
+    }
+    if (persistResult.status === "not_found") {
+      showMessage(renewModalMessage, "Record not found.", "error");
+      closeRenewModal();
+      return;
+    }
+    if (persistResult.status === "suggested_unavailable") {
+      showMessage(
+        renewModalMessage,
+        "Suggested renewal is not available for this record.",
+        "error"
+      );
+      return;
+    }
+    if (persistResult.status === "invalid_date") {
+      const reason = persistResult.reason;
+      if (reason === "before_today") {
+        showMessage(
+          renewModalMessage,
+          "Expiry date must be today or later.",
+          "error"
+        );
+      } else {
+        showMessage(
+          renewModalMessage,
+          "Invalid date. Please enter a valid date.",
+          "error"
+        );
+      }
+      return;
+    }
+    const refreshed = await reloadCloudDataAfterWrite();
+    if (!refreshed) {
+      return;
+    }
+    closeRenewModal();
+    const newExpiryDisplay = formatExpiryDateForAuditNote(
+      persistResult.expiryDate || newExpiryDate
+    );
     showMessage(
       appMessage,
       `Renewed: ${recordLabel}. New expiry date: ${newExpiryDisplay}.`,
       "success"
     );
-    renderTable();
   }
   function handleRenewUseSuggested() {
     if (!renewModalContext?.suggestedExpiryDate) {
       return;
     }
-    applyRenewal(renewModalContext.suggestedExpiryDate, "suggested");
+    void persistRenewal(renewModalContext.suggestedExpiryDate, RENEWAL_MODES.SUGGESTED);
   }
   function handleRenewSaveCustom() {
     const trimmed = renewCustomDateInput.value.trim();
-    if (!trimmed) {
+    const validation = validateCustomRenewalDate(trimmed);
+    if (validation.reason === "missing") {
       showMessage(renewModalMessage, "Please enter an expiry date.", "error");
       return;
     }
-    if (!isValidExpiryDate(trimmed)) {
+    if (validation.reason === "invalid") {
       showMessage(
         renewModalMessage,
         "Invalid date. Please enter a valid date.",
@@ -26193,7 +26409,15 @@ ${auditLine}` : auditLine;
       );
       return;
     }
-    applyRenewal(normalizeExpiryDate(trimmed), "custom");
+    if (validation.reason === "before_today") {
+      showMessage(
+        renewModalMessage,
+        "Expiry date must be today or later.",
+        "error"
+      );
+      return;
+    }
+    void persistRenewal(normalizeExpiryDate(trimmed), RENEWAL_MODES.CUSTOM);
   }
   function renderTable({ refreshDashboards = true } = {}) {
     if (!tableBody) {
@@ -26236,7 +26460,7 @@ ${auditLine}` : auditLine;
       <td class="${openActionsClass}">${actionSummary.activeCount}</td>
       <td class="table-action-cell"><button type="button" class="details-btn" data-person-id="${row.personId}" data-record-id="${row.recordId}">Details</button></td>
       <td class="table-action-cell"><button type="button" class="edit-btn" data-person-id="${row.personId}" data-record-id="${row.recordId}"${canMutateData() ? "" : " disabled"}>Edit</button></td>
-      <td class="table-action-cell"><button type="button" class="renew-btn" data-person-id="${row.personId}" data-record-id="${row.recordId}"${canMutateData() ? "" : " disabled"}>Renew</button></td>
+      <td class="table-action-cell"><button type="button" class="renew-btn" data-person-id="${row.personId}" data-record-id="${row.recordId}"${canRenewCompliance() ? "" : " disabled"}>Renew</button></td>
     `;
       tableBody.appendChild(tableRow);
     });
@@ -27363,10 +27587,7 @@ Your current data will be overwritten. Continue?`
       "reminder-days-7",
       "hide-sent-reminders",
       "workspace-edit-btn",
-      "workspace-renew-btn",
       "workspace-delete-btn",
-      "renew-use-suggested-btn",
-      "renew-save-custom-btn",
       "evidence-save-btn",
       "name",
       "role",
@@ -27415,6 +27636,26 @@ Your current data will be overwritten. Continue?`
         element.classList.add("read-only-disabled");
       });
     }
+    if (canRenewCompliance()) {
+      const renewControlIds = [
+        "workspace-renew-btn",
+        "renew-use-suggested-btn",
+        "renew-save-custom-btn"
+      ];
+      renewControlIds.forEach((id) => {
+        const element = document.getElementById(id);
+        if (element instanceof HTMLButtonElement) {
+          element.disabled = false;
+          element.classList.remove("read-only-disabled");
+        }
+      });
+    } else {
+      const workspaceRenew = document.getElementById("workspace-renew-btn");
+      if (workspaceRenew instanceof HTMLButtonElement) {
+        workspaceRenew.disabled = true;
+        workspaceRenew.classList.add("read-only-disabled");
+      }
+    }
   }
   async function finishAppBoot() {
     const bootOk = await bootData();
@@ -27426,7 +27667,7 @@ Your current data will be overwritten. Continue?`
     if (dataBackendBadge) {
       if (DATA_BACKEND === "local") {
         dataBackendBadge.textContent = "Local storage mode";
-      } else if (CLOUD_WRITES_ENABLED && (canMarkReminderSent() || canSetActionStatus())) {
+      } else if (CLOUD_WRITES_ENABLED && (canMarkReminderSent() || canSetActionStatus() || canRenewCompliance())) {
         dataBackendBadge.textContent = "Cloud mode (limited writes)";
       } else {
         dataBackendBadge.textContent = "Cloud mode (read-only)";

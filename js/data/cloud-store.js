@@ -7,6 +7,7 @@ import { getSupabaseClient, isSupabaseConfigured } from "./supabase-client.js";
 import { buildPeopleTree, mapDeletedSnapshots } from "./cloud-mapper.js";
 import { mapActionStatusToRpcTarget } from "./action-status.js";
 import { mapReminderTypeToRpcCode } from "./reminder-sent.js";
+import { mapRenewalModeToRpc } from "./renew-compliance.js";
 import { LocalComplianceStore } from "./local-store.js";
 
 const READ_ONLY_MESSAGE =
@@ -173,6 +174,104 @@ export class CloudComplianceStore extends LocalComplianceStore {
     }
 
     return { ok: false, error: `Unexpected set_action_status status: ${String(status)}` };
+  }
+
+  /**
+   * @param {string} recordId
+   * @param {string} renewalMode `suggested` or `custom`
+   * @param {string} [newExpiryDate] ISO date for custom mode
+   * @returns {Promise<
+   *   | {
+   *       ok: true;
+   *       status:
+   *         | "renewed"
+   *         | "not_found"
+   *         | "invalid_date"
+   *         | "suggested_unavailable";
+   *       reason?: string;
+   *       expiryDate?: string;
+   *       notes?: string;
+   *     }
+   *   | { ok: false; error: string }
+   * >}
+   */
+  async renewCompliance(recordId, renewalMode, newExpiryDate) {
+    if (!isSupabaseConfigured()) {
+      return { ok: false, error: "Supabase is not configured." };
+    }
+
+    await waitForAuthReady();
+
+    if (!isAuthenticated()) {
+      return { ok: false, error: "Not signed in." };
+    }
+
+    const rpcMode = mapRenewalModeToRpc(renewalMode);
+
+    if (!rpcMode) {
+      return { ok: false, error: `Invalid renewal mode: ${renewalMode}` };
+    }
+
+    const supabase = getSupabaseClient();
+    const rpcArgs = {
+      p_record_id: recordId,
+      p_renewal_mode: rpcMode,
+    };
+
+    if (rpcMode === "custom" && newExpiryDate) {
+      rpcArgs.p_new_expiry_date = newExpiryDate;
+    }
+
+    const { data, error } = await supabase.rpc("renew_compliance", rpcArgs);
+
+    if (error) {
+      return { ok: false, error: error.message };
+    }
+
+    if (!data || typeof data !== "object") {
+      return { ok: false, error: "Unexpected response from renew_compliance." };
+    }
+
+    const status = data.status;
+
+    if (status === "not_found") {
+      return { ok: true, status: "not_found" };
+    }
+
+    if (status === "invalid_date") {
+      return {
+        ok: true,
+        status: "invalid_date",
+        reason: typeof data.reason === "string" ? data.reason : "invalid_date",
+      };
+    }
+
+    if (status === "suggested_unavailable") {
+      return {
+        ok: true,
+        status: "suggested_unavailable",
+        reason: typeof data.reason === "string" ? data.reason : "suggested_unavailable",
+      };
+    }
+
+    if (status === "renewed") {
+      const expiryRaw = data.expiry_date;
+      const expiryDate =
+        typeof expiryRaw === "string"
+          ? expiryRaw.slice(0, 10)
+          : expiryRaw instanceof Date
+            ? expiryRaw.toISOString().slice(0, 10)
+            : "";
+
+      return {
+        ok: true,
+        status: "renewed",
+        expiryDate,
+        notes: typeof data.notes === "string" ? data.notes : "",
+      };
+    }
+
+    return { ok: false, error: `Unexpected renew_compliance status: ${String(status)}` };
   }
 
   /**

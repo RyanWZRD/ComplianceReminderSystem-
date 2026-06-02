@@ -17,7 +17,8 @@ js/data/
   supabase-env.js           Gitignored — generated via npm run sync-env
   supabase-client.js        Browser Supabase client
   cloud-mapper.js           Internal Postgres row → nested app shape
-  cloud-store.js            CloudComplianceStore (load; markReminderSent + setActionStatus RPC; save is no-op)
+  renew-compliance.js       Renewal mode mapping + custom date validation (London today)
+  cloud-store.js            CloudComplianceStore (load; markReminderSent, setActionStatus, renewCompliance RPC; save is no-op)
   cloud-settings-store.js   CloudSettingsStore (load-only; setSettings throws)
 ```
 
@@ -42,7 +43,7 @@ export const DATA_BACKEND = "local"; // committed default
 
 Browser cloud dev: `?backend=cloud` in the URL. Node verify scripts: `process.env.DATA_BACKEND=cloud`.
 
-Cloud **load** is implemented. **Mark Reminder Sent** (single record) and **action complete/reopen** use RPC when `CLOUD_WRITES_ENABLED` is true. All other cloud mutations remain blocked (`canMutateData()` false in cloud). See `js/app/permissions.js` (`canMarkReminderSent()`, `canSetActionStatus()`).
+Cloud **load** is implemented. **Mark Reminder Sent**, **renew compliance**, and **action complete/reopen** use RPC when `CLOUD_WRITES_ENABLED` is true. All other cloud mutations remain blocked (`canMutateData()` false in cloud). See `js/app/permissions.js` (`canMarkReminderSent()`, `canRenewCompliance()`, `canSetActionStatus()`).
 
 ## Verify scripts
 
@@ -57,6 +58,7 @@ Cloud **load** is implemented. **Mark Reminder Sent** (single record) and **acti
 | `npm run verify-local-mode` | Local works without Supabase |
 | `npm run verify-read-only-guards` | `canMutateData()` false in cloud |
 | `npm run verify-cloud-mark-reminder-sent` | Editor mark-sent RPC + reload; viewer denied |
+| `npm run verify-cloud-renew-compliance` | Editor renew RPC + reload; viewer denied |
 | `npm run verify-staging-config` | `.env` + `supabase-env.js` present |
 
 See `docs/cloud-setup.md` and `docs/staging-deployment.md`.

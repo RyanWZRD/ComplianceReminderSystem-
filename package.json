@@ -13,6 +13,7 @@
     "verify-read-only-guards": "node scripts/verify-read-only-guards.mjs",
     "verify-cloud-role-load": "node scripts/verify-cloud-role-load.mjs",
     "verify-cloud-mark-reminder-sent": "node scripts/verify-cloud-mark-reminder-sent.mjs",
+    "verify-cloud-set-action-status": "node scripts/verify-cloud-set-action-status.mjs",
     "verify-staging-config": "node scripts/verify-staging-config.mjs"
   },
   "dependencies": {

@@ -100,6 +100,23 @@ Requires migration `20260203000001` and `?backend=cloud&cloudWrites=1` on **loca
 
 ---
 
+## G. Limited writes — Action status (Step 8)
+
+Requires migration `20260203000002` and `?backend=cloud&cloudWrites=1` on **localhost or staging only**.
+
+| # | Check | Editor | Viewer |
+|---|--------|:------:|:------:|
+| G1 | Banner mentions action complete/reopen | ☐ | ☐ |
+| G2 | Open action — Mark complete succeeds, persists after refresh | ☐ | N/A |
+| G3 | Completed action — Reopen succeeds, persists after refresh | ☐ | N/A |
+| G4 | In-progress action — no status buttons | ☐ | ☐ |
+| G5 | Edit / delete action buttons hidden | ☐ | ☐ |
+| G6 | Add default actions still blocked | ☐ | ☐ |
+| G7 | Viewer: no complete/reopen buttons | N/A | ☐ |
+| G8 | Mark Sent (Step 7) still works | ☐ | N/A |
+
+---
+
 ## E. RLS (database — optional manual)
 
 Postgres write policies are validated in `docs/cloud-phase1-rls-checklist.md` (SQL Editor). No app write tests in Step 6.

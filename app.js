@@ -16,6 +16,7 @@ import {
   canMarkReminderSent,
   canMutateData,
   canMutateReminderSettings,
+  canSetActionStatus,
   isCloudMode,
 } from "./js/app/permissions.js";
 import {
@@ -26,6 +27,7 @@ import {
   settingsRepository,
 } from "./js/data/repository.js";
 import { REMINDER_UI_LABELS, getReminderSentText } from "./js/data/reminder-sent.js";
+import { isAllowedActionStatusTransition } from "./js/data/action-status.js";
 import {
   ACTION_STATUSES,
   ACTION_STATUS_LABELS,
@@ -413,6 +415,19 @@ function notifyMarkReminderBlocked() {
     showMessage(
       appMessage,
       "Your role cannot mark reminders sent in cloud mode.",
+      "error"
+    );
+    return;
+  }
+
+  notifyReadOnlyBlocked();
+}
+
+function notifySetActionStatusBlocked() {
+  if (isCloudMode() && CLOUD_WRITES_ENABLED) {
+    showMessage(
+      appMessage,
+      "Your role cannot update action status in cloud mode.",
       "error"
     );
     return;
@@ -1796,6 +1811,36 @@ function actionMatchesWorkspaceFilter(actionItem) {
   return getActionStatus(actionItem) === workspaceActionFilter;
 }
 
+function buildActionMutationButtons(personId, recordId, item) {
+  const status = getActionStatus(item);
+
+  if (canMutateData()) {
+    return `${status === ACTION_STATUSES.OPEN ? `<button type="button" class="action-progress-btn" data-person-id="${personId}" data-record-id="${recordId}" data-action-id="${item.id}">Mark in progress</button>` : ""}${
+      !isActionCompleted(item)
+        ? `<button type="button" class="action-complete-btn" data-person-id="${personId}" data-record-id="${recordId}" data-action-id="${item.id}">Mark complete</button>`
+        : ""
+    }${
+      isActionCompleted(item)
+        ? `<button type="button" class="action-reopen-btn" data-person-id="${personId}" data-record-id="${recordId}" data-action-id="${item.id}">Reopen</button>`
+        : ""
+    }<button type="button" class="action-edit-btn" data-person-id="${personId}" data-record-id="${recordId}" data-action-id="${item.id}">Edit</button><button type="button" class="delete-action-btn" data-person-id="${personId}" data-record-id="${recordId}" data-action-id="${item.id}">Delete</button>`;
+  }
+
+  if (!canSetActionStatus()) {
+    return "";
+  }
+
+  if (status === ACTION_STATUSES.OPEN) {
+    return `<button type="button" class="action-complete-btn" data-person-id="${personId}" data-record-id="${recordId}" data-action-id="${item.id}">Mark complete</button>`;
+  }
+
+  if (status === ACTION_STATUSES.COMPLETED) {
+    return `<button type="button" class="action-reopen-btn" data-person-id="${personId}" data-record-id="${recordId}" data-action-id="${item.id}">Reopen</button>`;
+  }
+
+  return "";
+}
+
 function buildActionItemHtml(personId, recordId, item) {
   const status = getActionStatus(item);
   const statusLabel = getActionStatusLabel(item);
@@ -1824,17 +1869,7 @@ function buildActionItemHtml(personId, recordId, item) {
     : "";
   const overdueBadge = overdue ? `<span class="action-overdue-badge">OVERDUE</span>` : "";
 
-  const mutationButtons = canMutateData()
-    ? `${status === ACTION_STATUSES.OPEN ? `<button type="button" class="action-progress-btn" data-person-id="${personId}" data-record-id="${recordId}" data-action-id="${item.id}">Mark in progress</button>` : ""}${
-        !isActionCompleted(item)
-          ? `<button type="button" class="action-complete-btn" data-person-id="${personId}" data-record-id="${recordId}" data-action-id="${item.id}">Mark complete</button>`
-          : ""
-      }${
-        isActionCompleted(item)
-          ? `<button type="button" class="action-reopen-btn" data-person-id="${personId}" data-record-id="${recordId}" data-action-id="${item.id}">Reopen</button>`
-          : ""
-      }<button type="button" class="action-edit-btn" data-person-id="${personId}" data-record-id="${recordId}" data-action-id="${item.id}">Edit</button><button type="button" class="delete-action-btn" data-person-id="${personId}" data-record-id="${recordId}" data-action-id="${item.id}">Delete</button>`
-    : "";
+  const mutationButtons = buildActionMutationButtons(personId, recordId, item);
 
   return `
     <li class="${itemClass}">
@@ -2152,9 +2187,9 @@ function handleWorkspaceRecordAction(event) {
   } else if (button.classList.contains("action-progress-btn")) {
     setActionInProgress(personId, recordId, parseEntityId(button.dataset.actionId));
   } else if (button.classList.contains("action-complete-btn")) {
-    completeActionItem(personId, recordId, parseEntityId(button.dataset.actionId));
+    void completeActionItem(personId, recordId, parseEntityId(button.dataset.actionId));
   } else if (button.classList.contains("action-reopen-btn")) {
-    reopenActionItem(personId, recordId, parseEntityId(button.dataset.actionId));
+    void reopenActionItem(personId, recordId, parseEntityId(button.dataset.actionId));
   } else if (button.classList.contains("delete-action-btn")) {
     deleteActionItem(personId, recordId, parseEntityId(button.dataset.actionId));
   }
@@ -2634,62 +2669,135 @@ function setActionInProgress(personId, recordId, actionId) {
   renderTable();
 }
 
-function completeActionItem(personId, recordId, actionId) {
-  if (rejectIfReadOnly()) {
-    return;
-  }
+/**
+ * @param {string | number} personId
+ * @param {string | number} recordId
+ * @param {string | number} actionId
+ * @param {string} targetStatus
+ * @param {{ cloudRules?: boolean }} [options]
+ * @returns {{ status: 'updated' | 'not_found' | 'invalid_transition'; actionTitle?: string }}
+ */
+function applyActionStatusLocal(personId, recordId, actionId, targetStatus, { cloudRules = false } = {}) {
   const result = findPersonAndRecord(personId, recordId);
+
   if (!result) {
-    return;
+    return { status: "not_found" };
   }
 
   const actionItem = (result.record.actions || []).find((item) => item.id === actionId);
 
-  if (!actionItem || isActionCompleted(actionItem)) {
-    return;
+  if (!actionItem) {
+    return { status: "not_found" };
   }
 
-  actionItem.status = ACTION_STATUSES.COMPLETED;
+  const currentStatus = getActionStatus(actionItem);
+
+  if (cloudRules) {
+    if (!isAllowedActionStatusTransition(currentStatus, targetStatus)) {
+      return { status: "invalid_transition" };
+    }
+  } else if (targetStatus === ACTION_STATUSES.COMPLETED) {
+    if (isActionCompleted(actionItem)) {
+      return { status: "invalid_transition" };
+    }
+  } else if (!isActionCompleted(actionItem)) {
+    return { status: "invalid_transition" };
+  }
+
+  actionItem.status = targetStatus;
   syncActionCompletionFields(actionItem);
 
-  appendHistoryEntry(
-    result.record,
-    HISTORY_ACTIONS.ACTION_COMPLETED,
-    `Action completed: ${actionItem.title}.`
-  );
+  const historyAction =
+    targetStatus === ACTION_STATUSES.COMPLETED
+      ? HISTORY_ACTIONS.ACTION_COMPLETED
+      : HISTORY_ACTIONS.ACTION_REOPENED;
+  const historyDescription =
+    targetStatus === ACTION_STATUSES.COMPLETED
+      ? `Action completed: ${actionItem.title}.`
+      : `Action reopened: ${actionItem.title}.`;
 
-  savePeople();
-  showMessage(appMessage, `Action completed: ${actionItem.title}.`, "success");
-  renderTable();
+  appendHistoryEntry(result.record, historyAction, historyDescription);
+
+  return { status: "updated", actionTitle: actionItem.title };
 }
 
-function reopenActionItem(personId, recordId, actionId) {
-  if (rejectIfReadOnly()) {
+/**
+ * @param {string | number} personId
+ * @param {string | number} recordId
+ * @param {string | number} actionId
+ * @param {string} targetStatus
+ */
+async function persistActionStatus(personId, recordId, actionId, targetStatus) {
+  if (!canSetActionStatus()) {
+    notifySetActionStatusBlocked();
     return;
   }
+
+  if (!isCloudMode()) {
+    const outcome = applyActionStatusLocal(personId, recordId, actionId, targetStatus);
+
+    if (outcome.status === "not_found") {
+      return;
+    }
+
+    if (outcome.status === "invalid_transition") {
+      showMessage(appMessage, "This action status cannot be changed that way.", "error");
+      return;
+    }
+
+    savePeople();
+    const verb =
+      targetStatus === ACTION_STATUSES.COMPLETED ? "completed" : "reopened";
+    showMessage(appMessage, `Action ${verb}: ${outcome.actionTitle}.`, "success");
+    renderTable();
+    return;
+  }
+
+  if (typeof repository.setActionStatus !== "function") {
+    showMessage(appMessage, "Cloud action status updates are not available.", "error");
+    return;
+  }
+
+  const persistResult = await repository.setActionStatus(String(actionId), targetStatus);
+
+  if (!persistResult.ok) {
+    showMessage(
+      appMessage,
+      persistResult.error || "Could not save action status to the cloud.",
+      "error"
+    );
+    return;
+  }
+
+  if (persistResult.status === "not_found") {
+    showMessage(appMessage, "Action not found.", "error");
+    return;
+  }
+
+  if (persistResult.status === "invalid_transition") {
+    showMessage(appMessage, "This action status cannot be changed that way.", "error");
+    return;
+  }
+
+  const refreshed = await reloadCloudDataAfterWrite();
+
+  if (!refreshed) {
+    return;
+  }
+
   const result = findPersonAndRecord(personId, recordId);
-  if (!result) {
-    return;
-  }
+  const actionItem = result?.record.actions?.find((item) => item.id === actionId);
+  const title = actionItem?.title || "Action";
+  const verb = targetStatus === ACTION_STATUSES.COMPLETED ? "completed" : "reopened";
+  showMessage(appMessage, `Action ${verb}: ${title}.`, "success");
+}
 
-  const actionItem = (result.record.actions || []).find((item) => item.id === actionId);
+async function completeActionItem(personId, recordId, actionId) {
+  await persistActionStatus(personId, recordId, actionId, ACTION_STATUSES.COMPLETED);
+}
 
-  if (!actionItem || !isActionCompleted(actionItem)) {
-    return;
-  }
-
-  actionItem.status = ACTION_STATUSES.OPEN;
-  syncActionCompletionFields(actionItem);
-
-  appendHistoryEntry(
-    result.record,
-    HISTORY_ACTIONS.ACTION_REOPENED,
-    `Action reopened: ${actionItem.title}.`
-  );
-
-  savePeople();
-  showMessage(appMessage, `Action reopened: ${actionItem.title}.`, "success");
-  renderTable();
+async function reopenActionItem(personId, recordId, actionId) {
+  await persistActionStatus(personId, recordId, actionId, ACTION_STATUSES.OPEN);
 }
 
 function deleteActionItem(personId, recordId, actionId) {
@@ -6359,7 +6467,7 @@ async function finishAppBoot() {
   if (dataBackendBadge) {
     if (DATA_BACKEND === "local") {
       dataBackendBadge.textContent = "Local storage mode";
-    } else if (CLOUD_WRITES_ENABLED && canMarkReminderSent()) {
+    } else if (CLOUD_WRITES_ENABLED && (canMarkReminderSent() || canSetActionStatus())) {
       dataBackendBadge.textContent = "Cloud mode (limited writes)";
     } else {
       dataBackendBadge.textContent = "Cloud mode (read-only)";

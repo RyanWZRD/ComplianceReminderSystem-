@@ -17,7 +17,7 @@ js/data/
   supabase-env.js           Gitignored — generated via npm run sync-env
   supabase-client.js        Browser Supabase client
   cloud-mapper.js           Internal Postgres row → nested app shape
-  cloud-store.js            CloudComplianceStore (load; markReminderSent RPC; save is no-op)
+  cloud-store.js            CloudComplianceStore (load; markReminderSent + setActionStatus RPC; save is no-op)
   cloud-settings-store.js   CloudSettingsStore (load-only; setSettings throws)
 ```
 
@@ -42,7 +42,7 @@ export const DATA_BACKEND = "local"; // committed default
 
 Browser cloud dev: `?backend=cloud` in the URL. Node verify scripts: `process.env.DATA_BACKEND=cloud`.
 
-Cloud **load** is implemented. **Mark Reminder Sent** (single record) uses RPC when `CLOUD_WRITES_ENABLED` is true. All other cloud mutations remain blocked (`canMutateData()` false in cloud). See `js/app/permissions.js` (`canMarkReminderSent()`).
+Cloud **load** is implemented. **Mark Reminder Sent** (single record) and **action complete/reopen** use RPC when `CLOUD_WRITES_ENABLED` is true. All other cloud mutations remain blocked (`canMutateData()` false in cloud). See `js/app/permissions.js` (`canMarkReminderSent()`, `canSetActionStatus()`).
 
 ## Verify scripts
 

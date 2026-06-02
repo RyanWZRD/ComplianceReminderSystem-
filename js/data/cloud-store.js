@@ -5,6 +5,7 @@ import {
 } from "../auth/session.js";
 import { getSupabaseClient, isSupabaseConfigured } from "./supabase-client.js";
 import { buildPeopleTree, mapDeletedSnapshots } from "./cloud-mapper.js";
+import { mapActionStatusToRpcTarget } from "./action-status.js";
 import { mapReminderTypeToRpcCode } from "./reminder-sent.js";
 import { LocalComplianceStore } from "./local-store.js";
 
@@ -102,6 +103,76 @@ export class CloudComplianceStore extends LocalComplianceStore {
     }
 
     return { ok: false, error: `Unexpected mark_reminder_sent status: ${String(status)}` };
+  }
+
+  /**
+   * @param {string} actionId
+   * @param {string} targetStatus `open` or `completed`
+   * @returns {Promise<
+   *   | {
+   *       ok: true;
+   *       status: "updated" | "not_found" | "invalid_transition";
+   *       reason?: string;
+   *       targetStatus?: string;
+   *     }
+   *   | { ok: false; error: string }
+   * >}
+   */
+  async setActionStatus(actionId, targetStatus) {
+    if (!isSupabaseConfigured()) {
+      return { ok: false, error: "Supabase is not configured." };
+    }
+
+    await waitForAuthReady();
+
+    if (!isAuthenticated()) {
+      return { ok: false, error: "Not signed in." };
+    }
+
+    const rpcTarget = mapActionStatusToRpcTarget(targetStatus);
+
+    if (!rpcTarget) {
+      return { ok: false, error: `Invalid action status target: ${targetStatus}` };
+    }
+
+    const supabase = getSupabaseClient();
+    const { data, error } = await supabase.rpc("set_action_status", {
+      p_action_id: actionId,
+      p_target_status: rpcTarget,
+    });
+
+    if (error) {
+      return { ok: false, error: error.message };
+    }
+
+    if (!data || typeof data !== "object") {
+      return { ok: false, error: "Unexpected response from set_action_status." };
+    }
+
+    const status = data.status;
+
+    if (status === "not_found") {
+      return { ok: true, status: "not_found" };
+    }
+
+    if (status === "invalid_transition") {
+      return {
+        ok: true,
+        status: "invalid_transition",
+        reason: typeof data.reason === "string" ? data.reason : "invalid_transition",
+      };
+    }
+
+    if (status === "updated") {
+      return {
+        ok: true,
+        status: "updated",
+        targetStatus:
+          typeof data.target_status === "string" ? data.target_status : rpcTarget,
+      };
+    }
+
+    return { ok: false, error: `Unexpected set_action_status status: ${String(status)}` };
   }
 
   /**

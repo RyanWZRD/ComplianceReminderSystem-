@@ -224,6 +224,7 @@ npm run build
 ## Phase 2 Step 7 — Mark Reminder Sent (single-record RPC)
 
 - Migration: `supabase/migrations/20260203000001_mark_reminder_sent_rpc.sql` (apply before verify)
+- Migration: `supabase/migrations/20260203000002_set_action_status_rpc.sql` (Step 8 — apply before action status verify)
 - `CLOUD_WRITES_ENABLED` default `false`; Node: `CLOUD_WRITES_ENABLED=true` for verify
 - Browser: `?cloudWrites=1` only on **localhost** or hostnames in `STAGING_APP_HOSTNAMES` — **never production**
 - `canMutateData()` stays false in cloud; only `canMarkReminderSent()` enables Mark Sent
@@ -236,6 +237,19 @@ npm run verify-cloud-mark-reminder-sent
 ```
 
 See `docs/cloud-writes-step7.md`.
+
+## Phase 2 Step 8 — Action status (open ↔ completed RPC)
+
+- Migration: `supabase/migrations/20260203000002_set_action_status_rpc.sql`
+- `canMutateData()` stays false; `canSetActionStatus()` enables Mark complete / Reopen only
+- No in-progress, edit, delete, or add-default-actions in cloud
+
+```bash
+supabase db push
+npm run verify-cloud-set-action-status
+```
+
+See `docs/cloud-writes-step8.md`.
 
 ## Rollback
 

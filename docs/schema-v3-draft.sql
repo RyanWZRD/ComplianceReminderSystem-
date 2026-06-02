@@ -1,4 +1,5 @@
 -- Draft schema for v3.x cloud migration (Supabase/PostgreSQL)
+-- SUPERSEDED: use supabase/migrations/ as the source of truth (v3.0.0 Alpha Phase 1).
 -- Not used by v2.4.0 local storage mode.
 
 create table organisations (

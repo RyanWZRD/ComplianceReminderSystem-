@@ -1,0 +1,13 @@
+# Dependencies and secrets
+node_modules/
+.env
+.env.local
+.env.*.local
+
+# Supabase local
+supabase/.branches
+supabase/.temp
+
+# OS
+.DS_Store
+Thumbs.db

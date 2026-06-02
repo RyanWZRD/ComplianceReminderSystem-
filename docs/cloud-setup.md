@@ -184,6 +184,43 @@ Set `SUPABASE_TEST_EMAIL`, `SUPABASE_TEST_PASSWORD`, and optional `SUPABASE_TEST
 npm run verify-cloud-load
 ```
 
+## Phase 2 Step 4 — Repository wiring and async boot
+
+- `repository.js` uses real `CloudComplianceStore` / `CloudSettingsStore` when `DATA_BACKEND=cloud`
+- Committed default: `DATA_BACKEND = "local"` in `js/data/config.js`
+- `app.js` boots asynchronously; cloud mode shows a boot error if not signed in (no login UI yet)
+
+```bash
+npm run verify-local-mode
+npm run verify-repository-cloud
+npm run verify-read-only-guards
+npm run build
+```
+
+## Phase 2 Step 5 — Login UI and read-only cloud UX
+
+- Sign-in screen for cloud mode (`?backend=cloud` in the browser — no separate build required)
+- All cloud users: read-only UI + `canMutateData()` guards (including editor/admin until writes ship)
+- Local mode unchanged (default build)
+
+Browser cloud test: `npm run build`, then `npm run serve`, then open `http://127.0.0.1:8877/?backend=cloud`
+
+## Phase 2 Step 6 — Staging deployment and read-only QA
+
+- Staging deploy runbook: `docs/staging-deployment.md`
+- Manual QA checklist: `docs/cloud-readonly-qa.md`
+- Cloud remains read-only; `DATA_BACKEND = "local"` in committed `js/data/config.js`
+
+```bash
+npm run sync-env
+npm run verify-staging-config
+npm run verify-cloud-role-load
+npm run verify-read-only-guards
+npm run build
+```
+
+`verify-cloud-role-load` signs in as admin, editor, and viewer and asserts identical seed load counts plus `canMutateData() === false`. RLS write tests stay in `docs/cloud-phase1-rls-checklist.md` (not automated in Step 6).
+
 ## Rollback
 
 | Scenario | Action |

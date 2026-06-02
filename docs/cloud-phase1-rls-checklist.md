@@ -205,6 +205,7 @@ select count(*) from public.people;
 | Three test profiles linked | ☐ |
 | Checklist sections 4–5 pass | ☐ |
 | Ready for Phase 2 | ☐ |
+| App read-only cloud QA (`docs/cloud-readonly-qa.md`) | ☐ |
 
 Date: _______________  
 Validated by: _______________

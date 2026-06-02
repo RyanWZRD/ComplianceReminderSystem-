@@ -12,9 +12,11 @@ export const AUTH_MODE = "local"; // local | supabase-preview | supabase
 |------|-----------|
 | `local` | Mock session: Local User, admin (default) |
 | `supabase-preview` | Mock session: Preview User, admin (legacy placeholder) |
-| `supabase` | Supabase Auth + `public.profiles` row (not wired in `app.js` until a later step) |
+| `supabase` | Supabase Auth + `public.profiles` row |
 
-In Node, set `process.env.AUTH_MODE=supabase` before importing `session.js` (used by `npm run verify-supabase-auth`). The browser bundle keeps `local` unless `config.js` is changed for dev.
+Browser cloud dev: add `?backend=cloud` to the URL (auto-sets auth to `supabase`). Login UI is shown before the register loads.
+
+In Node, set `process.env.AUTH_MODE=supabase` before importing `session.js` (used by verify scripts). Committed defaults remain `local` / `local`.
 
 ## Session API (`js/auth/session.js`)
 
@@ -47,3 +49,13 @@ npm run verify-supabase-auth
 ```
 
 Requires `.env` test user credentials (see `.env.example`). Uses staging alpha users from `docs/cloud-setup.md`.
+
+## Phase 2 Step 6 — Read-only cloud QA
+
+All signed-in roles (admin, editor, viewer) can **load** the same organisation data. The app blocks **mutations** in cloud mode until a future write step (`canMutateData()` is false for all cloud users).
+
+```bash
+npm run verify-cloud-role-load
+```
+
+Manual browser checklist: `docs/cloud-readonly-qa.md`. Staging deploy: `docs/staging-deployment.md`.

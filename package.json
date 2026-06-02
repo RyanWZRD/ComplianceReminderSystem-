@@ -3,11 +3,16 @@
   "private": true,
   "scripts": {
     "build": "npx esbuild app.js --bundle --format=iife --outfile=app.bundle.js",
-    "serve": "python -m http.server 8765",
+    "serve": "python -m http.server 8877 --bind 127.0.0.1",
     "sync-env": "node scripts/sync-supabase-env.mjs",
     "verify-supabase": "node scripts/verify-supabase-client.mjs",
     "verify-supabase-auth": "node scripts/verify-supabase-auth.mjs",
-    "verify-cloud-load": "node scripts/verify-cloud-load.mjs"
+    "verify-cloud-load": "node scripts/verify-cloud-load.mjs",
+    "verify-repository-cloud": "node scripts/verify-repository-cloud.mjs",
+    "verify-local-mode": "node scripts/verify-local-mode.mjs",
+    "verify-read-only-guards": "node scripts/verify-read-only-guards.mjs",
+    "verify-cloud-role-load": "node scripts/verify-cloud-role-load.mjs",
+    "verify-staging-config": "node scripts/verify-staging-config.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.8"

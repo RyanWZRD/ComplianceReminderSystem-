@@ -1,4 +1,4 @@
-# Data Layer (v2.4.0)
+# Data Layer
 
 Persistence is handled through a **repository** instead of direct `localStorage` calls in `app.js`.
 
@@ -14,18 +14,21 @@ js/data/
   repository.js             Factory + exported repository singleton
   supabase-env.example.js   Template for Supabase URL and anon key
   supabase-env.js           Gitignored — generated via npm run sync-env
-  supabase-client.js        Browser Supabase client (not wired to app.js yet)
+  supabase-client.js        Browser Supabase client
   cloud-mapper.js           Internal Postgres row → nested app shape
-  cloud-store.js            CloudComplianceStore (load-only, not wired to repository yet)
+  cloud-store.js            CloudComplianceStore (load-only; save is no-op)
+  cloud-settings-store.js   CloudSettingsStore (load-only; setSettings throws)
 ```
+
+`repository.js` selects local vs cloud from `DATA_BACKEND` (committed default: `local`).
 
 ## Usage
 
 `app.js` imports `repository` and `settingsRepository`:
 
 - `repository.people`, `repository.nextPersonId`, etc. — in-memory state
-- `repository.save()` / `repository.load()` — persist to localStorage
-- `repository.buildBackup()` / `repository.applyBackup(data)` — backup import/export
+- `repository.save()` / `repository.load()` — persist (localStorage in local mode; no-op save in cloud read-only alpha)
+- `repository.buildBackup()` / `repository.applyBackup(data)` — backup import/export (local; cloud throws)
 - `repository.validateBackupDryRun(data)` — validate without importing
 
 ## Feature flag
@@ -33,13 +36,29 @@ js/data/
 In `js/data/config.js`:
 
 ```javascript
-export const DATA_BACKEND = "local"; // or "cloud" (stub — not implemented)
+export const DATA_BACKEND = "local"; // committed default
 ```
 
-Cloud mode throws until `CloudComplianceStore` is implemented. The Supabase client module is available for Phase 2+ steps; see `docs/cloud-setup.md` (Phase 2 Step 1).
+Browser cloud dev: `?backend=cloud` in the URL. Node verify scripts: `process.env.DATA_BACKEND=cloud`.
 
-Configure env: `npm run sync-env`, then `npm run verify-supabase`. Auth session: `npm run verify-supabase-auth`. Cloud load: `npm run verify-cloud-load` (see `docs/cloud-setup.md` Step 3).
+Cloud **load** is implemented; cloud **writes** are not — see `js/app/permissions.js` (`canMutateData()` false in cloud mode).
+
+## Verify scripts
+
+| Script | Purpose |
+|--------|---------|
+| `npm run sync-env` | Generate `supabase-env.js` from `.env` |
+| `npm run verify-supabase` | Client configured |
+| `npm run verify-supabase-auth` | Sign-in / profile / sign-out |
+| `npm run verify-cloud-load` | CloudComplianceStore.load (admin) |
+| `npm run verify-cloud-role-load` | Load parity admin / editor / viewer |
+| `npm run verify-repository-cloud` | Repository singleton + cloud load |
+| `npm run verify-local-mode` | Local works without Supabase |
+| `npm run verify-read-only-guards` | `canMutateData()` false in cloud |
+| `npm run verify-staging-config` | `.env` + `supabase-env.js` present |
+
+See `docs/cloud-setup.md` and `docs/staging-deployment.md`.
 
 ## v3 migration
 
-Draft PostgreSQL schema: `docs/schema-v3-draft.sql`
+PostgreSQL schema: `supabase/migrations/`. Draft reference: `docs/schema-v3-draft.sql` (superseded by migrations).

@@ -2,7 +2,16 @@ import {
   AUTH_MODE,
   initAuth,
   getCurrentUser,
+  isAuthenticated,
+  waitForAuthReady,
 } from "./js/auth/session.js";
+import {
+  hideLoginScreen,
+  initLoginPanel,
+  showLoginScreen,
+  updateAuthChromeForCloud,
+} from "./js/auth/login-panel.js";
+import { canMutateData, canMutateReminderSettings, isCloudMode } from "./js/app/permissions.js";
 import {
   APP_VERSION,
   DATA_BACKEND,
@@ -388,7 +397,48 @@ function applySampleData() {
   });
 }
 
+function notifyReadOnlyBlocked() {
+  showMessage(
+    appMessage,
+    "Cloud mode is read-only. Changes are not saved to the cloud.",
+    "error"
+  );
+}
+
+/** @returns {boolean} True when mutation was blocked. */
+function rejectIfReadOnly() {
+  if (canMutateData()) {
+    return false;
+  }
+
+  notifyReadOnlyBlocked();
+  return true;
+}
+
+/**
+ * @param {string | number | undefined} value
+ * @returns {string | number}
+ */
+function parseEntityId(value) {
+  if (value === undefined || value === null || value === "") {
+    return NaN;
+  }
+
+  const text = String(value).trim();
+  const asNumber = Number(text);
+
+  if (!Number.isNaN(asNumber) && String(asNumber) === text) {
+    return asNumber;
+  }
+
+  return text;
+}
+
 function savePeople() {
+  if (!canMutateData()) {
+    return;
+  }
+
   repository.save();
 }
 
@@ -459,6 +509,9 @@ function syncAddFormRenewalCycleDefault() {
 }
 
 function appendHistoryEntry(record, action, description) {
+  if (!canMutateData()) {
+    return;
+  }
   if (!Array.isArray(record.history)) {
     record.history = [];
   }
@@ -676,7 +729,11 @@ function buildEvidencePanelHtml(personId, recordId) {
           ${notesLine}
           <div class="evidence-item-actions">
             ${downloadButton}
-            <button type="button" class="delete-evidence-btn" data-person-id="${personId}" data-record-id="${recordId}" data-evidence-id="${item.id}">Delete</button>
+            ${
+              canMutateData()
+                ? `<button type="button" class="delete-evidence-btn" data-person-id="${personId}" data-record-id="${recordId}" data-evidence-id="${item.id}">Delete</button>`
+                : ""
+            }
           </div>
         </li>
       `;
@@ -697,6 +754,9 @@ function readFileAsDataUrl(file) {
 }
 
 function openAddEvidenceModal(personId, recordId) {
+  if (rejectIfReadOnly()) {
+    return;
+  }
   const result = findPersonAndRecord(personId, recordId);
   if (!result) {
     return;
@@ -738,6 +798,9 @@ function closeEvidenceModal() {
 }
 
 async function handleSaveEvidence() {
+  if (rejectIfReadOnly()) {
+    return;
+  }
   if (!evidenceModalContext) {
     return;
   }
@@ -811,6 +874,9 @@ async function handleSaveEvidence() {
 }
 
 function deleteEvidenceItem(personId, recordId, evidenceId) {
+  if (rejectIfReadOnly()) {
+    return;
+  }
   const result = findPersonAndRecord(personId, recordId);
   if (!result) {
     return;
@@ -1719,15 +1785,16 @@ function buildActionItemHtml(personId, recordId, item) {
     : "";
   const overdueBadge = overdue ? `<span class="action-overdue-badge">OVERDUE</span>` : "";
 
-  const progressButton =
-    status === ACTION_STATUSES.OPEN
-      ? `<button type="button" class="action-progress-btn" data-person-id="${personId}" data-record-id="${recordId}" data-action-id="${item.id}">Mark in progress</button>`
-      : "";
-  const completeButton = !isActionCompleted(item)
-    ? `<button type="button" class="action-complete-btn" data-person-id="${personId}" data-record-id="${recordId}" data-action-id="${item.id}">Mark complete</button>`
-    : "";
-  const reopenButton = isActionCompleted(item)
-    ? `<button type="button" class="action-reopen-btn" data-person-id="${personId}" data-record-id="${recordId}" data-action-id="${item.id}">Reopen</button>`
+  const mutationButtons = canMutateData()
+    ? `${status === ACTION_STATUSES.OPEN ? `<button type="button" class="action-progress-btn" data-person-id="${personId}" data-record-id="${recordId}" data-action-id="${item.id}">Mark in progress</button>` : ""}${
+        !isActionCompleted(item)
+          ? `<button type="button" class="action-complete-btn" data-person-id="${personId}" data-record-id="${recordId}" data-action-id="${item.id}">Mark complete</button>`
+          : ""
+      }${
+        isActionCompleted(item)
+          ? `<button type="button" class="action-reopen-btn" data-person-id="${personId}" data-record-id="${recordId}" data-action-id="${item.id}">Reopen</button>`
+          : ""
+      }<button type="button" class="action-edit-btn" data-person-id="${personId}" data-record-id="${recordId}" data-action-id="${item.id}">Edit</button><button type="button" class="delete-action-btn" data-person-id="${personId}" data-record-id="${recordId}" data-action-id="${item.id}">Delete</button>`
     : "";
 
   return `
@@ -1741,11 +1808,7 @@ function buildActionItemHtml(personId, recordId, item) {
       <p class="action-item-meta">Completed: ${escapeHtml(completedDisplay)}</p>
       ${notesLine}
       <div class="action-item-actions">
-        <button type="button" class="action-edit-btn" data-person-id="${personId}" data-record-id="${recordId}" data-action-id="${item.id}">Edit</button>
-        ${progressButton}
-        ${completeButton}
-        ${reopenButton}
-        <button type="button" class="delete-action-btn" data-person-id="${personId}" data-record-id="${recordId}" data-action-id="${item.id}">Delete</button>
+        ${mutationButtons}
       </div>
     </li>
   `;
@@ -1775,9 +1838,10 @@ function buildActionsPanelHtml(personId, recordId) {
   const completedItems = items.filter((item) => isActionCompleted(item));
   const showDefaultButton = isRecordActionRequired(row);
 
-  const defaultButton = showDefaultButton
-    ? `<button type="button" class="action-defaults-btn" data-person-id="${personId}" data-record-id="${recordId}">Add default actions</button>`
-    : "";
+  const defaultButton =
+    showDefaultButton && canMutateData()
+      ? `<button type="button" class="action-defaults-btn" data-person-id="${personId}" data-record-id="${recordId}">Add default actions</button>`
+      : "";
 
   const filterOptions = [
     { value: "all", label: "All" },
@@ -2001,6 +2065,28 @@ function renderRecordWorkspace() {
       </div>
     </section>
   `;
+
+  if (!canMutateData()) {
+    const notesInput = workspaceContent.querySelector("#workspace-notes-input");
+    const saveNotesBtn = workspaceContent.querySelector("#workspace-save-notes-btn");
+
+    if (notesInput instanceof HTMLTextAreaElement) {
+      notesInput.disabled = true;
+      notesInput.classList.add("read-only-disabled");
+    }
+
+    if (saveNotesBtn instanceof HTMLButtonElement) {
+      saveNotesBtn.disabled = true;
+      saveNotesBtn.classList.add("read-only-disabled");
+    }
+
+    workspaceContent.querySelectorAll(".evidence-add-btn, .action-add-btn").forEach((button) => {
+      if (button instanceof HTMLButtonElement) {
+        button.disabled = true;
+        button.classList.add("read-only-disabled");
+      }
+    });
+  }
 }
 
 function handleWorkspaceRecordAction(event) {
@@ -2009,33 +2095,36 @@ function handleWorkspaceRecordAction(event) {
     return;
   }
 
-  const personId = Number(button.dataset.personId) || workspaceContext.personId;
-  const recordId = Number(button.dataset.recordId) || workspaceContext.recordId;
+  const personId = parseEntityId(button.dataset.personId) || workspaceContext.personId;
+  const recordId = parseEntityId(button.dataset.recordId) || workspaceContext.recordId;
 
   if (button.classList.contains("evidence-add-btn")) {
     openAddEvidenceModal(personId, recordId);
   } else if (button.classList.contains("delete-evidence-btn")) {
-    deleteEvidenceItem(personId, recordId, Number(button.dataset.evidenceId));
+    deleteEvidenceItem(personId, recordId, parseEntityId(button.dataset.evidenceId));
   } else if (button.classList.contains("evidence-download-btn")) {
-    downloadEvidenceFile(personId, recordId, Number(button.dataset.evidenceId));
+    downloadEvidenceFile(personId, recordId, parseEntityId(button.dataset.evidenceId));
   } else if (button.classList.contains("actions-add-btn")) {
     openAddActionModal(personId, recordId);
   } else if (button.classList.contains("action-edit-btn")) {
-    openEditActionModal(personId, recordId, Number(button.dataset.actionId));
+    openEditActionModal(personId, recordId, parseEntityId(button.dataset.actionId));
   } else if (button.classList.contains("action-defaults-btn")) {
     addDefaultActions(personId, recordId);
   } else if (button.classList.contains("action-progress-btn")) {
-    setActionInProgress(personId, recordId, Number(button.dataset.actionId));
+    setActionInProgress(personId, recordId, parseEntityId(button.dataset.actionId));
   } else if (button.classList.contains("action-complete-btn")) {
-    completeActionItem(personId, recordId, Number(button.dataset.actionId));
+    completeActionItem(personId, recordId, parseEntityId(button.dataset.actionId));
   } else if (button.classList.contains("action-reopen-btn")) {
-    reopenActionItem(personId, recordId, Number(button.dataset.actionId));
+    reopenActionItem(personId, recordId, parseEntityId(button.dataset.actionId));
   } else if (button.classList.contains("delete-action-btn")) {
-    deleteActionItem(personId, recordId, Number(button.dataset.actionId));
+    deleteActionItem(personId, recordId, parseEntityId(button.dataset.actionId));
   }
 }
 
 function handleWorkspaceNotesSave() {
+  if (rejectIfReadOnly()) {
+    return;
+  }
   if (!workspaceContext || !workspaceContent) {
     return;
   }
@@ -2100,6 +2189,9 @@ function setupRecordWorkspaceListeners() {
 }
 
 function openAddActionModal(personId, recordId) {
+  if (rejectIfReadOnly()) {
+    return;
+  }
   const result = findPersonAndRecord(personId, recordId);
   if (!result) {
     return;
@@ -2142,6 +2234,9 @@ function openAddActionModal(personId, recordId) {
 }
 
 function openEditActionModal(personId, recordId, actionId) {
+  if (rejectIfReadOnly()) {
+    return;
+  }
   const result = findPersonAndRecord(personId, recordId);
   if (!result) {
     return;
@@ -2209,6 +2304,9 @@ function closeActionModal() {
 }
 
 function addActionToRecord(personId, recordId, title, notes = "", dueDate = null, owner = "") {
+  if (!canMutateData()) {
+    return null;
+  }
   const result = findPersonAndRecord(personId, recordId);
   if (!result) {
     return false;
@@ -2242,6 +2340,9 @@ function addActionToRecord(personId, recordId, title, notes = "", dueDate = null
 }
 
 function updateActionItem(personId, recordId, actionId, updates) {
+  if (!canMutateData()) {
+    return;
+  }
   const result = findPersonAndRecord(personId, recordId);
   if (!result) {
     return false;
@@ -2270,6 +2371,9 @@ function updateActionItem(personId, recordId, actionId, updates) {
 }
 
 function openBulkAddActionModal() {
+  if (rejectIfReadOnly()) {
+    return;
+  }
   const count = selectedRecordKeys.size;
 
   if (count === 0 || !bulkActionModal) {
@@ -2304,6 +2408,9 @@ function closeBulkActionModal() {
 }
 
 function handleBulkSaveAction() {
+  if (rejectIfReadOnly()) {
+    return;
+  }
   const title = bulkActionTitleInput.value.trim();
   const notes = bulkActionNotesInput.value.trim();
 
@@ -2345,6 +2452,9 @@ function handleBulkSaveAction() {
 }
 
 function handleSaveAction() {
+  if (rejectIfReadOnly()) {
+    return;
+  }
   if (!actionModalContext) {
     return;
   }
@@ -2392,6 +2502,9 @@ function handleSaveAction() {
 }
 
 function addDefaultActions(personId, recordId) {
+  if (rejectIfReadOnly()) {
+    return;
+  }
   const result = findPersonAndRecord(personId, recordId);
   if (!result) {
     return;
@@ -2454,6 +2567,9 @@ function addDefaultActions(personId, recordId) {
 }
 
 function setActionInProgress(personId, recordId, actionId) {
+  if (rejectIfReadOnly()) {
+    return;
+  }
   const result = findPersonAndRecord(personId, recordId);
   if (!result) {
     return;
@@ -2480,6 +2596,9 @@ function setActionInProgress(personId, recordId, actionId) {
 }
 
 function completeActionItem(personId, recordId, actionId) {
+  if (rejectIfReadOnly()) {
+    return;
+  }
   const result = findPersonAndRecord(personId, recordId);
   if (!result) {
     return;
@@ -2506,6 +2625,9 @@ function completeActionItem(personId, recordId, actionId) {
 }
 
 function reopenActionItem(personId, recordId, actionId) {
+  if (rejectIfReadOnly()) {
+    return;
+  }
   const result = findPersonAndRecord(personId, recordId);
   if (!result) {
     return;
@@ -2532,6 +2654,9 @@ function reopenActionItem(personId, recordId, actionId) {
 }
 
 function deleteActionItem(personId, recordId, actionId) {
+  if (rejectIfReadOnly()) {
+    return;
+  }
   const result = findPersonAndRecord(personId, recordId);
   if (!result) {
     return;
@@ -2877,8 +3002,8 @@ function setupBulkSelectionListeners() {
       }
 
       toggleRecordSelection(
-        Number(checkbox.dataset.personId),
-        Number(checkbox.dataset.recordId),
+        parseEntityId(checkbox.dataset.personId),
+        parseEntityId(checkbox.dataset.recordId),
         checkbox.checked
       );
 
@@ -2888,7 +3013,7 @@ function setupBulkSelectionListeners() {
       tableBody.querySelectorAll(".row-select-checkbox").forEach((input) => {
         const row = input.closest("tr");
         const isChecked = selectedRecordKeys.has(
-          actionRowKey(Number(input.dataset.personId), Number(input.dataset.recordId))
+          actionRowKey(parseEntityId(input.dataset.personId), parseEntityId(input.dataset.recordId))
         );
         input.checked = isChecked;
         row?.classList.toggle("row-selected", isChecked);
@@ -2981,13 +3106,17 @@ function getTotalRecordCount() {
 }
 
 // Load reminder period settings via the settings repository
-function loadReminderSettings() {
-  settingsRepository.load();
+async function loadReminderSettings() {
+  await Promise.resolve(settingsRepository.load());
   reminderSettings = settingsRepository.getSettings();
   syncReminderSettingsUI();
 }
 
 function saveReminderSettings() {
+  if (!canMutateReminderSettings()) {
+    return;
+  }
+
   settingsRepository.setSettings(reminderSettings);
 }
 
@@ -3015,6 +3144,10 @@ function isHideSentRemindersEnabled() {
 
 // Read checkboxes and refresh reminders
 function handleReminderSettingsChange() {
+  if (rejectIfReadOnly()) {
+    return;
+  }
+
   reminderSettings = {
     days30: reminderDays30.checked,
     days14: reminderDays14.checked,
@@ -3088,26 +3221,87 @@ function hideMessage(element) {
   element.textContent = "";
 }
 
+function showBootError(message) {
+  const bootError = document.getElementById("app-boot-error");
+  const loginScreen = document.getElementById("auth-login-screen");
+  const mainApp = document.getElementById("main-app");
+
+  if (bootError) {
+    bootError.textContent = message;
+    bootError.classList.remove("hidden");
+  }
+
+  delete document.documentElement.dataset.appReady;
+
+  if (loginScreen?.classList.contains("hidden") && mainApp?.classList.contains("hidden")) {
+    if (loginScreen) {
+      loginScreen.classList.remove("hidden");
+      document.documentElement.dataset.appState = "login";
+    } else if (mainApp) {
+      mainApp.classList.remove("hidden");
+      delete document.documentElement.dataset.appState;
+    }
+  }
+}
+
 // Load people via the data repository, or use sample data on first visit
-function loadPeople() {
-  const result = repository.load({
-    onLoadError: () => {
-      showMessage(
-        appMessage,
-        "Your saved data could not be loaded, so the sample data has been restored.",
-        "error"
+/** @returns {Promise<boolean>} */
+async function loadPeople() {
+  const result = await Promise.resolve(
+    repository.load({
+      onLoadError: (error) => {
+        if (DATA_BACKEND === "cloud") {
+          showBootError(
+            error?.message || "Cloud data could not be loaded. Check your connection and sign-in."
+          );
+          return;
+        }
+
+        showMessage(
+          appMessage,
+          "Your saved data could not be loaded, so the sample data has been restored.",
+          "error"
+        );
+      },
+    })
+  );
+
+  if (!result.ok) {
+    if (DATA_BACKEND === "cloud") {
+      showBootError(
+        result.error?.message || "Cloud data could not be loaded. Check your connection and sign-in."
       );
-    },
-  });
+    }
+
+    return false;
+  }
 
   if (result.isFirstVisit || result.usedSample) {
-    applySampleData();
-    savePeople();
+    if (DATA_BACKEND !== "cloud") {
+      applySampleData();
+      savePeople();
+    }
   }
+
+  return true;
+}
+
+/** @returns {Promise<boolean>} */
+async function bootData() {
+  if (isCloudMode() && !isAuthenticated()) {
+    return false;
+  }
+
+  await loadReminderSettings();
+  return loadPeople();
 }
 
 // Restore the original 20 sample people (replaces current data)
 function resetSampleData() {
+  if (rejectIfReadOnly()) {
+    return;
+  }
+
   const confirmed = confirm(
     "This will replace all current people with the original 20 sample people. Continue?"
   );
@@ -3397,6 +3591,9 @@ function applyReminderSent(personId, recordId, reminderType) {
 }
 
 function markReminderSent(personId, recordId, reminderType, { silent = false } = {}) {
+  if (!canMutateData()) {
+    return false;
+  }
   const outcome = applyReminderSent(personId, recordId, reminderType);
 
   if (outcome.status === "not_found") {
@@ -3427,6 +3624,9 @@ function markReminderSent(personId, recordId, reminderType, { silent = false } =
 }
 
 function bulkMarkSelectedRemindersSent() {
+  if (rejectIfReadOnly()) {
+    return;
+  }
   const rows = getSelectedComplianceRows();
 
   if (rows.length === 0) {
@@ -3949,7 +4149,7 @@ function renderReminders() {
           data-person-id="${reminder.personId}"
           data-record-id="${reminder.recordId}"
           data-reminder-type="${reminder.reminderType}"
-          ${alreadySent ? "disabled" : ""}
+          ${alreadySent || !canMutateData() ? "disabled" : ""}
         >${alreadySent ? "Sent" : "Mark Sent"}</button>
       </td>
     `;
@@ -4151,6 +4351,10 @@ function filterByAnalyticsCard(filterKey) {
 
 // Show the edit form for one compliance record
 function startEdit(personId, recordId) {
+  if (rejectIfReadOnly()) {
+    return;
+  }
+
   const result = findPersonAndRecord(personId, recordId);
   if (!result) return;
 
@@ -4188,6 +4392,9 @@ function updatePerson(
   notes,
   renewalCycle
 ) {
+  if (rejectIfReadOnly()) {
+    return;
+  }
   const validation = validatePersonInput(name, role, complianceType, expiryDate);
 
   if (!validation.valid) {
@@ -4287,6 +4494,9 @@ function updateRecordNotes(personId, recordId, notes) {
 
 // Remove one compliance record (and the person if it was their last record)
 function deleteComplianceRecord(personId, recordId) {
+  if (rejectIfReadOnly()) {
+    return;
+  }
   const result = findPersonAndRecord(personId, recordId);
   if (!result) return;
 
@@ -4322,8 +4532,8 @@ function deleteComplianceRecord(personId, recordId) {
   selectedRecordKeys.delete(actionRowKey(personId, recordId));
 
   if (
-    Number(editIdInput.value) === personId &&
-    Number(editRecordIdInput.value) === recordId
+    String(editIdInput.value) === String(personId) &&
+    String(editRecordIdInput.value) === String(recordId)
   ) {
     hideEditForm();
   }
@@ -4389,6 +4599,10 @@ function setRenewSuggestedControlsVisible(visible) {
 }
 
 function openRenewModal(personId, recordId) {
+  if (rejectIfReadOnly()) {
+    return;
+  }
+
   const result = findPersonAndRecord(personId, recordId);
   if (!result) {
     return;
@@ -4451,6 +4665,10 @@ function closeRenewModal() {
 }
 
 function applyRenewal(newExpiryDate, mode) {
+  if (rejectIfReadOnly()) {
+    return;
+  }
+
   if (!renewModalContext) {
     return;
   }
@@ -4488,7 +4706,10 @@ function applyRenewal(newExpiryDate, mode) {
   savePeople();
   closeRenewModal();
 
-  if (Number(editIdInput.value) === personId && Number(editRecordIdInput.value) === recordId) {
+  if (
+    String(editIdInput.value) === String(personId) &&
+    String(editRecordIdInput.value) === String(recordId)
+  ) {
     document.getElementById("edit-dbs-expiry").value = newExpiryDate;
   }
 
@@ -4529,6 +4750,13 @@ function handleRenewSaveCustom() {
 }
 
 function renderTable({ refreshDashboards = true } = {}) {
+  if (!tableBody) {
+    showBootError(
+      "The compliance register table is missing from the page. Hard-refresh (Ctrl+Shift+R) or redeploy index.html."
+    );
+    return;
+  }
+
   tableBody.innerHTML = "";
 
   const filteredRows = getFilteredComplianceRows();
@@ -4574,8 +4802,8 @@ function renderTable({ refreshDashboards = true } = {}) {
       <td><span class="status status-badge ${status.className}">${getStatusBadgeLabel(status.key)}</span></td>
       <td class="${openActionsClass}">${actionSummary.activeCount}</td>
       <td class="table-action-cell"><button type="button" class="details-btn" data-person-id="${row.personId}" data-record-id="${row.recordId}">Details</button></td>
-      <td class="table-action-cell"><button type="button" class="edit-btn" data-person-id="${row.personId}" data-record-id="${row.recordId}">Edit</button></td>
-      <td class="table-action-cell"><button type="button" class="renew-btn" data-person-id="${row.personId}" data-record-id="${row.recordId}">Renew</button></td>
+      <td class="table-action-cell"><button type="button" class="edit-btn" data-person-id="${row.personId}" data-record-id="${row.recordId}"${canMutateData() ? "" : " disabled"}>Edit</button></td>
+      <td class="table-action-cell"><button type="button" class="renew-btn" data-person-id="${row.personId}" data-record-id="${row.recordId}"${canMutateData() ? "" : " disabled"}>Renew</button></td>
     `;
 
     tableBody.appendChild(tableRow);
@@ -5172,6 +5400,10 @@ function exportBackup() {
 }
 
 function applyBackupData(data) {
+  if (rejectIfReadOnly()) {
+    return;
+  }
+
   repository.applyBackup(data);
   expandedHistoryRows.clear();
   expandedEvidenceRows.clear();
@@ -5232,6 +5464,9 @@ function handleBackupValidate(event) {
 }
 
 function handleBackupImport(event) {
+  if (rejectIfReadOnly()) {
+    return;
+  }
   const file = event.target.files[0];
   if (!file) return;
 
@@ -5378,6 +5613,9 @@ function formatSkipReasons(skipReasons) {
 
 // Add a compliance record — reuse an existing person when the name matches
 function addComplianceRecord(name, role, complianceType, expiryDate, renewalCycle) {
+  if (rejectIfReadOnly()) {
+    return;
+  }
   const record = repository.createComplianceRecord(
     {
       complianceType,
@@ -5425,6 +5663,9 @@ function addComplianceRecord(name, role, complianceType, expiryDate, renewalCycl
 
 // Read CSV text and add valid rows as compliance records
 function importPeopleFromCsv(csvText) {
+  if (rejectIfReadOnly()) {
+    return;
+  }
   const cleanedText = csvText.replace(/^\uFEFF/, "");
   const lines = cleanedText.split(/\r?\n/).filter((line) => line.trim() !== "");
 
@@ -5551,6 +5792,9 @@ function showImportMessage(result) {
 
 // Handle the user choosing a CSV file to import
 function handleCsvImport(event) {
+  if (rejectIfReadOnly()) {
+    return;
+  }
   const file = event.target.files[0];
   if (!file) return;
 
@@ -5605,8 +5849,8 @@ if (tableBody) {
   const button = event.target;
   if (!button.matches("button")) return;
 
-  const personId = Number(button.dataset.personId);
-  const recordId = Number(button.dataset.recordId);
+  const personId = parseEntityId(button.dataset.personId);
+  const recordId = parseEntityId(button.dataset.recordId);
 
   if (button.classList.contains("details-btn")) {
     openRecordWorkspace(personId, recordId);
@@ -5623,8 +5867,12 @@ if (editForm) {
   editForm.addEventListener("submit", (event) => {
   event.preventDefault();
 
-  const personId = Number(editIdInput.value);
-  const recordId = Number(editRecordIdInput.value);
+  if (rejectIfReadOnly()) {
+    return;
+  }
+
+  const personId = parseEntityId(editIdInput.value);
+  const recordId = parseEntityId(editRecordIdInput.value);
   const name = document.getElementById("edit-name").value.trim();
   const role = document.getElementById("edit-role").value.trim();
   const complianceType = document.getElementById("edit-compliance-type").value;
@@ -5742,6 +5990,10 @@ if (form) {
   form.addEventListener("submit", (event) => {
   event.preventDefault();
 
+  if (rejectIfReadOnly()) {
+    return;
+  }
+
   const nameInput = document.getElementById("name");
   const roleInput = document.getElementById("role");
   const complianceTypeInput = document.getElementById("compliance-type");
@@ -5825,8 +6077,8 @@ if (remindersTableBody) {
     }
 
     markReminderSent(
-      Number(button.dataset.personId),
-      Number(button.dataset.recordId),
+      parseEntityId(button.dataset.personId),
+      parseEntityId(button.dataset.recordId),
       button.dataset.reminderType
     );
   });
@@ -5938,32 +6190,210 @@ if (paginationNextBtn) {
   });
 }
 
-// Load saved data, then show the table
-initAuth();
-setupRenewModalListeners();
-setupEvidenceModalListeners();
-setupActionModalListeners();
-setupBulkActionModalListeners();
-setupBulkSelectionListeners();
-setupManagementInsightListeners();
-setupVisualInsightsListeners();
-setupActionDashboardListeners();
-setupRecordWorkspaceListeners();
-setupReportListeners();
-loadReminderSettings();
-loadPeople();
-syncAddFormRenewalCycleDefault();
+function applyReadOnlyMode() {
+  if (!isCloudMode()) {
+    return;
+  }
 
-const dataBackendBadge = document.getElementById("data-backend-badge");
-if (dataBackendBadge) {
-  dataBackendBadge.textContent =
-    DATA_BACKEND === "local" ? "Local storage mode" : "Cloud mode (preview)";
+  updateAuthChromeForCloud();
+
+  const disableIds = [
+    "reset-sample-btn",
+    "import-csv-btn",
+    "import-backup-btn",
+    "validate-backup-btn",
+    "action-add-person",
+    "bulk-add-action-btn",
+    "bulk-mark-reminders-btn",
+    "reminder-days-30",
+    "reminder-days-14",
+    "reminder-days-7",
+    "hide-sent-reminders",
+    "workspace-edit-btn",
+    "workspace-renew-btn",
+    "workspace-delete-btn",
+    "renew-use-suggested-btn",
+    "renew-save-custom-btn",
+    "evidence-save-btn",
+    "name",
+    "role",
+    "compliance-type",
+    "renewal-cycle",
+    "dbs-expiry",
+    "edit-name",
+    "edit-role",
+    "edit-compliance-type",
+    "edit-renewal-cycle",
+    "edit-dbs-expiry",
+    "edit-notes",
+  ];
+
+  disableIds.forEach((id) => {
+    const element = document.getElementById(id);
+
+    if (element instanceof HTMLInputElement || element instanceof HTMLSelectElement) {
+      element.disabled = true;
+      element.classList.add("read-only-disabled");
+    } else if (element instanceof HTMLButtonElement) {
+      element.disabled = true;
+      element.classList.add("read-only-disabled");
+    } else if (element instanceof HTMLTextAreaElement) {
+      element.disabled = true;
+      element.classList.add("read-only-disabled");
+    }
+  });
+
+  if (form) {
+    form.querySelectorAll("input, select, button, textarea").forEach((element) => {
+      if (element instanceof HTMLElement) {
+        if (element instanceof HTMLInputElement || element instanceof HTMLSelectElement) {
+          element.disabled = true;
+        } else if (element instanceof HTMLButtonElement) {
+          element.disabled = true;
+        }
+        element.classList.add("read-only-disabled");
+      }
+    });
+  }
+
+  if (editForm) {
+    editForm.querySelectorAll("input, select, button, textarea").forEach((element) => {
+      if (element instanceof HTMLInputElement || element instanceof HTMLSelectElement) {
+        element.disabled = true;
+      } else if (element instanceof HTMLButtonElement) {
+        element.disabled = true;
+      }
+      element.classList.add("read-only-disabled");
+    });
+  }
 }
 
-const complianceTypeInput = document.getElementById("compliance-type");
-if (complianceTypeInput) {
-  complianceTypeInput.addEventListener("change", syncAddFormRenewalCycleDefault);
+async function finishAppBoot() {
+  const bootOk = await bootData();
+
+  if (!bootOk) {
+    return false;
+  }
+
+  syncAddFormRenewalCycleDefault();
+
+  const dataBackendBadge = document.getElementById("data-backend-badge");
+  if (dataBackendBadge) {
+    dataBackendBadge.textContent =
+      DATA_BACKEND === "local" ? "Local storage mode" : "Cloud mode (read-only)";
+  }
+
+  const complianceTypeInput = document.getElementById("compliance-type");
+  if (complianceTypeInput) {
+    complianceTypeInput.addEventListener("change", syncAddFormRenewalCycleDefault);
+  }
+
+  applyReadOnlyMode();
+  renderTable();
+  document.documentElement.dataset.appReady = "true";
+  return true;
 }
 
-renderTable();
-document.documentElement.dataset.appReady = "true";
+function runBootSetup() {
+  initAuth();
+  setupRenewModalListeners();
+  setupEvidenceModalListeners();
+  setupActionModalListeners();
+  setupBulkActionModalListeners();
+  setupBulkSelectionListeners();
+  setupManagementInsightListeners();
+  setupVisualInsightsListeners();
+  setupActionDashboardListeners();
+  setupRecordWorkspaceListeners();
+  setupReportListeners();
+}
+
+async function bootApp() {
+  if (!isCloudMode()) {
+    hideLoginScreen();
+  }
+
+  try {
+    runBootSetup();
+  } catch (error) {
+    console.error(error);
+    showBootError(
+      error instanceof Error
+        ? error.message
+        : "The app failed to start while wiring controls. Check the browser console (F12)."
+    );
+    return;
+  }
+
+  if (isCloudMode()) {
+    if (AUTH_MODE !== "supabase") {
+      showBootError(
+        'Cloud mode requires AUTH_MODE "supabase". Use ?backend=cloud in the URL (sets auth automatically) or configure js/auth/config.js for development.'
+      );
+      return;
+    }
+
+    initLoginPanel({ onAuthenticated: finishAppBoot });
+
+    try {
+      await waitForAuthReady();
+    } catch (error) {
+      console.error(error);
+      showBootError(
+        error instanceof Error
+          ? error.message
+          : "Cloud authentication failed to initialize. Check the browser console (F12)."
+      );
+      showLoginScreen();
+      return;
+    }
+
+    if (!isAuthenticated()) {
+      showLoginScreen();
+      return;
+    }
+
+    hideLoginScreen();
+
+    try {
+      await finishAppBoot();
+    } catch (error) {
+      console.error(error);
+      showBootError(
+        error instanceof Error
+          ? error.message
+          : "The app failed to load cloud data. Check the browser console (F12)."
+      );
+    }
+
+    return;
+  }
+
+  try {
+    await finishAppBoot();
+  } catch (error) {
+    console.error(error);
+    showBootError(
+      error instanceof Error
+        ? error.message
+        : "The app failed to start. Check the browser console (F12)."
+    );
+  }
+}
+
+function startApp() {
+  bootApp().catch((error) => {
+    console.error(error);
+    showBootError(
+      error instanceof Error
+        ? error.message
+        : "The app failed to start. Check the browser console (F12)."
+    );
+  });
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", startApp);
+} else {
+  startApp();
+}

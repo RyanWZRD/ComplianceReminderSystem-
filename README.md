@@ -21,7 +21,13 @@ Or:
 npm run serve
 ```
 
-Then open [http://localhost:8765](http://localhost:8765).
+Then open [http://127.0.0.1:8877](http://127.0.0.1:8877) (serves on port **8877**, bound to loopback).
+
+Equivalent manual command:
+
+```powershell
+python -m http.server 8877 --bind 127.0.0.1
+```
 
 ## After editing source code
 
@@ -31,6 +37,18 @@ The browser loads **`app.bundle.js`**, not `app.js` directly. Rebuild after chan
 npm run build
 ```
 
+## Cloud mode (read-only alpha)
+
+Default build is **local**. To test cloud against staging Supabase:
+
+1. Copy `.env.example` → `.env`, configure staging URL/keys and test users (`docs/cloud-setup.md`).
+2. `npm run sync-env` then `npm run build` and `npm run serve`.
+3. Open [http://127.0.0.1:8877/?backend=cloud](http://127.0.0.1:8877/?backend=cloud) and sign in.
+
+Staging deployment and QA: `docs/staging-deployment.md`, `docs/cloud-readonly-qa.md`.
+
+Verify: `npm run verify-cloud-role-load` (admin / editor / viewer load parity).
+
 ## Key files
 
 | File | Purpose |
@@ -39,8 +57,9 @@ npm run build
 | `styles.css` | Visual styling |
 | `app.js` | Source (ES modules) |
 | `app.bundle.js` | Bundled script loaded by the browser |
-| `js/data/` | Data layer (localStorage repository) |
-| `js/auth/` | Auth shell (mock session) |
+| `js/data/` | Data layer (local + cloud load) |
+| `js/auth/` | Auth shell (`session.js` facade) |
+| `docs/cloud-setup.md` | Supabase setup and Phase 2 steps |
 
 ## Troubleshooting
 

@@ -1,83 +1,14 @@
 import { DATA_BACKEND } from "./config.js";
+import { CloudComplianceStore } from "./cloud-store.js";
+import { CloudSettingsStore } from "./cloud-settings-store.js";
 import { LocalComplianceStore } from "./local-store.js";
 import { LocalSettingsStore } from "./settings-store.js";
 
-export class CloudComplianceStore {
-  get backend() {
-    return "cloud";
-  }
+export { CloudComplianceStore } from "./cloud-store.js";
+export { CloudSettingsStore } from "./cloud-settings-store.js";
 
-  throwUnavailable() {
-    throw new Error(
-      "Cloud data backend is not configured yet. Set DATA_BACKEND to 'local' in js/data/config.js."
-    );
-  }
-
-  get people() {
-    this.throwUnavailable();
-  }
-
-  set people(_value) {
-    this.throwUnavailable();
-  }
-
-  save() {
-    this.throwUnavailable();
-  }
-
-  load() {
-    this.throwUnavailable();
-  }
-
-  buildBackup() {
-    this.throwUnavailable();
-  }
-
-  validateBackupDryRun() {
-    this.throwUnavailable();
-  }
-
-  applyBackup() {
-    this.throwUnavailable();
-  }
-
-  normalizePerson() {
-    this.throwUnavailable();
-  }
-
-  normalizeComplianceType() {
-    this.throwUnavailable();
-  }
-
-  normalizeDocumentType() {
-    this.throwUnavailable();
-  }
-
-  syncAllIds() {
-    this.throwUnavailable();
-  }
-}
-
-export class CloudSettingsStore {
-  get backend() {
-    return "cloud";
-  }
-
-  load() {
-    throw new Error("Cloud settings backend is not configured yet.");
-  }
-
-  save() {
-    throw new Error("Cloud settings backend is not configured yet.");
-  }
-
-  getSettings() {
-    throw new Error("Cloud settings backend is not configured yet.");
-  }
-
-  setSettings() {
-    throw new Error("Cloud settings backend is not configured yet.");
-  }
+export function isCloudDataBackend() {
+  return DATA_BACKEND === "cloud";
 }
 
 function createComplianceStore() {

@@ -3,27 +3,52 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Compliance Reminder System v2.9.1</title>
-  <link rel="stylesheet" href="styles.css?v=2.9.1">
+  <title>Compliance Reminder System v3.0.0-alpha-phase2-step5</title>
+  <link rel="stylesheet" href="styles.css?v=v3.0.0-alpha-phase2-step5">
 </head>
 <body>
+  <section id="auth-login-screen" class="auth-login-screen hidden" aria-labelledby="auth-login-title">
+    <div class="auth-login-card">
+      <h2 id="auth-login-title">Sign in</h2>
+      <p class="auth-login-hint">Cloud read-only access to your organisation compliance register.</p>
+      <form id="auth-login-form">
+        <div class="form-row">
+          <label for="auth-login-email">Email</label>
+          <input type="email" id="auth-login-email" name="email" autocomplete="username" required>
+        </div>
+        <div class="form-row">
+          <label for="auth-login-password">Password</label>
+          <input type="password" id="auth-login-password" name="password" autocomplete="current-password" required>
+        </div>
+        <p id="auth-login-error" class="auth-login-error hidden" role="alert"></p>
+        <button type="submit" id="auth-login-submit" class="auth-login-submit">Sign in</button>
+      </form>
+    </div>
+  </section>
+
+  <p id="app-boot-error" class="app-boot-error hidden" role="alert"></p>
+
+  <div id="main-app" class="main-app">
   <div class="container">
     <header>
       <h1>Compliance Reminder System</h1>
       <div class="header-badges">
-        <p class="version-badge">Version 2.9.1</p>
+        <p class="version-badge">v3.0.0-alpha-phase2-step5</p>
         <p id="data-backend-badge" class="data-backend-badge">Local storage mode</p>
         <p id="auth-mode-badge" class="auth-mode-badge hidden">Local auth</p>
       </div>
+      <p id="cloud-read-only-banner" class="cloud-read-only-banner hidden" role="status">
+        Cloud mode is read-only. You can view and export data; changes are not saved to the cloud yet.
+      </p>
       <div class="header-user" id="header-user">
         <span class="header-user-item">User: <strong id="header-user-name">Local User</strong></span>
         <span class="header-user-item">Role: <strong id="header-user-role">Admin</strong></span>
+        <button type="button" id="sign-out-btn" class="sign-out-btn hidden">Sign out</button>
       </div>
       <p class="subtitle">Track safeguarding compliance, training renewals and DBS expiry dates</p>
       <button type="button" id="reset-sample-btn" class="reset-btn">Reset sample data</button>
     </header>
 
-    <p id="app-boot-error" class="app-boot-error hidden" role="alert"></p>
     <p id="app-message" class="app-message hidden"></p>
 
     <section class="summary-cards">
@@ -761,12 +786,22 @@
       </footer>
     </div>
   </div>
+  </div>
 
-  <script src="app.bundle.js?v=2.9.1"></script>
+  <script src="app.bundle.js?v=v3.0.0-alpha-phase2-step5"></script>
   <script>
     window.addEventListener("load", function () {
       window.setTimeout(function () {
         if (document.documentElement.dataset.appReady === "true") {
+          return;
+        }
+
+        if (document.documentElement.dataset.appState === "login") {
+          return;
+        }
+
+        var loginScreen = document.getElementById("auth-login-screen");
+        if (loginScreen && !loginScreen.classList.contains("hidden")) {
           return;
         }
 
@@ -777,7 +812,7 @@
 
         bootError.classList.remove("hidden");
         bootError.textContent =
-          "The app did not start. Try a hard refresh (Ctrl+Shift+R). If the problem continues, run serve.ps1 and open http://localhost:8765, or check the browser console (F12).";
+          "The app did not start. Try a hard refresh (Ctrl+Shift+R). If the problem continues, run npm run serve and open http://127.0.0.1:8877, or check the browser console (F12).";
       }, 800);
     });
   </script>

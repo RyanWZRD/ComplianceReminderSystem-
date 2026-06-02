@@ -1,12 +1,35 @@
 /** @typedef {'local' | 'supabase-preview' | 'supabase'} AuthMode */
 
 /**
- * Browser default is local. Node scripts may set process.env.AUTH_MODE before importing session.js.
+ * @returns {AuthMode | null}
+ */
+function readAuthFromLocation() {
+  if (typeof window === "undefined" || !window.location?.search) {
+    return null;
+  }
+
+  const params = new URLSearchParams(window.location.search);
+  const auth = params.get("auth");
+
+  if (auth === "supabase" || auth === "supabase-preview" || auth === "local") {
+    return auth;
+  }
+
+  if (params.get("backend") === "cloud") {
+    return "supabase";
+  }
+
+  return null;
+}
+
+/**
+ * Browser default is local. Node: process.env.AUTH_MODE. Cloud browser dev: ?backend=cloud → supabase
  * @type {AuthMode}
  */
 export const AUTH_MODE =
-  typeof process !== "undefined" && process.env?.AUTH_MODE === "supabase"
+  readAuthFromLocation() ??
+  (typeof process !== "undefined" && process.env?.AUTH_MODE === "supabase"
     ? "supabase"
     : typeof process !== "undefined" && process.env?.AUTH_MODE === "supabase-preview"
       ? "supabase-preview"
-      : "local";
+      : "local");

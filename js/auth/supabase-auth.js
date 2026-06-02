@@ -161,6 +161,10 @@ export async function signOutFromClient() {
  * @returns {() => void}
  */
 export function subscribeToAuthChanges(handler) {
+  if (!isSupabaseConfigured()) {
+    throw new Error("Supabase is not configured.");
+  }
+
   const supabase = getSupabaseClient();
   const { data } = supabase.auth.onAuthStateChange(handler);
   return () => data.subscription.unsubscribe();

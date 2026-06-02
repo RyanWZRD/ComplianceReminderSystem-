@@ -90,17 +90,23 @@ function initSupabaseAuth() {
     unsubscribeAuth();
   }
 
-  unsubscribeAuth = subscribeToAuthChanges((event) => {
-    if (event === "SIGNED_OUT") {
-      setCurrentUser(null);
-      renderHeaderUserBadge();
-      return;
-    }
+  try {
+    unsubscribeAuth = subscribeToAuthChanges((event) => {
+      if (event === "SIGNED_OUT") {
+        setCurrentUser(null);
+        renderHeaderUserBadge();
+        return;
+      }
 
-    if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
-      authReadyPromise = restoreSupabaseSession();
-    }
-  });
+      if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
+        authReadyPromise = restoreSupabaseSession();
+      }
+    });
+  } catch (error) {
+    console.error(error);
+    currentUser = null;
+    authReadyPromise = Promise.resolve();
+  }
 
   renderHeaderUserBadge();
 }

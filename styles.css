@@ -2498,6 +2498,12 @@ tr:last-child td {
   line-height: 1.45;
 }
 
+body > #app-boot-error:not(.hidden) {
+  max-width: 720px;
+  margin: 1rem auto;
+  padding: 0 1rem;
+}
+
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -2901,4 +2907,78 @@ tr:last-child td {
     max-height: none;
     overflow: visible;
   }
+}
+
+.auth-login-screen {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: #f4f6fb;
+}
+
+.auth-login-screen.hidden {
+  display: none;
+}
+
+.auth-login-card {
+  width: 100%;
+  max-width: 420px;
+  padding: 2rem;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(22, 33, 62, 0.12);
+}
+
+.auth-login-card h2 {
+  margin: 0 0 0.5rem;
+}
+
+.auth-login-hint {
+  margin: 0 0 1.25rem;
+  color: #4b5563;
+  font-size: 0.9rem;
+}
+
+.auth-login-error {
+  margin: 0.75rem 0 0;
+  color: #991b1b;
+  font-size: 0.875rem;
+}
+
+.auth-login-submit {
+  margin-top: 1rem;
+  width: 100%;
+}
+
+.sign-out-btn {
+  margin-left: 0.75rem;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.cloud-read-only-banner {
+  margin: 0.5rem 0 0;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  background: #eff6ff;
+  color: #1e40af;
+  border: 1px solid #bfdbfe;
+  font-size: 0.875rem;
+}
+
+.main-app.hidden {
+  display: none;
+}
+
+.read-only-disabled,
+button.read-only-disabled,
+input.read-only-disabled,
+select.read-only-disabled,
+textarea.read-only-disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  pointer-events: none;
 }

@@ -3,15 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Compliance Reminder System v2.8.0</title>
-  <link rel="stylesheet" href="styles.css?v=2.8.0">
+  <title>Compliance Reminder System v2.9.0</title>
+  <link rel="stylesheet" href="styles.css?v=2.9.0">
 </head>
 <body>
   <div class="container">
     <header>
       <h1>Compliance Reminder System</h1>
       <div class="header-badges">
-        <p class="version-badge">Version 2.8.0</p>
+        <p class="version-badge">Version 2.9.0</p>
         <p id="data-backend-badge" class="data-backend-badge">Local storage mode</p>
         <p id="auth-mode-badge" class="auth-mode-badge hidden">Local auth</p>
       </div>
@@ -357,6 +357,40 @@
         <div class="insight-preview-actions no-print">
           <button type="button" id="export-insight-csv-btn" class="export-btn">Export Insight CSV</button>
           <button type="button" id="clear-insight-preview-btn" class="quick-action-btn">Clear Preview</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="card compliance-charts-section" id="compliance-charts-section">
+      <h2>Visual Insights</h2>
+      <p class="settings-hint">Lightweight charts summarising compliance trends, action workload, and evidence coverage.</p>
+
+      <div class="management-snapshot" id="management-snapshot">
+        <h3 class="charts-subheading">Management Snapshot</h3>
+        <p id="snapshot-generated" class="snapshot-meta"></p>
+        <dl class="snapshot-grid" id="snapshot-grid"></dl>
+        <div class="snapshot-actions no-print">
+          <button type="button" id="export-snapshot-csv-btn" class="export-btn">Export Snapshot CSV</button>
+          <button type="button" id="print-charts-btn" class="quick-action-btn">Print Snapshot</button>
+        </div>
+      </div>
+
+      <div class="charts-grid">
+        <div class="chart-card">
+          <h3 class="charts-subheading">Expiry by Month (Next 12 Months)</h3>
+          <div id="expiry-by-month-chart" class="chart-bars chart-bars-scroll"></div>
+        </div>
+        <div class="chart-card">
+          <h3 class="charts-subheading">Compliance Status Breakdown</h3>
+          <div id="compliance-status-chart" class="chart-bars"></div>
+        </div>
+        <div class="chart-card">
+          <h3 class="charts-subheading">Evidence Coverage</h3>
+          <div id="evidence-coverage-chart" class="chart-bars"></div>
+        </div>
+        <div class="chart-card">
+          <h3 class="charts-subheading">Action Workload</h3>
+          <div id="action-workload-chart" class="chart-bars"></div>
         </div>
       </div>
     </section>
@@ -726,7 +760,7 @@
     </div>
   </div>
 
-  <script src="app.bundle.js?v=2.8.0"></script>
+  <script src="app.bundle.js?v=2.9.0"></script>
   <script>
     window.addEventListener("load", function () {
       window.setTimeout(function () {

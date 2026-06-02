@@ -25,6 +25,49 @@ A local-first safeguarding compliance tracker. All data is stored in the browser
 
 ---
 
+# Future Releases
+
+## v3.0.0 — Cloud Platform Foundation
+
+### Goals
+
+- Shared data
+- User accounts
+- Login
+- Role permissions
+- Cloud persistence
+- Multi-device access
+
+### Target architecture
+
+**Frontend:**
+
+- Current HTML/CSS/JS application
+
+**Backend:**
+
+- Supabase
+
+**Roles:**
+
+- Admin
+- Editor
+- Viewer
+
+**Data:**
+
+- Compliance records
+- Evidence
+- Actions
+- History
+- Reports
+
+### Migration
+
+- Existing backup JSON import into cloud database
+
+---
+
 # Recent Releases
 
 ## v2.7.0 (Released)
@@ -292,11 +335,15 @@ Benefits:
 - Real user sessions replacing mock preview user
 - Read-only cloud sync (initial)
 
-### v3.0 — Multi-organisation · Planned
+### v3.0.0 — Cloud Platform Foundation · Planned
 
-* Multi-organisation support
-* Organisation settings
-* User permissions and roles
+- Shared data and cloud persistence (Supabase)
+- User accounts, login, and multi-device access
+- Role permissions (Admin, Editor, Viewer)
+- Compliance records, evidence, actions, history, and reports in the cloud
+- Migration path: existing backup JSON import into cloud database
+
+See [v3.0.0 — Cloud Platform Foundation](#v300--cloud-platform-foundation) above for full goals and architecture.
 
 ---
 

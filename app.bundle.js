@@ -64,7 +64,7 @@
 
   // js/data/config.js
   var DATA_BACKEND = "local";
-  var APP_VERSION = "2.8.0";
+  var APP_VERSION = "2.9.0";
 
   // js/data/constants.js
   var STORAGE_KEY = "complianceReminderPeople";
@@ -869,6 +869,14 @@
   var exportInsightCsvBtn = document.getElementById("export-insight-csv-btn");
   var clearInsightPreviewBtn = document.getElementById("clear-insight-preview-btn");
   var insightCards = document.querySelectorAll("[data-insight]");
+  var snapshotGrid = document.getElementById("snapshot-grid");
+  var snapshotGenerated = document.getElementById("snapshot-generated");
+  var exportSnapshotCsvBtn = document.getElementById("export-snapshot-csv-btn");
+  var printChartsBtn = document.getElementById("print-charts-btn");
+  var expiryByMonthChart = document.getElementById("expiry-by-month-chart");
+  var complianceStatusChart = document.getElementById("compliance-status-chart");
+  var evidenceCoverageChart = document.getElementById("evidence-coverage-chart");
+  var actionWorkloadChart = document.getElementById("action-workload-chart");
   var reportPreview = document.getElementById("report-preview");
   var reportTitle = document.getElementById("report-title");
   var reportMeta = document.getElementById("report-meta");
@@ -1517,6 +1525,173 @@ This cannot be undone.`
       totalRecords,
       staleEvidenceRecords
     };
+  }
+  function getMonthChartLabel(monthOffset) {
+    const { start } = getMonthDateRange(monthOffset);
+    return start.toLocaleDateString("en-GB", { month: "short", year: "numeric" });
+  }
+  function getExpiryByMonthChartData() {
+    const rows = getAllComplianceRows();
+    const months = [];
+    for (let monthOffset = 0; monthOffset < 12; monthOffset += 1) {
+      const count = rows.filter(
+        (row) => isExpiryInMonthRange(row.expiryDate, monthOffset)
+      ).length;
+      months.push({
+        label: getMonthChartLabel(monthOffset),
+        count
+      });
+    }
+    return months;
+  }
+  function getComplianceStatusChartData() {
+    const counts = getSummaryCounts();
+    return [
+      { label: "Valid", count: counts.valid, barClass: "chart-bar-valid" },
+      { label: "Due Soon", count: counts.dueSoon, barClass: "chart-bar-due-soon" },
+      { label: "Expired", count: counts.expired, barClass: "chart-bar-expired" }
+    ];
+  }
+  function getEvidenceCoverageChartData() {
+    const rows = getAllComplianceRows();
+    let withEvidence = 0;
+    let withoutEvidence = 0;
+    let staleEvidence = 0;
+    rows.forEach((row) => {
+      const evidenceCount = getEvidenceSummary(row.evidence).count;
+      if (evidenceCount === 0) {
+        withoutEvidence += 1;
+      } else {
+        withEvidence += 1;
+      }
+      if (recordHasStaleEvidence(row.evidence)) {
+        staleEvidence += 1;
+      }
+    });
+    return [
+      { label: "With evidence", count: withEvidence, barClass: "chart-bar-evidence-with" },
+      {
+        label: "Without evidence",
+        count: withoutEvidence,
+        barClass: "chart-bar-evidence-without"
+      },
+      { label: "Stale evidence", count: staleEvidence, barClass: "chart-bar-evidence-stale" }
+    ];
+  }
+  function getActionWorkloadChartData() {
+    const metrics = getGlobalActionMetrics();
+    return [
+      { label: "Open", count: metrics.openActions, barClass: "chart-bar-action-open" },
+      {
+        label: "In progress",
+        count: metrics.inProgressActions,
+        barClass: "chart-bar-action-progress"
+      },
+      { label: "Overdue", count: metrics.overdueActions, barClass: "chart-bar-action-overdue" },
+      {
+        label: "Completed",
+        count: metrics.completedActions,
+        barClass: "chart-bar-action-completed"
+      }
+    ];
+  }
+  function getManagementSnapshot() {
+    const insight = getManagementInsightMetrics();
+    const actionMetrics = getGlobalActionMetrics();
+    const generatedAt = /* @__PURE__ */ new Date();
+    return {
+      generatedAt: generatedAt.toISOString(),
+      generatedDisplay: generatedAt.toLocaleString("en-GB", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit"
+      }),
+      totalRecords: insight.totalRecords,
+      healthScore: insight.healthScore,
+      activeActions: insight.totalOpenActions,
+      overdueActions: actionMetrics.overdueActions,
+      missingEvidence: insight.missingEvidenceRecords,
+      expiringNext30Days: countExpiringWithinDays(30)
+    };
+  }
+  function renderHorizontalBarChart(container, items, { maxValue = null } = {}) {
+    if (!container) {
+      return;
+    }
+    const max = maxValue ?? Math.max(...items.map((item) => item.count), 1);
+    container.innerHTML = items.map((item) => {
+      const pct = max === 0 ? 0 : Math.round(item.count / max * 100);
+      const rowClass = item.barClass ? ` ${item.barClass}` : "";
+      return `
+        <div class="chart-row${rowClass}">
+          <span class="chart-label">${escapeHtml(item.label)}</span>
+          <div class="chart-bar-track">
+            <div class="chart-bar-fill" style="width: ${pct}%"></div>
+          </div>
+          <span class="chart-value">${item.count}</span>
+        </div>
+      `;
+    }).join("");
+  }
+  function renderVisualInsights() {
+    if (!snapshotGrid) {
+      return;
+    }
+    const snapshot = getManagementSnapshot();
+    if (snapshotGenerated) {
+      snapshotGenerated.textContent = `Generated ${snapshot.generatedDisplay}`;
+    }
+    snapshotGrid.innerHTML = `
+    <dt>Total Records</dt>
+    <dd>${snapshot.totalRecords}</dd>
+    <dt>Compliance Health Score</dt>
+    <dd>${snapshot.healthScore}%</dd>
+    <dt>Open / In Progress Actions</dt>
+    <dd>${snapshot.activeActions}</dd>
+    <dt>Overdue Actions</dt>
+    <dd>${snapshot.overdueActions}</dd>
+    <dt>Records Missing Evidence</dt>
+    <dd>${snapshot.missingEvidence}</dd>
+    <dt>Records Expiring in Next 30 Days</dt>
+    <dd>${snapshot.expiringNext30Days}</dd>
+  `;
+    renderHorizontalBarChart(expiryByMonthChart, getExpiryByMonthChartData());
+    renderHorizontalBarChart(complianceStatusChart, getComplianceStatusChartData());
+    renderHorizontalBarChart(evidenceCoverageChart, getEvidenceCoverageChartData());
+    renderHorizontalBarChart(actionWorkloadChart, getActionWorkloadChartData());
+  }
+  function exportSnapshotCsv() {
+    const snapshot = getManagementSnapshot();
+    const lines = [
+      "Metric,Value",
+      `"Total Records","${snapshot.totalRecords}"`,
+      `"Compliance Health Score (%)","${snapshot.healthScore}"`,
+      `"Open / In Progress Actions","${snapshot.activeActions}"`,
+      `"Overdue Actions","${snapshot.overdueActions}"`,
+      `"Records Missing Evidence","${snapshot.missingEvidence}"`,
+      `"Records Expiring in Next 30 Days","${snapshot.expiringNext30Days}"`,
+      "",
+      `"Generated","${escapeCsvValue(snapshot.generatedDisplay)}"`
+    ];
+    downloadFile(lines.join("\n"), "management-snapshot.csv", "text/csv");
+    showMessage(appMessage, "Management snapshot CSV downloaded.", "success");
+  }
+  function printChartsSnapshot() {
+    document.documentElement.classList.add("printing-charts");
+    window.print();
+    window.addEventListener(
+      "afterprint",
+      () => {
+        document.documentElement.classList.remove("printing-charts");
+      },
+      { once: true }
+    );
+  }
+  function setupVisualInsightsListeners() {
+    exportSnapshotCsvBtn?.addEventListener("click", exportSnapshotCsv);
+    printChartsBtn?.addEventListener("click", printChartsSnapshot);
   }
   function getInsightTitle(insightType) {
     const titles = {
@@ -3458,6 +3633,7 @@ ${auditLine}` : auditLine;
     summaryExpired.textContent = counts.expired;
     renderActionSummaryCards();
     renderManagementInsights();
+    renderVisualInsights();
     updateSummaryActiveState();
   }
   function renderAnalytics() {
@@ -5085,6 +5261,7 @@ Your current data will be overwritten. Continue?`
   setupBulkActionModalListeners();
   setupBulkSelectionListeners();
   setupManagementInsightListeners();
+  setupVisualInsightsListeners();
   setupActionDashboardListeners();
   setupRecordWorkspaceListeners();
   setupReportListeners();

@@ -37,6 +37,18 @@ export const EVIDENCE_TYPES = [
   "Other",
 ];
 
+export const ACTION_STATUSES = {
+  OPEN: "open",
+  IN_PROGRESS: "in_progress",
+  COMPLETED: "completed",
+};
+
+export const ACTION_STATUS_LABELS = {
+  open: "Open",
+  in_progress: "In Progress",
+  completed: "Completed",
+};
+
 export const HISTORY_ACTIONS = {
   CREATED: "created",
   EDITED: "edited",
@@ -46,6 +58,7 @@ export const HISTORY_ACTIONS = {
   EVIDENCE_ADDED: "evidence_added",
   EVIDENCE_DELETED: "evidence_deleted",
   ACTION_ADDED: "action_added",
+  ACTION_UPDATED: "action_updated",
   ACTION_COMPLETED: "action_completed",
   ACTION_REOPENED: "action_reopened",
   ACTION_DELETED: "action_deleted",

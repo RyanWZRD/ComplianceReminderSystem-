@@ -3,15 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Compliance Reminder System v2.7.0</title>
-  <link rel="stylesheet" href="styles.css?v=2.7.0">
+  <title>Compliance Reminder System v2.8.0</title>
+  <link rel="stylesheet" href="styles.css?v=2.8.0">
 </head>
 <body>
   <div class="container">
     <header>
       <h1>Compliance Reminder System</h1>
       <div class="header-badges">
-        <p class="version-badge">Version 2.7.0</p>
+        <p class="version-badge">Version 2.8.0</p>
         <p id="data-backend-badge" class="data-backend-badge">Local storage mode</p>
         <p id="auth-mode-badge" class="auth-mode-badge hidden">Local auth</p>
       </div>
@@ -45,18 +45,43 @@
       </button>
     </section>
 
-    <section class="action-summary-cards" id="action-summary-section">
-      <div class="action-summary-card">
-        <p class="summary-label">Open Actions</p>
-        <p id="action-summary-open" class="summary-number">0</p>
+    <section class="card action-dashboard-section" id="action-dashboard-section">
+      <h2>Action Dashboard</h2>
+      <p class="settings-hint">Click a card to preview matching actions across all records.</p>
+      <div class="action-dashboard-cards">
+        <button type="button" class="action-dashboard-card" data-action-dashboard="open">
+          <p class="summary-label">Open Actions</p>
+          <p id="action-dashboard-open" class="summary-number">0</p>
+        </button>
+        <button type="button" class="action-dashboard-card action-dashboard-due" data-action-dashboard="due-this-week">
+          <p class="summary-label">Actions Due This Week</p>
+          <p id="action-dashboard-due-week" class="summary-number">0</p>
+        </button>
+        <button type="button" class="action-dashboard-card action-dashboard-overdue" data-action-dashboard="overdue">
+          <p class="summary-label">Overdue Actions</p>
+          <p id="action-dashboard-overdue" class="summary-number">0</p>
+        </button>
+        <button type="button" class="action-dashboard-card action-dashboard-progress" data-action-dashboard="in-progress">
+          <p class="summary-label">In Progress Actions</p>
+          <p id="action-dashboard-in-progress" class="summary-number">0</p>
+        </button>
       </div>
-      <div class="action-summary-card action-summary-completed">
-        <p class="summary-label">Completed Actions</p>
-        <p id="action-summary-completed" class="summary-number">0</p>
-      </div>
-      <div class="action-summary-card action-summary-expired">
-        <p class="summary-label">Expired Records with Open Actions</p>
-        <p id="action-summary-expired-open" class="summary-number">0</p>
+      <p id="action-dashboard-empty-hint" class="settings-hint action-dashboard-empty-hint">Select an action metric above to preview.</p>
+      <div id="action-dashboard-preview" class="action-dashboard-preview hidden">
+        <div class="action-dashboard-preview-header">
+          <h3 id="action-dashboard-preview-title" class="action-dashboard-preview-title"></h3>
+          <p id="action-dashboard-preview-meta" class="action-dashboard-preview-meta"></p>
+        </div>
+        <div class="table-wrapper action-dashboard-table-wrapper">
+          <table class="action-dashboard-table">
+            <thead id="action-dashboard-table-head"></thead>
+            <tbody id="action-dashboard-table-body"></tbody>
+          </table>
+        </div>
+        <div class="action-dashboard-preview-actions no-print">
+          <button type="button" id="export-action-dashboard-csv-btn" class="export-btn">Export Insight CSV</button>
+          <button type="button" id="clear-action-dashboard-preview-btn" class="quick-action-btn">Clear Preview</button>
+        </div>
       </div>
     </section>
 
@@ -299,7 +324,7 @@
           <p id="insight-expired-linked-actions" class="insight-number">0</p>
         </button>
         <button type="button" class="insight-card insight-card-warning" data-insight="missing-evidence">
-          <p class="insight-label">Records Missing Evidence</p>
+          <p class="insight-label">Records With No Evidence</p>
           <p id="insight-missing-evidence" class="insight-number">0</p>
         </button>
         <button type="button" class="insight-card insight-card-warning" data-insight="expiring-this-month">
@@ -309,6 +334,10 @@
         <button type="button" class="insight-card insight-card-warning" data-insight="expiring-next-month">
           <p class="insight-label">Expiring Next Month</p>
           <p id="insight-expiring-next-month" class="insight-number">0</p>
+        </button>
+        <button type="button" class="insight-card insight-card-warning" data-insight="stale-evidence">
+          <p class="insight-label">Evidence Older Than 12 Months</p>
+          <p id="insight-stale-evidence" class="insight-number">0</p>
         </button>
       </div>
 
@@ -641,6 +670,28 @@
         <label for="action-notes">Notes</label>
         <textarea id="action-notes" name="action-notes" rows="3" placeholder="Optional notes about this action..."></textarea>
       </div>
+      <div class="form-row">
+        <label for="action-due-date">Due Date</label>
+        <input type="date" id="action-due-date" name="action-due-date">
+      </div>
+      <div class="form-row">
+        <label for="action-owner">Owner</label>
+        <input type="text" id="action-owner" name="action-owner" placeholder="e.g. Compliance Lead" list="action-owner-suggestions">
+        <datalist id="action-owner-suggestions">
+          <option value="Ryan"></option>
+          <option value="Emma"></option>
+          <option value="Manager"></option>
+          <option value="Compliance Lead"></option>
+        </datalist>
+      </div>
+      <div class="form-row hidden" id="action-status-row">
+        <label for="action-status">Status</label>
+        <select id="action-status" name="action-status">
+          <option value="open">Open</option>
+          <option value="in_progress">In Progress</option>
+          <option value="completed">Completed</option>
+        </select>
+      </div>
 
       <p id="action-modal-message" class="form-message hidden"></p>
 
@@ -675,7 +726,7 @@
     </div>
   </div>
 
-  <script src="app.bundle.js?v=2.7.0"></script>
+  <script src="app.bundle.js?v=2.8.0"></script>
   <script>
     window.addEventListener("load", function () {
       window.setTimeout(function () {

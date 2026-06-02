@@ -10,6 +10,8 @@ import {
   settingsRepository,
 } from "./js/data/repository.js";
 import {
+  ACTION_STATUSES,
+  ACTION_STATUS_LABELS,
   COMPLIANCE_TYPES,
   DEFAULT_COMPLIANCE_TYPE,
   DEFAULT_RENEWAL_CYCLE,
@@ -89,6 +91,7 @@ const HISTORY_ACTION_LABELS = {
   action_completed: "Action completed",
   action_reopened: "Action reopened",
   action_deleted: "Action deleted",
+  action_updated: "Action updated",
 };
 
 let reminderSettings = settingsRepository.getSettings();
@@ -175,13 +178,30 @@ const actionModalRecordLabel = document.getElementById("action-modal-record-labe
 const actionTitleInput = document.getElementById("action-title");
 const actionNotesInput = document.getElementById("action-notes");
 const actionModalMessage = document.getElementById("action-modal-message");
-const actionSummaryOpen = document.getElementById("action-summary-open");
-const actionSummaryCompleted = document.getElementById("action-summary-completed");
-const actionSummaryExpiredOpen = document.getElementById("action-summary-expired-open");
+const actionDueDateInput = document.getElementById("action-due-date");
+const actionOwnerInput = document.getElementById("action-owner");
+const actionStatusInput = document.getElementById("action-status");
+const actionStatusRow = document.getElementById("action-status-row");
+const actionModalTitle = document.getElementById("action-modal-title");
+const actionDashboardOpen = document.getElementById("action-dashboard-open");
+const actionDashboardDueWeek = document.getElementById("action-dashboard-due-week");
+const actionDashboardOverdue = document.getElementById("action-dashboard-overdue");
+const actionDashboardInProgress = document.getElementById("action-dashboard-in-progress");
+const actionDashboardEmptyHint = document.getElementById("action-dashboard-empty-hint");
+const actionDashboardPreview = document.getElementById("action-dashboard-preview");
+const actionDashboardPreviewTitle = document.getElementById("action-dashboard-preview-title");
+const actionDashboardPreviewMeta = document.getElementById("action-dashboard-preview-meta");
+const actionDashboardTableHead = document.getElementById("action-dashboard-table-head");
+const actionDashboardTableBody = document.getElementById("action-dashboard-table-body");
+const exportActionDashboardCsvBtn = document.getElementById("export-action-dashboard-csv-btn");
+const clearActionDashboardPreviewBtn = document.getElementById("clear-action-dashboard-preview-btn");
+const actionDashboardCards = document.querySelectorAll("[data-action-dashboard]");
+const insightStaleEvidence = document.getElementById("insight-stale-evidence");
 
 let renewModalContext = null;
 let evidenceModalContext = null;
 let actionModalContext = null;
+let workspaceActionFilter = "all";
 
 // Tracks which dashboard expiry window is active (30, 60, 90, or null)
 let expiryWindowFilter = null;
@@ -275,7 +295,28 @@ const INSIGHT_TYPES = {
   EXPIRING_THIS_MONTH: "expiring-this-month",
   EXPIRING_NEXT_MONTH: "expiring-next-month",
   HEALTH_SCORE: "health-score",
+  STALE_EVIDENCE: "stale-evidence",
 };
+
+const ACTION_DASHBOARD_TYPES = {
+  OPEN: "open",
+  DUE_THIS_WEEK: "due-this-week",
+  OVERDUE: "overdue",
+  IN_PROGRESS: "in-progress",
+};
+
+const ACTION_DASHBOARD_PREVIEW_COLUMNS = [
+  { key: "name", label: "Name" },
+  { key: "role", label: "Role" },
+  { key: "complianceType", label: "Compliance Type" },
+  { key: "actionTitle", label: "Action Title" },
+  { key: "status", label: "Status" },
+  { key: "dueDate", label: "Due Date" },
+  { key: "owner", label: "Owner" },
+  { key: "expiryDate", label: "Expiry Date" },
+];
+
+let currentActionDashboard = null;
 
 const INSIGHT_PREVIEW_COLUMNS = [
   { key: "name", label: "Name" },
@@ -519,6 +560,54 @@ function getEvidenceSummary(evidence) {
   };
 }
 
+function getEvidenceAgeDays(addedDate) {
+  const added = parseDateAtMidnight(addedDate);
+  const today = getTodayAtMidnight();
+
+  if (Number.isNaN(added.getTime())) {
+    return null;
+  }
+
+  return Math.floor((today - added) / (1000 * 60 * 60 * 24));
+}
+
+function formatEvidenceAge(addedDate) {
+  const ageDays = getEvidenceAgeDays(addedDate);
+
+  if (ageDays === null) {
+    return "Added date unknown";
+  }
+
+  if (ageDays <= 0) {
+    return "Added today";
+  }
+
+  if (ageDays === 1) {
+    return "Added 1 day ago";
+  }
+
+  if (ageDays < 30) {
+    return `Added ${ageDays} days ago`;
+  }
+
+  const ageMonths = Math.floor(ageDays / 30);
+
+  if (ageMonths < 12) {
+    return ageMonths === 1 ? "Added 1 month ago" : `Added ${ageMonths} months ago`;
+  }
+
+  return ageMonths === 12 ? "Added 12 months ago" : `Added ${ageMonths} months ago`;
+}
+
+function isEvidenceStale(addedDate) {
+  const ageDays = getEvidenceAgeDays(addedDate);
+  return ageDays !== null && ageDays > 365;
+}
+
+function recordHasStaleEvidence(evidence) {
+  return (evidence || []).some((item) => isEvidenceStale(item.addedDate));
+}
+
 function evidenceRowKey(personId, recordId) {
   return `${personId}:${recordId}`;
 }
@@ -565,13 +654,15 @@ function buildEvidencePanelHtml(personId, recordId) {
         ? `<button type="button" class="evidence-download-btn" data-person-id="${personId}" data-record-id="${recordId}" data-evidence-id="${item.id}">Download file</button>`
         : "";
 
+      const staleClass = isEvidenceStale(item.addedDate) ? " evidence-item-stale" : "";
+
       return `
-        <li class="evidence-item">
+        <li class="evidence-item${staleClass}">
           <div class="evidence-item-header">
             <strong class="evidence-item-name">${escapeHtml(item.name)}</strong>
             <span class="evidence-item-type">${escapeHtml(item.documentType)}</span>
           </div>
-          <p class="evidence-item-date">Added: ${escapeHtml(formatDate(item.addedDate))}</p>
+          <p class="evidence-item-date">${escapeHtml(formatEvidenceAge(item.addedDate))}</p>
           ${fileLine}
           ${notesLine}
           <div class="evidence-item-actions">
@@ -767,31 +858,181 @@ function downloadEvidenceFile(personId, recordId, evidenceId) {
   link.click();
 }
 
-function getActionSummary(actions) {
-  const items = Array.isArray(actions) ? actions : [];
-  const openCount = items.filter((item) => !item.completed).length;
-  const completedCount = items.filter((item) => item.completed).length;
+function getActionStatus(actionItem) {
+  if (!actionItem) {
+    return ACTION_STATUSES.OPEN;
+  }
 
-  return { openCount, completedCount };
+  if (
+    actionItem.status === ACTION_STATUSES.IN_PROGRESS ||
+    actionItem.status === ACTION_STATUSES.COMPLETED ||
+    actionItem.status === ACTION_STATUSES.OPEN
+  ) {
+    return actionItem.status;
+  }
+
+  return actionItem.completed ? ACTION_STATUSES.COMPLETED : ACTION_STATUSES.OPEN;
 }
 
-function getGlobalActionCounts() {
+function isActionCompleted(actionItem) {
+  return getActionStatus(actionItem) === ACTION_STATUSES.COMPLETED;
+}
+
+function getActionStatusLabel(actionItem) {
+  return ACTION_STATUS_LABELS[getActionStatus(actionItem)] || "Open";
+}
+
+function getWeekDateRange(referenceDate = new Date()) {
+  const date = new Date(referenceDate);
+  date.setHours(0, 0, 0, 0);
+  const day = date.getDay();
+  const diffToMonday = day === 0 ? -6 : 1 - day;
+  const start = new Date(date);
+  start.setDate(date.getDate() + diffToMonday);
+  const end = new Date(start);
+  end.setDate(start.getDate() + 6);
+  end.setHours(23, 59, 59, 999);
+  return { start, end };
+}
+
+function isActionDueThisWeek(actionItem) {
+  if (isActionCompleted(actionItem) || !actionItem.dueDate) {
+    return false;
+  }
+
+  const due = parseDateAtMidnight(actionItem.dueDate);
+
+  if (Number.isNaN(due.getTime())) {
+    return false;
+  }
+
+  const { start, end } = getWeekDateRange();
+  return due >= start && due <= end;
+}
+
+function isActionOverdue(actionItem) {
+  if (isActionCompleted(actionItem) || !actionItem.dueDate) {
+    return false;
+  }
+
+  const due = parseDateAtMidnight(actionItem.dueDate);
+
+  if (Number.isNaN(due.getTime())) {
+    return false;
+  }
+
+  return due < getTodayAtMidnight();
+}
+
+function formatActionDueDate(dueDate) {
+  if (!dueDate) {
+    return "—";
+  }
+
+  return formatDate(dueDate);
+}
+
+function syncActionCompletionFields(actionItem) {
+  const status = getActionStatus(actionItem);
+  actionItem.status = status;
+  actionItem.completed = status === ACTION_STATUSES.COMPLETED;
+
+  if (actionItem.completed && !actionItem.completedAt) {
+    actionItem.completedAt = new Date().toISOString();
+  }
+
+  if (!actionItem.completed) {
+    actionItem.completedAt = null;
+  }
+}
+
+function getActionSummary(actions) {
+  const items = Array.isArray(actions) ? actions : [];
+  let openCount = 0;
+  let inProgressCount = 0;
+  let completedCount = 0;
+
+  items.forEach((item) => {
+    const status = getActionStatus(item);
+
+    if (status === ACTION_STATUSES.COMPLETED) {
+      completedCount += 1;
+    } else if (status === ACTION_STATUSES.IN_PROGRESS) {
+      inProgressCount += 1;
+    } else {
+      openCount += 1;
+    }
+  });
+
+  return {
+    openCount,
+    inProgressCount,
+    completedCount,
+    activeCount: openCount + inProgressCount,
+  };
+}
+
+function getFlattenedActionEntries() {
+  const entries = [];
+
+  getAllComplianceRows().forEach((row) => {
+    (row.actions || []).forEach((action) => {
+      entries.push({ row, action });
+    });
+  });
+
+  return entries;
+}
+
+function getGlobalActionMetrics() {
   let openActions = 0;
+  let inProgressActions = 0;
+  let dueThisWeek = 0;
+  let overdueActions = 0;
   let completedActions = 0;
   let expiredWithOpenActions = 0;
 
   getAllComplianceRows().forEach((row) => {
     const summary = getActionSummary(row.actions);
+    const status = getStatus(row.expiryDate);
 
     openActions += summary.openCount;
+    inProgressActions += summary.inProgressCount;
     completedActions += summary.completedCount;
 
-    if (summary.openCount > 0 && getStatus(row.expiryDate).key === "expired") {
+    if (summary.activeCount > 0 && status.key === "expired") {
       expiredWithOpenActions += 1;
     }
+
+    (row.actions || []).forEach((action) => {
+      if (isActionDueThisWeek(action)) {
+        dueThisWeek += 1;
+      }
+
+      if (isActionOverdue(action)) {
+        overdueActions += 1;
+      }
+    });
   });
 
-  return { openActions, completedActions, expiredWithOpenActions };
+  return {
+    openActions,
+    inProgressActions,
+    dueThisWeek,
+    overdueActions,
+    completedActions,
+    expiredWithOpenActions,
+  };
+}
+
+function getGlobalActionCounts() {
+  const metrics = getGlobalActionMetrics();
+
+  return {
+    openActions: metrics.openActions + metrics.inProgressActions,
+    completedActions: metrics.completedActions,
+    expiredWithOpenActions: metrics.expiredWithOpenActions,
+  };
 }
 
 function getMonthDateRange(monthOffset = 0) {
@@ -822,20 +1063,25 @@ function getManagementInsightMetrics() {
   let expiringThisMonth = 0;
   let expiringNextMonth = 0;
   let validWithEvidence = 0;
+  let staleEvidenceRecords = 0;
 
   rows.forEach((row) => {
     const actionSummary = getActionSummary(row.actions);
     const evidenceCount = getEvidenceSummary(row.evidence).count;
     const status = getStatus(row.expiryDate);
 
-    totalOpenActions += actionSummary.openCount;
+    totalOpenActions += actionSummary.activeCount;
 
     if (status.key === "expired") {
-      expiredLinkedOpenActions += actionSummary.openCount;
+      expiredLinkedOpenActions += actionSummary.activeCount;
     }
 
     if (evidenceCount === 0) {
       missingEvidenceRecords += 1;
+    }
+
+    if (recordHasStaleEvidence(row.evidence)) {
+      staleEvidenceRecords += 1;
     }
 
     if (status.key !== "expired" && isExpiryInMonthRange(row.expiryDate, 0)) {
@@ -864,6 +1110,7 @@ function getManagementInsightMetrics() {
     healthScore,
     validWithEvidence,
     totalRecords,
+    staleEvidenceRecords,
   };
 }
 
@@ -871,10 +1118,11 @@ function getInsightTitle(insightType) {
   const titles = {
     [INSIGHT_TYPES.OPEN_ACTIONS]: "Records with Open Actions",
     [INSIGHT_TYPES.EXPIRED_LINKED_ACTIONS]: "Expired Records with Open Actions",
-    [INSIGHT_TYPES.MISSING_EVIDENCE]: "Records Missing Evidence",
+    [INSIGHT_TYPES.MISSING_EVIDENCE]: "Records With No Evidence",
     [INSIGHT_TYPES.EXPIRING_THIS_MONTH]: "Expiring This Month",
     [INSIGHT_TYPES.EXPIRING_NEXT_MONTH]: "Expiring Next Month",
     [INSIGHT_TYPES.HEALTH_SCORE]: "Valid Records with Evidence",
+    [INSIGHT_TYPES.STALE_EVIDENCE]: "Records With Evidence Older Than 12 Months",
   };
 
   return titles[insightType] || "Management Insight";
@@ -888,14 +1136,14 @@ function getInsightRowsForType(insightType) {
   const rows = getAllComplianceRows();
 
   if (insightType === INSIGHT_TYPES.OPEN_ACTIONS) {
-    return rows.filter((row) => getActionSummary(row.actions).openCount > 0);
+    return rows.filter((row) => getActionSummary(row.actions).activeCount > 0);
   }
 
   if (insightType === INSIGHT_TYPES.EXPIRED_LINKED_ACTIONS) {
     return rows.filter(
       (row) =>
         getStatus(row.expiryDate).key === "expired" &&
-        getActionSummary(row.actions).openCount > 0
+        getActionSummary(row.actions).activeCount > 0
     );
   }
 
@@ -923,6 +1171,10 @@ function getInsightRowsForType(insightType) {
     );
   }
 
+  if (insightType === INSIGHT_TYPES.STALE_EVIDENCE) {
+    return rows.filter((row) => recordHasStaleEvidence(row.evidence));
+  }
+
   return rows;
 }
 
@@ -937,7 +1189,7 @@ function buildInsightPreviewRow(row) {
     complianceType: row.complianceType,
     expiryDate: formatDate(row.expiryDate),
     status: getStatusBadgeLabel(status.key),
-    openActionCount: String(actionSummary.openCount),
+    openActionCount: String(actionSummary.activeCount),
     evidenceCount: String(evidenceSummary.count),
   };
 }
@@ -980,6 +1232,10 @@ function renderManagementInsights() {
   insightExpiringThisMonth.textContent = metrics.expiringThisMonth;
   insightExpiringNextMonth.textContent = metrics.expiringNextMonth;
   insightHealthScore.textContent = `${metrics.healthScore}%`;
+
+  if (insightStaleEvidence) {
+    insightStaleEvidence.textContent = metrics.staleEvidenceRecords;
+  }
 
   insightHealthScore.classList.remove("health-high", "health-medium", "health-low");
 
@@ -1215,31 +1471,72 @@ function toggleActionsRow(personId, recordId) {
   renderTable({ refreshDashboards: false });
 }
 
+function actionMatchesWorkspaceFilter(actionItem) {
+  if (workspaceActionFilter === "all") {
+    return true;
+  }
+
+  if (workspaceActionFilter === "overdue") {
+    return isActionOverdue(actionItem);
+  }
+
+  return getActionStatus(actionItem) === workspaceActionFilter;
+}
+
 function buildActionItemHtml(personId, recordId, item) {
-  const statusLabel = item.completed ? "Completed" : "Open";
-  const statusClass = item.completed ? "action-status-completed" : "action-status-open";
+  const status = getActionStatus(item);
+  const statusLabel = getActionStatusLabel(item);
+  const statusClass =
+    status === ACTION_STATUSES.COMPLETED
+      ? "action-status-completed"
+      : status === ACTION_STATUSES.IN_PROGRESS
+        ? "action-status-in-progress"
+        : "action-status-open";
+  const overdue = isActionOverdue(item);
+  const itemClass = overdue
+    ? "action-item action-item-overdue"
+    : status === ACTION_STATUSES.COMPLETED
+      ? "action-item action-item-completed"
+      : status === ACTION_STATUSES.IN_PROGRESS
+        ? "action-item action-item-in-progress"
+        : "action-item action-item-open";
   const createdDisplay = formatHistoryTimestamp(item.createdAt);
   const completedDisplay = item.completedAt
     ? formatHistoryTimestamp(item.completedAt)
     : "—";
+  const dueDisplay = formatActionDueDate(item.dueDate);
+  const ownerDisplay = item.owner ? escapeHtml(item.owner) : "—";
   const notesLine = item.notes
     ? `<p class="action-item-notes">${escapeHtml(item.notes)}</p>`
     : "";
+  const overdueBadge = overdue ? `<span class="action-overdue-badge">OVERDUE</span>` : "";
 
-  const toggleButton = item.completed
+  const progressButton =
+    status === ACTION_STATUSES.OPEN
+      ? `<button type="button" class="action-progress-btn" data-person-id="${personId}" data-record-id="${recordId}" data-action-id="${item.id}">Mark in progress</button>`
+      : "";
+  const completeButton = !isActionCompleted(item)
+    ? `<button type="button" class="action-complete-btn" data-person-id="${personId}" data-record-id="${recordId}" data-action-id="${item.id}">Mark complete</button>`
+    : "";
+  const reopenButton = isActionCompleted(item)
     ? `<button type="button" class="action-reopen-btn" data-person-id="${personId}" data-record-id="${recordId}" data-action-id="${item.id}">Reopen</button>`
-    : `<button type="button" class="action-complete-btn" data-person-id="${personId}" data-record-id="${recordId}" data-action-id="${item.id}">Mark complete</button>`;
+    : "";
 
   return `
-    <li class="action-item ${item.completed ? "action-item-completed" : "action-item-open"}">
+    <li class="${itemClass}">
       <div class="action-item-header">
         <strong class="action-item-title">${escapeHtml(item.title)}</strong>
         <span class="action-item-status ${statusClass}">${statusLabel}</span>
+        ${overdueBadge}
       </div>
-      <p class="action-item-meta">Created: ${escapeHtml(createdDisplay)} · Completed: ${escapeHtml(completedDisplay)}</p>
+      <p class="action-item-meta">Created: ${escapeHtml(createdDisplay)} · Due: ${escapeHtml(dueDisplay)} · Owner: ${ownerDisplay}</p>
+      <p class="action-item-meta">Completed: ${escapeHtml(completedDisplay)}</p>
       ${notesLine}
       <div class="action-item-actions">
-        ${toggleButton}
+        <button type="button" class="action-edit-btn" data-person-id="${personId}" data-record-id="${recordId}" data-action-id="${item.id}">Edit</button>
+        ${progressButton}
+        ${completeButton}
+        ${reopenButton}
         <button type="button" class="delete-action-btn" data-person-id="${personId}" data-record-id="${recordId}" data-action-id="${item.id}">Delete</button>
       </div>
     </li>
@@ -1258,18 +1555,55 @@ function buildActionsPanelHtml(personId, recordId) {
     expiryDate: result.record.expiryDate,
     notes: result.record.notes,
   };
-  const items = result.record.actions || [];
-  const openItems = items.filter((item) => !item.completed);
-  const completedItems = items.filter((item) => item.completed);
+  const items = (result.record.actions || []).filter((item) =>
+    actionMatchesWorkspaceFilter(item)
+  );
+  const openItems = items.filter(
+    (item) => getActionStatus(item) === ACTION_STATUSES.OPEN
+  );
+  const inProgressItems = items.filter(
+    (item) => getActionStatus(item) === ACTION_STATUSES.IN_PROGRESS
+  );
+  const completedItems = items.filter((item) => isActionCompleted(item));
   const showDefaultButton = isRecordActionRequired(row);
 
   const defaultButton = showDefaultButton
     ? `<button type="button" class="action-defaults-btn" data-person-id="${personId}" data-record-id="${recordId}">Add default actions</button>`
     : "";
 
-  if (items.length === 0) {
+  const filterOptions = [
+    { value: "all", label: "All" },
+    { value: ACTION_STATUSES.OPEN, label: "Open" },
+    { value: ACTION_STATUSES.IN_PROGRESS, label: "In Progress" },
+    { value: ACTION_STATUSES.COMPLETED, label: "Completed" },
+    { value: "overdue", label: "Overdue" },
+  ];
+
+  const filterControls = `
+    <div class="action-filter-row">
+      <label for="workspace-action-filter">Filter actions</label>
+      <select id="workspace-action-filter" class="workspace-action-filter">
+        ${filterOptions
+          .map(
+            (option) =>
+              `<option value="${option.value}"${workspaceActionFilter === option.value ? " selected" : ""}>${option.label}</option>`
+          )
+          .join("")}
+      </select>
+    </div>
+  `;
+
+  if ((result.record.actions || []).length === 0) {
     return `
       <p class="action-empty">No actions added yet.</p>
+      <div class="action-panel-toolbar">${defaultButton}</div>
+    `;
+  }
+
+  if (items.length === 0) {
+    return `
+      ${filterControls}
+      <p class="action-empty">No actions match the current filter.</p>
       <div class="action-panel-toolbar">${defaultButton}</div>
     `;
   }
@@ -1280,7 +1614,15 @@ function buildActionsPanelHtml(personId, recordId) {
         <h5 class="action-section-title">Open actions</h5>
         <ul class="action-list">${openItems.map((item) => buildActionItemHtml(personId, recordId, item)).join("")}</ul>
       `
-      : `<h5 class="action-section-title">Open actions</h5><p class="action-empty-inline">No open actions.</p>`;
+      : "";
+
+  const inProgressSection =
+    inProgressItems.length > 0
+      ? `
+        <h5 class="action-section-title">In progress</h5>
+        <ul class="action-list">${inProgressItems.map((item) => buildActionItemHtml(personId, recordId, item)).join("")}</ul>
+      `
+      : "";
 
   const completedSection =
     completedItems.length > 0
@@ -1288,11 +1630,13 @@ function buildActionsPanelHtml(personId, recordId) {
         <h5 class="action-section-title">Completed actions</h5>
         <ul class="action-list">${completedItems.map((item) => buildActionItemHtml(personId, recordId, item)).join("")}</ul>
       `
-      : `<h5 class="action-section-title">Completed actions</h5><p class="action-empty-inline">No completed actions.</p>`;
+      : "";
 
   return `
+    ${filterControls}
     <div class="action-panel-toolbar">${defaultButton}</div>
     ${openSection}
+    ${inProgressSection}
     ${completedSection}
   `;
 }
@@ -1328,6 +1672,7 @@ function openRecordWorkspace(personId, recordId) {
 
 function closeRecordWorkspace() {
   workspaceContext = null;
+  workspaceActionFilter = "all";
 
   if (recordWorkspace) {
     recordWorkspace.classList.add("hidden");
@@ -1360,7 +1705,7 @@ function renderRecordWorkspace() {
   const actionSummary = getActionSummary(record.actions);
   const evidenceCountLabel =
     evidenceSummary.count === 1 ? "1 document" : `${evidenceSummary.count} documents`;
-  const actionMeta = `Open: ${actionSummary.openCount} · Completed: ${actionSummary.completedCount}`;
+  const actionMeta = `Open: ${actionSummary.openCount} · In Progress: ${actionSummary.inProgressCount} · Completed: ${actionSummary.completedCount}`;
   const existingNotesInput = workspaceContent.querySelector("#workspace-notes-input");
   const notesValue = existingNotesInput ? existingNotesInput.value : record.notes || "";
 
@@ -1467,8 +1812,12 @@ function handleWorkspaceRecordAction(event) {
     downloadEvidenceFile(personId, recordId, Number(button.dataset.evidenceId));
   } else if (button.classList.contains("actions-add-btn")) {
     openAddActionModal(personId, recordId);
+  } else if (button.classList.contains("action-edit-btn")) {
+    openEditActionModal(personId, recordId, Number(button.dataset.actionId));
   } else if (button.classList.contains("action-defaults-btn")) {
     addDefaultActions(personId, recordId);
+  } else if (button.classList.contains("action-progress-btn")) {
+    setActionInProgress(personId, recordId, Number(button.dataset.actionId));
   } else if (button.classList.contains("action-complete-btn")) {
     completeActionItem(personId, recordId, Number(button.dataset.actionId));
   } else if (button.classList.contains("action-reopen-btn")) {
@@ -1528,6 +1877,13 @@ function setupRecordWorkspaceListeners() {
 
   workspaceContent?.addEventListener("click", handleWorkspaceRecordAction);
 
+  workspaceContent?.addEventListener("change", (event) => {
+    if (event.target?.id === "workspace-action-filter") {
+      workspaceActionFilter = event.target.value;
+      renderRecordWorkspace();
+    }
+  });
+
   workspaceContent?.addEventListener("click", (event) => {
     if (event.target.closest("#workspace-save-notes-btn")) {
       handleWorkspaceNotesSave();
@@ -1547,11 +1903,81 @@ function openAddActionModal(personId, recordId) {
     personId,
     recordId,
     recordLabel: `${person.name} — ${record.complianceType}`,
+    actionId: null,
   };
+
+  if (actionModalTitle) {
+    actionModalTitle.textContent = "Add Action";
+  }
 
   actionModalRecordLabel.textContent = actionModalContext.recordLabel;
   actionTitleInput.value = "";
   actionNotesInput.value = "";
+
+  if (actionDueDateInput) {
+    actionDueDateInput.value = "";
+  }
+
+  if (actionOwnerInput) {
+    actionOwnerInput.value = "";
+  }
+
+  if (actionStatusRow) {
+    actionStatusRow.classList.add("hidden");
+  }
+
+  hideMessage(actionModalMessage);
+
+  actionModal.classList.remove("hidden");
+  actionModal.setAttribute("aria-hidden", "false");
+  actionTitleInput.focus();
+}
+
+function openEditActionModal(personId, recordId, actionId) {
+  const result = findPersonAndRecord(personId, recordId);
+  if (!result) {
+    return;
+  }
+
+  const actionItem = (result.record.actions || []).find((item) => item.id === actionId);
+
+  if (!actionItem) {
+    return;
+  }
+
+  const { person, record } = result;
+
+  actionModalContext = {
+    personId,
+    recordId,
+    recordLabel: `${person.name} — ${record.complianceType}`,
+    actionId,
+  };
+
+  if (actionModalTitle) {
+    actionModalTitle.textContent = "Edit Action";
+  }
+
+  actionModalRecordLabel.textContent = actionModalContext.recordLabel;
+  actionTitleInput.value = actionItem.title;
+  actionNotesInput.value = actionItem.notes || "";
+
+  if (actionDueDateInput) {
+    actionDueDateInput.value = actionItem.dueDate || "";
+  }
+
+  if (actionOwnerInput) {
+    actionOwnerInput.value = actionItem.owner || "";
+  }
+
+  if (actionStatusInput) {
+    actionStatusInput.value = getActionStatus(actionItem);
+  }
+
+  if (actionStatusRow) {
+    actionStatusRow.classList.remove("hidden");
+  }
+
   hideMessage(actionModalMessage);
 
   actionModal.classList.remove("hidden");
@@ -1574,7 +2000,7 @@ function closeActionModal() {
   }
 }
 
-function addActionToRecord(personId, recordId, title, notes = "") {
+function addActionToRecord(personId, recordId, title, notes = "", dueDate = null, owner = "") {
   const result = findPersonAndRecord(personId, recordId);
   if (!result) {
     return false;
@@ -1583,7 +2009,10 @@ function addActionToRecord(personId, recordId, title, notes = "") {
   const actionItem = {
     id: repository.nextActionId++,
     title,
+    status: ACTION_STATUSES.OPEN,
     completed: false,
+    dueDate: dueDate || null,
+    owner: owner || "",
     createdAt: new Date().toISOString(),
     completedAt: null,
     notes,
@@ -1599,6 +2028,34 @@ function addActionToRecord(personId, recordId, title, notes = "") {
     result.record,
     HISTORY_ACTIONS.ACTION_ADDED,
     `Action added: ${title}.`
+  );
+
+  return true;
+}
+
+function updateActionItem(personId, recordId, actionId, updates) {
+  const result = findPersonAndRecord(personId, recordId);
+  if (!result) {
+    return false;
+  }
+
+  const actionItem = (result.record.actions || []).find((item) => item.id === actionId);
+
+  if (!actionItem) {
+    return false;
+  }
+
+  actionItem.title = updates.title;
+  actionItem.notes = updates.notes;
+  actionItem.dueDate = updates.dueDate;
+  actionItem.owner = updates.owner;
+  actionItem.status = updates.status;
+  syncActionCompletionFields(actionItem);
+
+  appendHistoryEntry(
+    result.record,
+    HISTORY_ACTIONS.ACTION_UPDATED,
+    `Action updated: ${actionItem.title}.`
   );
 
   return true;
@@ -1686,13 +2143,15 @@ function handleSaveAction() {
 
   const title = actionTitleInput.value.trim();
   const notes = actionNotesInput.value.trim();
+  const dueDate = actionDueDateInput?.value.trim() || null;
+  const owner = actionOwnerInput?.value.trim() || "";
 
   if (!title) {
     showMessage(actionModalMessage, "Action title is required.", "error");
     return;
   }
 
-  const { personId, recordId, recordLabel } = actionModalContext;
+  const { personId, recordId, recordLabel, actionId } = actionModalContext;
   const result = findPersonAndRecord(personId, recordId);
 
   if (!result) {
@@ -1700,7 +2159,23 @@ function handleSaveAction() {
     return;
   }
 
-  addActionToRecord(personId, recordId, title, notes);
+  if (actionId) {
+    const status = actionStatusInput?.value || ACTION_STATUSES.OPEN;
+    updateActionItem(personId, recordId, actionId, {
+      title,
+      notes,
+      dueDate,
+      owner,
+      status,
+    });
+    savePeople();
+    closeActionModal();
+    showMessage(appMessage, `Action updated for ${recordLabel}.`, "success");
+    renderTable({ refreshDashboards: false });
+    return;
+  }
+
+  addActionToRecord(personId, recordId, title, notes, dueDate, owner);
 
   savePeople();
   closeActionModal();
@@ -1733,7 +2208,10 @@ function addDefaultActions(personId, recordId) {
     record.actions.push({
       id: repository.nextActionId++,
       title: templateTitle,
+      status: ACTION_STATUSES.OPEN,
       completed: false,
+      dueDate: null,
+      owner: "",
       createdAt: new Date().toISOString(),
       completedAt: null,
       notes: "",
@@ -1767,6 +2245,32 @@ function addDefaultActions(personId, recordId) {
   renderTable({ refreshDashboards: false });
 }
 
+function setActionInProgress(personId, recordId, actionId) {
+  const result = findPersonAndRecord(personId, recordId);
+  if (!result) {
+    return;
+  }
+
+  const actionItem = (result.record.actions || []).find((item) => item.id === actionId);
+
+  if (!actionItem || isActionCompleted(actionItem)) {
+    return;
+  }
+
+  actionItem.status = ACTION_STATUSES.IN_PROGRESS;
+  syncActionCompletionFields(actionItem);
+
+  appendHistoryEntry(
+    result.record,
+    HISTORY_ACTIONS.ACTION_UPDATED,
+    `Action marked in progress: ${actionItem.title}.`
+  );
+
+  savePeople();
+  showMessage(appMessage, `Action in progress: ${actionItem.title}.`, "success");
+  renderTable({ refreshDashboards: false });
+}
+
 function completeActionItem(personId, recordId, actionId) {
   const result = findPersonAndRecord(personId, recordId);
   if (!result) {
@@ -1775,12 +2279,12 @@ function completeActionItem(personId, recordId, actionId) {
 
   const actionItem = (result.record.actions || []).find((item) => item.id === actionId);
 
-  if (!actionItem || actionItem.completed) {
+  if (!actionItem || isActionCompleted(actionItem)) {
     return;
   }
 
-  actionItem.completed = true;
-  actionItem.completedAt = new Date().toISOString();
+  actionItem.status = ACTION_STATUSES.COMPLETED;
+  syncActionCompletionFields(actionItem);
 
   appendHistoryEntry(
     result.record,
@@ -1801,12 +2305,12 @@ function reopenActionItem(personId, recordId, actionId) {
 
   const actionItem = (result.record.actions || []).find((item) => item.id === actionId);
 
-  if (!actionItem || !actionItem.completed) {
+  if (!actionItem || !isActionCompleted(actionItem)) {
     return;
   }
 
-  actionItem.completed = false;
-  actionItem.completedAt = null;
+  actionItem.status = ACTION_STATUSES.OPEN;
+  syncActionCompletionFields(actionItem);
 
   appendHistoryEntry(
     result.record,
@@ -1857,19 +2361,243 @@ function deleteActionItem(personId, recordId, actionId) {
   renderTable({ refreshDashboards: false });
 }
 
+function getActionDashboardTitle(dashboardType) {
+  const titles = {
+    [ACTION_DASHBOARD_TYPES.OPEN]: "Open Actions",
+    [ACTION_DASHBOARD_TYPES.DUE_THIS_WEEK]: "Actions Due This Week",
+    [ACTION_DASHBOARD_TYPES.OVERDUE]: "Overdue Actions",
+    [ACTION_DASHBOARD_TYPES.IN_PROGRESS]: "In Progress Actions",
+  };
+
+  return titles[dashboardType] || "Action Dashboard";
+}
+
+function getActionDashboardFilename(dashboardType) {
+  return `action-dashboard-${dashboardType.replace(/-/g, "_")}.csv`;
+}
+
+function getActionDashboardEntries(dashboardType) {
+  return getFlattenedActionEntries().filter(({ action }) => {
+    if (dashboardType === ACTION_DASHBOARD_TYPES.OPEN) {
+      return getActionStatus(action) === ACTION_STATUSES.OPEN;
+    }
+
+    if (dashboardType === ACTION_DASHBOARD_TYPES.IN_PROGRESS) {
+      return getActionStatus(action) === ACTION_STATUSES.IN_PROGRESS;
+    }
+
+    if (dashboardType === ACTION_DASHBOARD_TYPES.DUE_THIS_WEEK) {
+      return isActionDueThisWeek(action);
+    }
+
+    if (dashboardType === ACTION_DASHBOARD_TYPES.OVERDUE) {
+      return isActionOverdue(action);
+    }
+
+    return false;
+  });
+}
+
+function buildActionDashboardPreviewRow(entry) {
+  return {
+    name: entry.row.name,
+    role: entry.row.role,
+    complianceType: entry.row.complianceType,
+    actionTitle: entry.action.title,
+    status: getActionStatusLabel(entry.action),
+    dueDate: formatActionDueDate(entry.action.dueDate),
+    owner: entry.action.owner || "—",
+    expiryDate: formatDate(entry.row.expiryDate),
+  };
+}
+
+function buildActionDashboardReport(dashboardType) {
+  const generatedAt = new Date();
+  const entries = getActionDashboardEntries(dashboardType).sort((a, b) => {
+    const dueCompare = (a.action.dueDate || "9999").localeCompare(b.action.dueDate || "9999");
+
+    if (dueCompare !== 0) {
+      return dueCompare;
+    }
+
+    return a.row.name.localeCompare(b.row.name);
+  });
+
+  return {
+    type: dashboardType,
+    title: getActionDashboardTitle(dashboardType),
+    generatedAt: generatedAt.toISOString(),
+    generatedDisplay: generatedAt.toLocaleString("en-GB", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    }),
+    totalCount: entries.length,
+    columns: ACTION_DASHBOARD_PREVIEW_COLUMNS,
+    tableRows: entries.map(buildActionDashboardPreviewRow),
+    filename: getActionDashboardFilename(dashboardType),
+  };
+}
+
+function renderActionDashboardPreview(report) {
+  if (
+    !actionDashboardPreview ||
+    !actionDashboardPreviewTitle ||
+    !actionDashboardPreviewMeta ||
+    !actionDashboardTableHead ||
+    !actionDashboardTableBody
+  ) {
+    return;
+  }
+
+  currentActionDashboard = report;
+  actionDashboardPreviewTitle.textContent = report.title;
+  actionDashboardPreviewMeta.textContent = `Generated: ${report.generatedDisplay} · Actions included: ${report.totalCount}`;
+
+  actionDashboardTableHead.innerHTML = `
+    <tr>
+      ${report.columns.map((column) => `<th>${escapeHtml(column.label)}</th>`).join("")}
+    </tr>
+  `;
+
+  if (report.tableRows.length === 0) {
+    actionDashboardTableBody.innerHTML = `
+      <tr>
+        <td colspan="${report.columns.length}" class="insight-empty-cell">No actions match this metric.</td>
+      </tr>
+    `;
+  } else {
+    actionDashboardTableBody.innerHTML = report.tableRows
+      .map(
+        (row) => `
+          <tr>
+            ${report.columns
+              .map((column) => `<td>${escapeHtml(row[column.key] ?? "")}</td>`)
+              .join("")}
+          </tr>
+        `
+      )
+      .join("");
+  }
+
+  actionDashboardPreview.classList.remove("hidden");
+
+  if (actionDashboardEmptyHint) {
+    actionDashboardEmptyHint.classList.add("hidden");
+  }
+
+  updateActionDashboardCardActiveState();
+}
+
+function showActionDashboardPreview(dashboardType) {
+  renderActionDashboardPreview(buildActionDashboardReport(dashboardType));
+
+  if (actionDashboardPreview) {
+    actionDashboardPreview.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+}
+
+function clearActionDashboardPreview() {
+  currentActionDashboard = null;
+
+  if (actionDashboardPreview) {
+    actionDashboardPreview.classList.add("hidden");
+  }
+
+  if (actionDashboardTableHead) {
+    actionDashboardTableHead.innerHTML = "";
+  }
+
+  if (actionDashboardTableBody) {
+    actionDashboardTableBody.innerHTML = "";
+  }
+
+  if (actionDashboardEmptyHint) {
+    actionDashboardEmptyHint.classList.remove("hidden");
+  }
+
+  updateActionDashboardCardActiveState();
+}
+
+function exportActionDashboardCsv() {
+  if (!currentActionDashboard) {
+    showMessage(appMessage, "Select an action metric to preview first.", "error");
+    return;
+  }
+
+  const headerRow = currentActionDashboard.columns
+    .map((column) => escapeCsvValue(column.label))
+    .join(",");
+  const dataRows = currentActionDashboard.tableRows.map((row) =>
+    currentActionDashboard.columns
+      .map((column) => escapeCsvValue(row[column.key] ?? ""))
+      .join(",")
+  );
+  const summaryLines = [
+    `"Insight","${escapeCsvValue(currentActionDashboard.title)}"`,
+    `"Generated","${escapeCsvValue(currentActionDashboard.generatedDisplay)}"`,
+    `"Actions included","${currentActionDashboard.totalCount}"`,
+    "",
+  ];
+  const csvContent = [...summaryLines, headerRow, ...dataRows].join("\n");
+
+  downloadFile(csvContent, currentActionDashboard.filename, "text/csv");
+  showMessage(appMessage, "Action dashboard CSV downloaded.", "success");
+}
+
+function updateActionDashboardCardActiveState() {
+  actionDashboardCards.forEach((card) => {
+    card.classList.toggle(
+      "active",
+      Boolean(
+        currentActionDashboard && card.dataset.actionDashboard === currentActionDashboard.type
+      )
+    );
+  });
+}
+
+function refreshActiveActionDashboardPreview() {
+  if (
+    !currentActionDashboard?.type ||
+    !actionDashboardPreview ||
+    actionDashboardPreview.classList.contains("hidden")
+  ) {
+    return;
+  }
+
+  renderActionDashboardPreview(buildActionDashboardReport(currentActionDashboard.type));
+}
+
+function setupActionDashboardListeners() {
+  actionDashboardCards.forEach((card) => {
+    card.addEventListener("click", () => {
+      showActionDashboardPreview(card.dataset.actionDashboard);
+    });
+  });
+
+  exportActionDashboardCsvBtn?.addEventListener("click", exportActionDashboardCsv);
+  clearActionDashboardPreviewBtn?.addEventListener("click", clearActionDashboardPreview);
+}
+
 function renderActionSummaryCards() {
-  const counts = getGlobalActionCounts();
+  const metrics = getGlobalActionMetrics();
 
-  if (actionSummaryOpen) {
-    actionSummaryOpen.textContent = counts.openActions;
+  if (actionDashboardOpen) {
+    actionDashboardOpen.textContent = metrics.openActions;
   }
 
-  if (actionSummaryCompleted) {
-    actionSummaryCompleted.textContent = counts.completedActions;
+  if (actionDashboardDueWeek) {
+    actionDashboardDueWeek.textContent = metrics.dueThisWeek;
   }
 
-  if (actionSummaryExpiredOpen) {
-    actionSummaryExpiredOpen.textContent = counts.expiredWithOpenActions;
+  if (actionDashboardOverdue) {
+    actionDashboardOverdue.textContent = metrics.overdueActions;
+  }
+
+  if (actionDashboardInProgress) {
+    actionDashboardInProgress.textContent = metrics.inProgressActions;
   }
 }
 
@@ -3609,7 +4337,7 @@ function renderTable({ refreshDashboards = true } = {}) {
     const status = getStatus(row.expiryDate);
     const actionSummary = getActionSummary(row.actions);
     const openActionsClass =
-      actionSummary.openCount > 0 ? "open-actions-count has-open" : "open-actions-count";
+      actionSummary.activeCount > 0 ? "open-actions-count has-open" : "open-actions-count";
     const tableRow = document.createElement("tr");
     const rowKey = actionRowKey(row.personId, row.recordId);
     const isSelected = selectedRecordKeys.has(rowKey);
@@ -3635,7 +4363,7 @@ function renderTable({ refreshDashboards = true } = {}) {
       <td class="compliance-type-cell">${row.complianceType}</td>
       <td>${formatDate(row.expiryDate)}</td>
       <td><span class="status status-badge ${status.className}">${getStatusBadgeLabel(status.key)}</span></td>
-      <td class="${openActionsClass}">${actionSummary.openCount}</td>
+      <td class="${openActionsClass}">${actionSummary.activeCount}</td>
       <td class="table-action-cell"><button type="button" class="details-btn" data-person-id="${row.personId}" data-record-id="${row.recordId}">Details</button></td>
       <td class="table-action-cell"><button type="button" class="edit-btn" data-person-id="${row.personId}" data-record-id="${row.recordId}">Edit</button></td>
       <td class="table-action-cell"><button type="button" class="renew-btn" data-person-id="${row.personId}" data-record-id="${row.recordId}">Renew</button></td>
@@ -3670,6 +4398,7 @@ function renderTable({ refreshDashboards = true } = {}) {
 
   refreshActiveReportPreview();
   refreshActiveInsightPreview();
+  refreshActiveActionDashboardPreview();
   renderBulkSelectionToolbar();
   updateSelectAllPageCheckbox(pageRows);
 }
@@ -3772,14 +4501,14 @@ function getReportRowsForType(reportType) {
   }
 
   if (reportType === REPORT_TYPES.RECORDS_WITH_OPEN_ACTIONS) {
-    return allRows.filter((row) => getActionSummary(row.actions).openCount > 0);
+    return allRows.filter((row) => getActionSummary(row.actions).activeCount > 0);
   }
 
   if (reportType === REPORT_TYPES.EXPIRED_WITH_OPEN_ACTIONS) {
     return allRows.filter(
       (row) =>
         getStatus(row.expiryDate).key === "expired" &&
-        getActionSummary(row.actions).openCount > 0
+        getActionSummary(row.actions).activeCount > 0
     );
   }
 
@@ -3791,7 +4520,7 @@ function getOpenActionFlattenedRows() {
 
   getAllComplianceRows().forEach((row) => {
     (row.actions || [])
-      .filter((item) => !item.completed)
+      .filter((item) => !isActionCompleted(item))
       .forEach((action) => {
         flattened.push({ row, action });
       });
@@ -3837,6 +4566,9 @@ function getReportColumns(reportType) {
       { key: "complianceType", label: "Compliance Type" },
       { key: "expiryDate", label: "Expiry Date" },
       { key: "actionTitle", label: "Action Title" },
+      { key: "status", label: "Status" },
+      { key: "dueDate", label: "Due Date" },
+      { key: "owner", label: "Owner" },
       { key: "createdAt", label: "Created" },
       { key: "notes", label: "Notes" },
     ];
@@ -3903,7 +4635,7 @@ function buildReportRowData(row, reportType) {
     expiryDate: formatDate(row.expiryDate),
     status: getStatusBadgeLabel(status.key),
     evidenceCount: String(evidenceSummary.count),
-    openActionCount: String(actionSummary.openCount),
+    openActionCount: String(actionSummary.activeCount),
   };
 }
 
@@ -3914,6 +4646,9 @@ function buildOpenActionReportRow(entry) {
     complianceType: entry.row.complianceType,
     expiryDate: formatDate(entry.row.expiryDate),
     actionTitle: entry.action.title,
+    status: getActionStatusLabel(entry.action),
+    dueDate: formatActionDueDate(entry.action.dueDate),
+    owner: entry.action.owner || "",
     createdAt: formatHistoryTimestamp(entry.action.createdAt),
     notes: entry.action.notes || "",
   };
@@ -4185,7 +4920,7 @@ function buildComplianceCsvRow(row) {
     escapeCsvValue(getReminderStatusLabel(row.expiryDate, row.notes)),
     escapeCsvValue(String(evidenceSummary.count)),
     escapeCsvValue(evidenceSummary.latestAdded),
-    escapeCsvValue(String(actionSummary.openCount)),
+    escapeCsvValue(String(actionSummary.activeCount)),
     escapeCsvValue(String(actionSummary.completedCount)),
     escapeCsvValue(row.notes || ""),
   ].join(",");
@@ -5002,6 +5737,7 @@ setupActionModalListeners();
 setupBulkActionModalListeners();
 setupBulkSelectionListeners();
 setupManagementInsightListeners();
+setupActionDashboardListeners();
 setupRecordWorkspaceListeners();
 setupReportListeners();
 loadReminderSettings();

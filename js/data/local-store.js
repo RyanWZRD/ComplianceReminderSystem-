@@ -319,14 +319,35 @@ export class LocalComplianceStore {
   }
 
   normalizeActionItem(item) {
+    let status = "open";
+
+    if (
+      typeof item.status === "string" &&
+      (item.status === "open" ||
+        item.status === "in_progress" ||
+        item.status === "completed")
+    ) {
+      status = item.status;
+    } else if (item.completed === true) {
+      status = "completed";
+    }
+
+    const completed = status === "completed";
+
     return {
       id: typeof item.id === "number" ? item.id : this.nextActionId++,
       title: typeof item.title === "string" ? item.title.trim() : "",
-      completed: item.completed === true,
+      status,
+      completed,
+      dueDate:
+        typeof item.dueDate === "string" && item.dueDate.trim() !== ""
+          ? item.dueDate.trim()
+          : null,
+      owner: typeof item.owner === "string" ? item.owner.trim() : "",
       createdAt:
         typeof item.createdAt === "string" ? item.createdAt : new Date().toISOString(),
       completedAt:
-        typeof item.completedAt === "string" && item.completedAt
+        completed && typeof item.completedAt === "string" && item.completedAt
           ? item.completedAt
           : null,
       notes: typeof item.notes === "string" ? item.notes : "",

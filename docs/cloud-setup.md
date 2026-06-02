@@ -173,6 +173,17 @@ npm run verify-supabase-auth
 
 Set `SUPABASE_TEST_EMAIL`, `SUPABASE_TEST_PASSWORD`, and optional `SUPABASE_TEST_ROLE` in `.env`.
 
+## Phase 2 Step 3 — Cloud compliance load (no app wiring)
+
+- `js/data/cloud-store.js` — `CloudComplianceStore.load()` (read-only)
+- `js/data/cloud-mapper.js` — internal row mapping
+- Loads: people, records, history, evidence, actions, deleted snapshots
+- `repository.js` still uses local store until a later step
+
+```bash
+npm run verify-cloud-load
+```
+
 ## Rollback
 
 | Scenario | Action |

@@ -261,7 +261,10 @@ export class LocalComplianceStore {
 
   normalizeHistoryEntry(entry) {
     const normalized = {
-      id: typeof entry.id === "number" ? entry.id : this.nextHistoryEntryId++,
+      id:
+        typeof entry.id === "number" || typeof entry.id === "string"
+          ? entry.id
+          : this.nextHistoryEntryId++,
       action:
         typeof entry.action === "string" ? entry.action : HISTORY_ACTIONS.EDITED,
       timestamp:
@@ -293,7 +296,10 @@ export class LocalComplianceStore {
 
   normalizeEvidenceItem(item) {
     return {
-      id: typeof item.id === "number" ? item.id : this.nextEvidenceId++,
+      id:
+        typeof item.id === "number" || typeof item.id === "string"
+          ? item.id
+          : this.nextEvidenceId++,
       name: typeof item.name === "string" ? item.name.trim() : "",
       documentType: this.normalizeDocumentType(item.documentType),
       addedDate:
@@ -335,7 +341,10 @@ export class LocalComplianceStore {
     const completed = status === "completed";
 
     return {
-      id: typeof item.id === "number" ? item.id : this.nextActionId++,
+      id:
+        typeof item.id === "number" || typeof item.id === "string"
+          ? item.id
+          : this.nextActionId++,
       title: typeof item.title === "string" ? item.title.trim() : "",
       status,
       completed,

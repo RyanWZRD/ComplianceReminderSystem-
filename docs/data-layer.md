@@ -15,6 +15,8 @@ js/data/
   supabase-env.example.js   Template for Supabase URL and anon key
   supabase-env.js           Gitignored — generated via npm run sync-env
   supabase-client.js        Browser Supabase client (not wired to app.js yet)
+  cloud-mapper.js           Internal Postgres row → nested app shape
+  cloud-store.js            CloudComplianceStore (load-only, not wired to repository yet)
 ```
 
 ## Usage
@@ -36,7 +38,7 @@ export const DATA_BACKEND = "local"; // or "cloud" (stub — not implemented)
 
 Cloud mode throws until `CloudComplianceStore` is implemented. The Supabase client module is available for Phase 2+ steps; see `docs/cloud-setup.md` (Phase 2 Step 1).
 
-Configure env: `npm run sync-env`, then `npm run verify-supabase`. Auth session: `npm run verify-supabase-auth` (see `docs/auth-shell.md`).
+Configure env: `npm run sync-env`, then `npm run verify-supabase`. Auth session: `npm run verify-supabase-auth`. Cloud load: `npm run verify-cloud-load` (see `docs/cloud-setup.md` Step 3).
 
 ## v3 migration
 

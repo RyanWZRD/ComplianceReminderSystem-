@@ -215,7 +215,15 @@ export async function signOut() {
   return result;
 }
 
+function isBrowserDocumentAvailable() {
+  return typeof document !== "undefined" && document !== null;
+}
+
 export function renderHeaderUserBadge() {
+  if (!isBrowserDocumentAvailable()) {
+    return;
+  }
+
   const nameEl = document.getElementById("header-user-name");
   const roleEl = document.getElementById("header-user-role");
   const authModeEl = document.getElementById("auth-mode-badge");

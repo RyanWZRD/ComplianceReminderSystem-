@@ -36,7 +36,7 @@ export const DATA_BACKEND = "local"; // or "cloud" (stub — not implemented)
 
 Cloud mode throws until `CloudComplianceStore` is implemented. The Supabase client module is available for Phase 2+ steps; see `docs/cloud-setup.md` (Phase 2 Step 1).
 
-Configure env: `npm run sync-env`, then `npm run verify-supabase`.
+Configure env: `npm run sync-env`, then `npm run verify-supabase`. Auth session: `npm run verify-supabase-auth` (see `docs/auth-shell.md`).
 
 ## v3 migration
 

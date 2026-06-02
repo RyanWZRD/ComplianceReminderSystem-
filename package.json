@@ -5,7 +5,8 @@
     "build": "npx esbuild app.js --bundle --format=iife --outfile=app.bundle.js",
     "serve": "python -m http.server 8765",
     "sync-env": "node scripts/sync-supabase-env.mjs",
-    "verify-supabase": "node scripts/verify-supabase-client.mjs"
+    "verify-supabase": "node scripts/verify-supabase-client.mjs",
+    "verify-supabase-auth": "node scripts/verify-supabase-auth.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.8"

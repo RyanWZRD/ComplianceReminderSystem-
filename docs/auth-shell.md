@@ -1,33 +1,34 @@
-# Auth Shell (v2.5.0)
+# Auth Shell
 
-Authentication is prepared but **not connected to Supabase yet**.
+Authentication modes are configured in `js/auth/config.js`. **App code must import only `js/auth/session.js`** — never `js/auth/supabase-auth.js` (internal).
 
 ## Config
 
-`js/auth/config.js`:
-
 ```javascript
-export const AUTH_MODE = "local"; // or "supabase-preview"
+export const AUTH_MODE = "local"; // local | supabase-preview | supabase
 ```
 
 | Mode | Behaviour |
 |------|-----------|
-| `local` | Mock session: Local User, admin |
-| `supabase-preview` | Mock session: Preview User, admin (placeholder until Supabase Auth) |
+| `local` | Mock session: Local User, admin (default) |
+| `supabase-preview` | Mock session: Preview User, admin (legacy placeholder) |
+| `supabase` | Supabase Auth + `public.profiles` row (not wired in `app.js` until a later step) |
 
-## Session API
+In Node, set `process.env.AUTH_MODE=supabase` before importing `session.js` (used by `npm run verify-supabase-auth`). The browser bundle keeps `local` unless `config.js` is changed for dev.
 
-`js/auth/session.js`:
+## Session API (`js/auth/session.js`)
 
-- `initAuth()` — initialise session and header badge
-- `getCurrentUser()` — `{ userId, displayName, role }`
-- `isAuthenticated()`
-- `getCurrentUserRole()`
-- `canView()` — admin, editor, viewer
-- `canEdit()` — admin, editor
-- `canAdmin()` — admin only
+- `initAuth()` — initialise session; supabase mode registers auth listener and restores session asynchronously
+- `waitForAuthReady()` — resolves after first session restore attempt (supabase mode)
+- `getCurrentUser()` — `{ userId, displayName, role, organisationId? }`
+- `getOrganisationId()` — organisation UUID in supabase mode, else `null`
+- `signInWithPassword(email, password)` — supabase mode only
+- `signOut()` — supabase mode only
+- `isAuthenticated()`, `getCurrentUserRole()`
+- `canView()` / `canEdit()` / `canAdmin()`
+- `renderHeaderUserBadge()`
 
-Role checks are **stubs**; no features are restricted in v2.5.0.
+Role checks use `profiles.role` when signed in via supabase mode.
 
 ## History
 
@@ -38,6 +39,11 @@ New history entries include optional:
 
 Older entries without these fields still render normally.
 
-## Supabase later
+## Phase 2 Step 2 verify
 
-Replace `resolveSessionUser()` in `session.js` with Supabase Auth session lookup when `AUTH_MODE === "supabase-preview"` (or a dedicated `supabase` mode).
+```bash
+npm run sync-env
+npm run verify-supabase-auth
+```
+
+Requires `.env` test user credentials (see `.env.example`). Uses staging alpha users from `docs/cloud-setup.md`.

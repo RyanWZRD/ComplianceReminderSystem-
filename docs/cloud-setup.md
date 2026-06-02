@@ -161,6 +161,18 @@ Browser client modules exist; the app still uses `DATA_BACKEND = "local"` and do
 
 Never commit `.env`, `supabase-env.js`, or real anon keys.
 
+## Phase 2 Step 2 — Supabase auth session (no app wiring)
+
+- `js/auth/session.js` — public facade (`signInWithPassword`, `signOut`, profile-backed `SessionUser`)
+- `js/auth/supabase-auth.js` — internal only; do not import from app code
+- Default `AUTH_MODE` remains `local`; app behaviour unchanged
+
+```bash
+npm run verify-supabase-auth
+```
+
+Set `SUPABASE_TEST_EMAIL`, `SUPABASE_TEST_PASSWORD`, and optional `SUPABASE_TEST_ROLE` in `.env`.
+
 ## Rollback
 
 | Scenario | Action |

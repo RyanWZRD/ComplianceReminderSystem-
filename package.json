@@ -15,6 +15,7 @@
     "verify-cloud-mark-reminder-sent": "node scripts/verify-cloud-mark-reminder-sent.mjs",
     "verify-cloud-set-action-status": "node scripts/verify-cloud-set-action-status.mjs",
     "verify-cloud-renew-compliance": "node scripts/verify-cloud-renew-compliance.mjs",
+    "verify-cloud-create-compliance-record": "node scripts/verify-cloud-create-compliance-record.mjs",
     "verify-staging-config": "node scripts/verify-staging-config.mjs"
   },
   "dependencies": {

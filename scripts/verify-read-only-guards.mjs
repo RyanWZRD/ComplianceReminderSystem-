@@ -2,6 +2,7 @@ process.env.DATA_BACKEND = "cloud";
 process.env.AUTH_MODE = "supabase";
 
 const {
+  canAddComplianceRecord,
   canMarkReminderSent,
   canMutateData,
   canMutateReminderSettings,
@@ -37,6 +38,11 @@ if (canSetActionStatus()) {
 
 if (canRenewCompliance()) {
   console.error("canRenewCompliance() must be false when CLOUD_WRITES_ENABLED is not set.");
+  process.exit(1);
+}
+
+if (canAddComplianceRecord()) {
+  console.error("canAddComplianceRecord() must be false when CLOUD_WRITES_ENABLED is not set.");
   process.exit(1);
 }
 

@@ -58,6 +58,19 @@ export function canRenewCompliance() {
 }
 
 /** @returns {boolean} */
+export function canAddComplianceRecord() {
+  if (!isCloudMode()) {
+    return canMutateData();
+  }
+
+  if (!CLOUD_WRITES_ENABLED) {
+    return false;
+  }
+
+  return canEdit();
+}
+
+/** @returns {boolean} */
 export function canMutateReminderSettings() {
   return canMutateData() && canAdmin();
 }

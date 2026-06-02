@@ -6,6 +6,7 @@ import { CLOUD_WRITES_ENABLED } from "../data/config.js";
 import {
   canMarkReminderSent,
   canRenewCompliance,
+  canAddComplianceRecord,
   canSetActionStatus,
 } from "../app/permissions.js";
 import { getCurrentUserRole, signInWithPassword, signOut } from "./session.js";
@@ -100,8 +101,13 @@ export function getCloudModeBannerText() {
     return "Cloud mode is read-only. You can view and export data; changes are not saved to the cloud yet.";
   }
 
-  if (canMarkReminderSent() || canSetActionStatus() || canRenewCompliance()) {
-    return "Cloud mode (limited writes). Mark Reminder Sent, renew compliance, and action complete/reopen are saved to the cloud.";
+  if (
+    canMarkReminderSent() ||
+    canSetActionStatus() ||
+    canRenewCompliance() ||
+    canAddComplianceRecord()
+  ) {
+    return "Cloud mode (limited writes). Mark Reminder Sent, renew compliance, action complete/reopen, and add compliance records are saved to the cloud.";
   }
 
   const role = getCurrentUserRole();

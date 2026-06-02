@@ -8,6 +8,7 @@ import { buildPeopleTree, mapDeletedSnapshots } from "./cloud-mapper.js";
 import { mapActionStatusToRpcTarget } from "./action-status.js";
 import { mapReminderTypeToRpcCode } from "./reminder-sent.js";
 import { mapRenewalModeToRpc } from "./renew-compliance.js";
+import { mapCreateComplianceRecordToRpc } from "./create-compliance-record.js";
 import { LocalComplianceStore } from "./local-store.js";
 
 const READ_ONLY_MESSAGE =
@@ -272,6 +273,94 @@ export class CloudComplianceStore extends LocalComplianceStore {
     }
 
     return { ok: false, error: `Unexpected renew_compliance status: ${String(status)}` };
+  }
+
+  /**
+   * @param {{
+   *   name: string;
+   *   role: string;
+   *   complianceType: string;
+   *   expiryDate: string;
+   *   renewalCycle?: string;
+   * }} input
+   * @returns {Promise<
+   *   | {
+   *       ok: true;
+   *       status: "created";
+   *       personId: string;
+   *       recordId: string;
+   *       isNewPerson: boolean;
+   *       complianceType?: string;
+   *       expiryDate?: string;
+   *     }
+   *   | {
+   *       ok: true;
+   *       status: "validation_error";
+   *       field?: string;
+   *       reason?: string;
+   *     }
+   *   | { ok: false; error: string }
+   * >}
+   */
+  async createComplianceRecord(input) {
+    if (!isSupabaseConfigured()) {
+      return { ok: false, error: "Supabase is not configured." };
+    }
+
+    await waitForAuthReady();
+
+    if (!isAuthenticated()) {
+      return { ok: false, error: "Not signed in." };
+    }
+
+    const supabase = getSupabaseClient();
+    const rpcArgs = mapCreateComplianceRecordToRpc(input);
+    const { data, error } = await supabase.rpc("create_compliance_record", rpcArgs);
+
+    if (error) {
+      return { ok: false, error: error.message };
+    }
+
+    if (!data || typeof data !== "object") {
+      return { ok: false, error: "Unexpected response from create_compliance_record." };
+    }
+
+    const status = data.status;
+
+    if (status === "validation_error") {
+      return {
+        ok: true,
+        status: "validation_error",
+        field: typeof data.field === "string" ? data.field : undefined,
+        reason: typeof data.reason === "string" ? data.reason : undefined,
+      };
+    }
+
+    if (status === "created") {
+      const expiryRaw = data.expiry_date;
+      const expiryDate =
+        typeof expiryRaw === "string"
+          ? expiryRaw.slice(0, 10)
+          : expiryRaw instanceof Date
+            ? expiryRaw.toISOString().slice(0, 10)
+            : "";
+
+      return {
+        ok: true,
+        status: "created",
+        personId: String(data.person_id ?? ""),
+        recordId: String(data.record_id ?? ""),
+        isNewPerson: Boolean(data.is_new_person),
+        complianceType:
+          typeof data.compliance_type === "string" ? data.compliance_type : undefined,
+        expiryDate,
+      };
+    }
+
+    return {
+      ok: false,
+      error: `Unexpected create_compliance_record status: ${String(status)}`,
+    };
   }
 
   /**

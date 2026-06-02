@@ -13,6 +13,7 @@ import {
   getCloudModeBannerText,
 } from "./js/auth/login-panel.js";
 import {
+  canAddComplianceRecord,
   canMarkReminderSent,
   canMutateData,
   canMutateReminderSettings,
@@ -446,6 +447,19 @@ function notifyRenewComplianceBlocked() {
     showMessage(
       appMessage,
       "Your role cannot renew compliance in cloud mode.",
+      "error"
+    );
+    return;
+  }
+
+  notifyReadOnlyBlocked();
+}
+
+function notifyAddComplianceRecordBlocked() {
+  if (isCloudMode() && CLOUD_WRITES_ENABLED) {
+    showMessage(
+      appMessage,
+      "Your role cannot add compliance records in cloud mode.",
       "error"
     );
     return;
@@ -5976,6 +5990,67 @@ function addComplianceRecord(name, role, complianceType, expiryDate, renewalCycl
   return { isNewPerson: true, record };
 }
 
+async function persistAddComplianceRecord(
+  name,
+  role,
+  complianceType,
+  expiryDate,
+  renewalCycle
+) {
+  if (!canAddComplianceRecord()) {
+    notifyAddComplianceRecordBlocked();
+    return;
+  }
+
+  const normalizedCycle =
+    renewalCycle !== undefined && renewalCycle !== ""
+      ? repository.normalizeRenewalCycle(renewalCycle)
+      : getDefaultRenewalCycleForType(complianceType);
+
+  const result = await repository.createComplianceRecord({
+    name,
+    role,
+    complianceType: repository.normalizeComplianceType(complianceType),
+    expiryDate,
+    renewalCycle: normalizedCycle,
+  });
+
+  if (!result.ok) {
+    showMessage(appMessage, result.error || "Could not add compliance record.", "error");
+    return;
+  }
+
+  if (result.status === "validation_error") {
+    showMessage(
+      addFormMessage,
+      "Could not add record. Check name, role, compliance type, and expiry date.",
+      "error"
+    );
+    return;
+  }
+
+  if (result.status !== "created") {
+    showMessage(appMessage, "Could not add compliance record.", "error");
+    return;
+  }
+
+  const refreshed = await reloadCloudDataAfterWrite();
+
+  if (!refreshed) {
+    return;
+  }
+
+  form.reset();
+  syncAddFormRenewalCycleDefault();
+  showMessage(
+    appMessage,
+    result.isNewPerson
+      ? "Person and compliance record added successfully."
+      : "Compliance record added for existing person.",
+    "success"
+  );
+}
+
 // Read CSV text and add valid rows as compliance records
 function importPeopleFromCsv(csvText) {
   if (rejectIfReadOnly()) {
@@ -6305,10 +6380,6 @@ if (form) {
   form.addEventListener("submit", (event) => {
   event.preventDefault();
 
-  if (rejectIfReadOnly()) {
-    return;
-  }
-
   const nameInput = document.getElementById("name");
   const roleInput = document.getElementById("role");
   const complianceTypeInput = document.getElementById("compliance-type");
@@ -6328,6 +6399,26 @@ if (form) {
   }
 
   hideMessage(addFormMessage);
+
+  if (isCloudMode()) {
+    if (!canAddComplianceRecord()) {
+      notifyAddComplianceRecordBlocked();
+      return;
+    }
+
+    void persistAddComplianceRecord(
+      validation.name,
+      validation.role,
+      validation.complianceType,
+      normalizeExpiryDate(validation.dbsExpiry),
+      renewalCycleInput.value
+    );
+    return;
+  }
+
+  if (rejectIfReadOnly()) {
+    return;
+  }
 
   const result = addComplianceRecord(
     validation.name,
@@ -6602,6 +6693,40 @@ function applyReadOnlyMode() {
       workspaceRenew.classList.add("read-only-disabled");
     }
   }
+
+  if (canAddComplianceRecord()) {
+    const addControlIds = [
+      "action-add-person",
+      "name",
+      "role",
+      "compliance-type",
+      "renewal-cycle",
+      "dbs-expiry",
+    ];
+
+    addControlIds.forEach((id) => {
+      const element = document.getElementById(id);
+
+      if (element instanceof HTMLInputElement || element instanceof HTMLSelectElement) {
+        element.disabled = false;
+        element.classList.remove("read-only-disabled");
+      } else if (element instanceof HTMLButtonElement) {
+        element.disabled = false;
+        element.classList.remove("read-only-disabled");
+      }
+    });
+
+    if (form) {
+      form.querySelectorAll("input, select, button, textarea").forEach((element) => {
+        if (element instanceof HTMLInputElement || element instanceof HTMLSelectElement) {
+          element.disabled = false;
+        } else if (element instanceof HTMLButtonElement) {
+          element.disabled = false;
+        }
+        element.classList.remove("read-only-disabled");
+      });
+    }
+  }
 }
 
 async function finishAppBoot() {
@@ -6619,7 +6744,10 @@ async function finishAppBoot() {
       dataBackendBadge.textContent = "Local storage mode";
     } else if (
       CLOUD_WRITES_ENABLED &&
-      (canMarkReminderSent() || canSetActionStatus() || canRenewCompliance())
+      (canMarkReminderSent() ||
+        canSetActionStatus() ||
+        canRenewCompliance() ||
+        canAddComplianceRecord())
     ) {
       dataBackendBadge.textContent = "Cloud mode (limited writes)";
     } else {

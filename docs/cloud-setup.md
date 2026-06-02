@@ -264,6 +264,19 @@ npm run verify-cloud-renew-compliance
 
 See `docs/cloud-writes-step9.md`.
 
+## Phase 2 Step 10 — Create compliance record RPC
+
+- Migration: `supabase/migrations/20260203000004_create_compliance_record_rpc.sql`
+- `canMutateData()` stays false; `canAddComplianceRecord()` enables Add Person form only
+- Find-or-create person by case-insensitive name within organisation
+
+```bash
+supabase db push
+npm run verify-cloud-create-compliance-record
+```
+
+See `docs/cloud-writes-step10.md`.
+
 ## Rollback
 
 | Scenario | Action |

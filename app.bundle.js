@@ -21306,7 +21306,7 @@ ${suffix}`;
   }
   var DATA_BACKEND = readBackendFromLocation() ?? (typeof process !== "undefined" && process.env?.DATA_BACKEND === "cloud" ? "cloud" : "local");
   var CLOUD_WRITES_ENABLED = readCloudWritesFromLocation() ?? (typeof process !== "undefined" && process.env?.CLOUD_WRITES_ENABLED === "true");
-  var APP_VERSION = "v3.0.0-alpha-phase2-step7";
+  var APP_VERSION = "v3.0.0-alpha-phase2-step10";
 
   // js/app/permissions.js
   function isCloudMode() {
@@ -21337,6 +21337,15 @@ ${suffix}`;
     return canEdit();
   }
   function canRenewCompliance() {
+    if (!isCloudMode()) {
+      return canMutateData();
+    }
+    if (!CLOUD_WRITES_ENABLED) {
+      return false;
+    }
+    return canEdit();
+  }
+  function canAddComplianceRecord() {
     if (!isCloudMode()) {
       return canMutateData();
     }
@@ -21413,8 +21422,8 @@ ${suffix}`;
     if (!CLOUD_WRITES_ENABLED) {
       return "Cloud mode is read-only. You can view and export data; changes are not saved to the cloud yet.";
     }
-    if (canMarkReminderSent() || canSetActionStatus() || canRenewCompliance()) {
-      return "Cloud mode (limited writes). Mark Reminder Sent, renew compliance, and action complete/reopen are saved to the cloud.";
+    if (canMarkReminderSent() || canSetActionStatus() || canRenewCompliance() || canAddComplianceRecord()) {
+      return "Cloud mode (limited writes). Mark Reminder Sent, renew compliance, action complete/reopen, and add compliance records are saved to the cloud.";
     }
     const role = getCurrentUserRole();
     if (role === "viewer") {
@@ -21764,6 +21773,22 @@ ${suffix}`;
       return { valid: false, reason: "before_today" };
     }
     return { valid: true };
+  }
+
+  // js/data/create-compliance-record.js
+  function mapCreateComplianceRecordToRpc(input) {
+    const rpcArgs = {
+      p_name: input.name,
+      p_role: input.role,
+      p_compliance_type: input.complianceType,
+      p_expiry_date: input.expiryDate
+    };
+    if (input.renewalCycle !== void 0 && input.renewalCycle !== null && input.renewalCycle !== "") {
+      rpcArgs.p_renewal_cycle = input.renewalCycle;
+    } else {
+      rpcArgs.p_renewal_cycle = DEFAULT_RENEWAL_CYCLE;
+    }
+    return rpcArgs;
   }
 
   // js/data/local-store.js
@@ -22336,6 +22361,77 @@ ${suffix}`;
         };
       }
       return { ok: false, error: `Unexpected renew_compliance status: ${String(status)}` };
+    }
+    /**
+     * @param {{
+     *   name: string;
+     *   role: string;
+     *   complianceType: string;
+     *   expiryDate: string;
+     *   renewalCycle?: string;
+     * }} input
+     * @returns {Promise<
+     *   | {
+     *       ok: true;
+     *       status: "created";
+     *       personId: string;
+     *       recordId: string;
+     *       isNewPerson: boolean;
+     *       complianceType?: string;
+     *       expiryDate?: string;
+     *     }
+     *   | {
+     *       ok: true;
+     *       status: "validation_error";
+     *       field?: string;
+     *       reason?: string;
+     *     }
+     *   | { ok: false; error: string }
+     * >}
+     */
+    async createComplianceRecord(input) {
+      if (!isSupabaseConfigured()) {
+        return { ok: false, error: "Supabase is not configured." };
+      }
+      await waitForAuthReady();
+      if (!isAuthenticated()) {
+        return { ok: false, error: "Not signed in." };
+      }
+      const supabase = getSupabaseClient();
+      const rpcArgs = mapCreateComplianceRecordToRpc(input);
+      const { data, error } = await supabase.rpc("create_compliance_record", rpcArgs);
+      if (error) {
+        return { ok: false, error: error.message };
+      }
+      if (!data || typeof data !== "object") {
+        return { ok: false, error: "Unexpected response from create_compliance_record." };
+      }
+      const status = data.status;
+      if (status === "validation_error") {
+        return {
+          ok: true,
+          status: "validation_error",
+          field: typeof data.field === "string" ? data.field : void 0,
+          reason: typeof data.reason === "string" ? data.reason : void 0
+        };
+      }
+      if (status === "created") {
+        const expiryRaw = data.expiry_date;
+        const expiryDate = typeof expiryRaw === "string" ? expiryRaw.slice(0, 10) : expiryRaw instanceof Date ? expiryRaw.toISOString().slice(0, 10) : "";
+        return {
+          ok: true,
+          status: "created",
+          personId: String(data.person_id ?? ""),
+          recordId: String(data.record_id ?? ""),
+          isNewPerson: Boolean(data.is_new_person),
+          complianceType: typeof data.compliance_type === "string" ? data.compliance_type : void 0,
+          expiryDate
+        };
+      }
+      return {
+        ok: false,
+        error: `Unexpected create_compliance_record status: ${String(status)}`
+      };
     }
     /**
      * @param {{ onLoadError?: (error: Error) => void }} [options]
@@ -22916,6 +23012,17 @@ ${suffix}`;
       showMessage(
         appMessage,
         "Your role cannot renew compliance in cloud mode.",
+        "error"
+      );
+      return;
+    }
+    notifyReadOnlyBlocked();
+  }
+  function notifyAddComplianceRecordBlocked() {
+    if (isCloudMode() && CLOUD_WRITES_ENABLED) {
+      showMessage(
+        appMessage,
+        "Your role cannot add compliance records in cloud mode.",
         "error"
       );
       return;
@@ -27145,6 +27252,47 @@ Your current data will be overwritten. Continue?`
     );
     return { isNewPerson: true, record };
   }
+  async function persistAddComplianceRecord(name, role, complianceType, expiryDate, renewalCycle) {
+    if (!canAddComplianceRecord()) {
+      notifyAddComplianceRecordBlocked();
+      return;
+    }
+    const normalizedCycle = renewalCycle !== void 0 && renewalCycle !== "" ? repository.normalizeRenewalCycle(renewalCycle) : getDefaultRenewalCycleForType(complianceType);
+    const result = await repository.createComplianceRecord({
+      name,
+      role,
+      complianceType: repository.normalizeComplianceType(complianceType),
+      expiryDate,
+      renewalCycle: normalizedCycle
+    });
+    if (!result.ok) {
+      showMessage(appMessage, result.error || "Could not add compliance record.", "error");
+      return;
+    }
+    if (result.status === "validation_error") {
+      showMessage(
+        addFormMessage,
+        "Could not add record. Check name, role, compliance type, and expiry date.",
+        "error"
+      );
+      return;
+    }
+    if (result.status !== "created") {
+      showMessage(appMessage, "Could not add compliance record.", "error");
+      return;
+    }
+    const refreshed = await reloadCloudDataAfterWrite();
+    if (!refreshed) {
+      return;
+    }
+    form.reset();
+    syncAddFormRenewalCycleDefault();
+    showMessage(
+      appMessage,
+      result.isNewPerson ? "Person and compliance record added successfully." : "Compliance record added for existing person.",
+      "success"
+    );
+  }
   function importPeopleFromCsv(csvText) {
     if (rejectIfReadOnly()) {
       return;
@@ -27403,9 +27551,6 @@ Your current data will be overwritten. Continue?`
   if (form) {
     form.addEventListener("submit", (event) => {
       event.preventDefault();
-      if (rejectIfReadOnly()) {
-        return;
-      }
       const nameInput = document.getElementById("name");
       const roleInput = document.getElementById("role");
       const complianceTypeInput = document.getElementById("compliance-type");
@@ -27422,6 +27567,23 @@ Your current data will be overwritten. Continue?`
         return;
       }
       hideMessage(addFormMessage);
+      if (isCloudMode()) {
+        if (!canAddComplianceRecord()) {
+          notifyAddComplianceRecordBlocked();
+          return;
+        }
+        void persistAddComplianceRecord(
+          validation.name,
+          validation.role,
+          validation.complianceType,
+          normalizeExpiryDate(validation.dbsExpiry),
+          renewalCycleInput.value
+        );
+        return;
+      }
+      if (rejectIfReadOnly()) {
+        return;
+      }
       const result = addComplianceRecord(
         validation.name,
         validation.role,
@@ -27656,6 +27818,36 @@ Your current data will be overwritten. Continue?`
         workspaceRenew.classList.add("read-only-disabled");
       }
     }
+    if (canAddComplianceRecord()) {
+      const addControlIds = [
+        "action-add-person",
+        "name",
+        "role",
+        "compliance-type",
+        "renewal-cycle",
+        "dbs-expiry"
+      ];
+      addControlIds.forEach((id) => {
+        const element = document.getElementById(id);
+        if (element instanceof HTMLInputElement || element instanceof HTMLSelectElement) {
+          element.disabled = false;
+          element.classList.remove("read-only-disabled");
+        } else if (element instanceof HTMLButtonElement) {
+          element.disabled = false;
+          element.classList.remove("read-only-disabled");
+        }
+      });
+      if (form) {
+        form.querySelectorAll("input, select, button, textarea").forEach((element) => {
+          if (element instanceof HTMLInputElement || element instanceof HTMLSelectElement) {
+            element.disabled = false;
+          } else if (element instanceof HTMLButtonElement) {
+            element.disabled = false;
+          }
+          element.classList.remove("read-only-disabled");
+        });
+      }
+    }
   }
   async function finishAppBoot() {
     const bootOk = await bootData();
@@ -27667,7 +27859,7 @@ Your current data will be overwritten. Continue?`
     if (dataBackendBadge) {
       if (DATA_BACKEND === "local") {
         dataBackendBadge.textContent = "Local storage mode";
-      } else if (CLOUD_WRITES_ENABLED && (canMarkReminderSent() || canSetActionStatus() || canRenewCompliance())) {
+      } else if (CLOUD_WRITES_ENABLED && (canMarkReminderSent() || canSetActionStatus() || canRenewCompliance() || canAddComplianceRecord())) {
         dataBackendBadge.textContent = "Cloud mode (limited writes)";
       } else {
         dataBackendBadge.textContent = "Cloud mode (read-only)";

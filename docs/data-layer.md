@@ -43,7 +43,7 @@ export const DATA_BACKEND = "local"; // committed default
 
 Browser cloud dev: `?backend=cloud` in the URL. Node verify scripts: `process.env.DATA_BACKEND=cloud`.
 
-Cloud **load** is implemented. **Mark Reminder Sent**, **renew compliance**, and **action complete/reopen** use RPC when `CLOUD_WRITES_ENABLED` is true. All other cloud mutations remain blocked (`canMutateData()` false in cloud). See `js/app/permissions.js` (`canMarkReminderSent()`, `canRenewCompliance()`, `canSetActionStatus()`).
+Cloud **load** is implemented. **Mark Reminder Sent**, **renew compliance**, **action complete/reopen**, and **add compliance record** use RPC when `CLOUD_WRITES_ENABLED` is true. All other cloud mutations remain blocked (`canMutateData()` false in cloud). See `js/app/permissions.js` (`canMarkReminderSent()`, `canRenewCompliance()`, `canSetActionStatus()`, `canAddComplianceRecord()`).
 
 ## Verify scripts
 

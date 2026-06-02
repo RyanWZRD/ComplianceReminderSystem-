@@ -134,6 +134,23 @@ Requires migration `20260203000003` and `?backend=cloud&cloudWrites=1` on **loca
 
 ---
 
+## I. Limited writes — Create compliance record (Step 10)
+
+Requires migration `20260203000004` and `?backend=cloud&cloudWrites=1` on **localhost or staging only**.
+
+| # | Check | Editor | Viewer |
+|---|--------|:------:|:------:|
+| I1 | Banner mentions add compliance records | ☐ | ☐ |
+| I2 | Add new person + DBS record — success, persists after refresh | ☐ | N/A |
+| I3 | Add second record for existing person (name case variant) — one person, two records | ☐ | N/A |
+| I4 | Blank name — validation error on form | ☐ | N/A |
+| I5 | Edit / delete / CSV import still blocked | ☐ | ☐ |
+| I6 | Mark Sent + renew + action complete/reopen still work | ☐ | N/A |
+| I7 | Viewer: Add Person form disabled | N/A | ☐ |
+| I8 | `?backend=cloud` without `cloudWrites` — add form disabled | ☐ | ☐ |
+
+---
+
 ## E. RLS (database — optional manual)
 
 Postgres write policies are validated in `docs/cloud-phase1-rls-checklist.md` (SQL Editor). No app write tests in Step 6.

@@ -132,6 +132,35 @@ All data is synthetic. No evidence files in Storage (alpha).
 
 Complete `docs/cloud-phase1-rls-checklist.md` before starting Phase 2 (CloudComplianceStore).
 
+## Phase 2 Step 1 — Supabase client (no app wiring)
+
+Browser client modules exist; the app still uses `DATA_BACKEND = "local"` and does not import the client yet.
+
+### Setup
+
+1. Copy `.env.example` to `.env` and set `SUPABASE_URL` and `SUPABASE_ANON_KEY` (from `supabase status` locally, or the staging project dashboard).
+2. Generate gitignored config:
+
+   ```bash
+   npm run sync-env
+   ```
+
+3. Smoke test:
+
+   ```bash
+   npm run verify-supabase
+   ```
+
+### Files
+
+| File | Committed |
+|------|-----------|
+| `js/data/supabase-env.example.js` | Yes (template) |
+| `js/data/supabase-env.js` | No (generated from `.env`) |
+| `js/data/supabase-client.js` | Yes (`getSupabaseClient`, `isSupabaseConfigured`) |
+
+Never commit `.env`, `supabase-env.js`, or real anon keys.
+
 ## Rollback
 
 | Scenario | Action |
@@ -143,7 +172,6 @@ Complete `docs/cloud-phase1-rls-checklist.md` before starting Phase 2 (CloudComp
 ## Not in Phase 1
 
 - CloudComplianceStore / app wiring
-- Supabase client in the browser
 - Login UI
 - Evidence Storage buckets
 - Backup JSON import tooling

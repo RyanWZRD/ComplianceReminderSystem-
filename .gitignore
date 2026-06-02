@@ -3,6 +3,7 @@ node_modules/
 .env
 .env.local
 .env.*.local
+js/data/supabase-env.js
 
 # Supabase local
 supabase/.branches

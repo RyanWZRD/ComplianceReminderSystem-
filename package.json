@@ -3,7 +3,12 @@
   "private": true,
   "scripts": {
     "build": "npx esbuild app.js --bundle --format=iife --outfile=app.bundle.js",
-    "serve": "python -m http.server 8765"
+    "serve": "python -m http.server 8765",
+    "sync-env": "node scripts/sync-supabase-env.mjs",
+    "verify-supabase": "node scripts/verify-supabase-client.mjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.8"
   },
   "devDependencies": {
     "esbuild": "^0.25.0"

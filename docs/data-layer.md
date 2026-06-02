@@ -6,12 +6,15 @@ Persistence is handled through a **repository** instead of direct `localStorage`
 
 ```
 js/data/
-  config.js          DATA_BACKEND flag and APP_VERSION
-  constants.js       Storage keys, compliance types, history actions
-  dates.js           Date parsing and validation helpers
-  local-store.js     LocalComplianceStore (localStorage)
-  settings-store.js  LocalSettingsStore (reminder settings)
-  repository.js      Factory + exported repository singleton
+  config.js                 DATA_BACKEND flag and APP_VERSION
+  constants.js              Storage keys, compliance types, history actions
+  dates.js                  Date parsing and validation helpers
+  local-store.js            LocalComplianceStore (localStorage)
+  settings-store.js         LocalSettingsStore (reminder settings)
+  repository.js             Factory + exported repository singleton
+  supabase-env.example.js   Template for Supabase URL and anon key
+  supabase-env.js           Gitignored — generated via npm run sync-env
+  supabase-client.js        Browser Supabase client (not wired to app.js yet)
 ```
 
 ## Usage
@@ -31,7 +34,9 @@ In `js/data/config.js`:
 export const DATA_BACKEND = "local"; // or "cloud" (stub — not implemented)
 ```
 
-Cloud mode throws until v2.5+ implements Supabase sync.
+Cloud mode throws until `CloudComplianceStore` is implemented. The Supabase client module is available for Phase 2+ steps; see `docs/cloud-setup.md` (Phase 2 Step 1).
+
+Configure env: `npm run sync-env`, then `npm run verify-supabase`.
 
 ## v3 migration
 

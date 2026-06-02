@@ -375,13 +375,21 @@ QA Status: PASS with warnings
 - Real user sessions replacing mock preview user
 - Read-only cloud sync (initial)
 
-### v3.0.0 — Cloud Platform Foundation · Planned
+### v3.0.0 Alpha — Phase 2 (operational cloud) · Shipped (Step 12 hardening)
 
-- Shared data and cloud persistence (Supabase)
-- User accounts, login, and multi-device access
-- Role permissions (Admin, Editor, Viewer)
-- Compliance records, evidence, actions, history, and reports in the cloud
-- Migration path: existing backup JSON import into cloud database
+- Supabase login, org-scoped load, admin/editor/viewer read parity
+- Limited RPC writes when explicitly enabled (not default): mark sent, action complete/reopen, renew, add record, edit record (no notes column write)
+- `canMutateData()` false in cloud; no `CloudComplianceStore.save()`
+- Verify: `npm run verify:phase2` — see `docs/cloud-phase2-completion.md`
+
+**Phase 3 (planned):** notes, evidence, delete/archive, CSV/backup import, reminder settings writes, full action CRUD in cloud, backup migration tooling.
+
+### v3.0.0 — Cloud Platform Foundation (remaining) · Planned
+
+- Production cloud writes policy and GDPR checklist
+- Evidence storage buckets and uploads
+- Delete/archive and import migration path
+- Reminder settings and full local parity in cloud
 
 See [v3.0.0 — Cloud Platform Foundation](#v300--cloud-platform-foundation) above for full goals and architecture.
 

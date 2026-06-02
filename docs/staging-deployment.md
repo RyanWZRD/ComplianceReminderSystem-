@@ -1,17 +1,23 @@
-# Staging deployment (read-only cloud alpha)
+# Staging deployment (cloud alpha)
 
-Deploy the static app against the **staging** Supabase project. Cloud mode remains **read-only**; `DATA_BACKEND` stays `local` in committed source.
+Deploy the static app against the **staging** Supabase project. Committed defaults: `DATA_BACKEND = "local"`, `CLOUD_WRITES_ENABLED = false`. Staging users normally see **read-only** cloud UX unless QA uses `?cloudWrites=1` on an allowed hostname.
 
 ## Prerequisites
 
-- Staging Supabase project linked and migrated (`npm run` docs in `docs/cloud-setup.md`)
-- Seed applied and three alpha test users + `profiles` rows (`docs/cloud-setup.md`)
+- Staging Supabase project linked and migrated through `20260203000005` (`docs/cloud-setup.md`)
+- Seed applied and three alpha test users + `profiles` rows
 - `.env` with staging `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and test passwords
 - `npm run sync-env` (generates gitignored `js/data/supabase-env.js`)
 
 ## 1. Pre-deploy checks
 
 From the repository root:
+
+```powershell
+npm run verify:phase2
+```
+
+Minimal pre-deploy (no RPC tests):
 
 ```powershell
 npm run sync-env
@@ -44,6 +50,8 @@ Examples:
 
 Record your **staging origin**, e.g. `https://your-org.github.io/ComplianceReminderSystem-/`.
 
+Add the hostname to `STAGING_APP_HOSTNAMES` in `.env` if you need `?cloudWrites=1` on staging.
+
 ## 4. Supabase Auth URL configuration
 
 In the staging project **Authentication → URL configuration**:
@@ -67,19 +75,21 @@ Local CLI `supabase/config.toml` uses `http://127.0.0.1:8877` for `supabase star
 | Mode | URL |
 |------|-----|
 | Local static server | `http://127.0.0.1:8877/` |
-| Local cloud (read-only) | `http://127.0.0.1:8877/?backend=cloud` |
+| Local cloud (read-only default) | `http://127.0.0.1:8877/?backend=cloud` |
+| Local cloud (limited writes QA) | `http://127.0.0.1:8877/?backend=cloud&cloudWrites=1` |
 | Staging cloud (read-only) | `https://YOUR_STAGING_ORIGIN/?backend=cloud` |
+| Staging cloud (writes QA) | `https://YOUR_STAGING_ORIGIN/?backend=cloud&cloudWrites=1` |
 
 `?backend=cloud` selects cloud data + Supabase auth without changing the committed default `DATA_BACKEND = "local"`.
 
 ## 7. Post-deploy QA
 
-Complete `docs/cloud-readonly-qa.md` on the staging URL for **admin**, **editor**, and **viewer** accounts.
+Complete `docs/cloud-readonly-qa.md` on the staging URL for **admin**, **editor**, and **viewer** accounts (sections B, D, and F–K as applicable).
 
 ## Rollback
 
 - Re-deploy the previous static file set or revert the hosting release
 - Revert Supabase Auth URL changes in the dashboard if needed
-- Application code rollback: checkout tag `v3.0.0-alpha-phase2-step5.1` and rebuild
+- Application code rollback: checkout tag `v3.0.0-alpha-phase2-step11` (or last known good) and `npm run build`
 
 No database rollback is required for a static-only deploy.

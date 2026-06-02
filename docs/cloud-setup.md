@@ -134,7 +134,7 @@ Complete `docs/cloud-phase1-rls-checklist.md` before starting Phase 2 (CloudComp
 
 ## Phase 2 Step 1 — Supabase client (no app wiring)
 
-Browser client modules exist; the app still uses `DATA_BACKEND = "local"` and does not import the client yet.
+Browser client modules are wired when `?backend=cloud` or `DATA_BACKEND=cloud`. Committed default remains `DATA_BACKEND = "local"`.
 
 ### Setup
 
@@ -290,6 +290,16 @@ npm run verify-cloud-edit-compliance-record
 
 See `docs/cloud-writes-step11.md`.
 
+## Phase 2 Step 12 — Hardening and release readiness
+
+- No new migrations or RPCs
+- `npm run verify:phase2` — full automated Phase 2 verification + build
+- Completion runbook: `docs/cloud-phase2-completion.md`
+- Release notes: `docs/phase2-release-notes.md`
+- QA checklist: `docs/cloud-readonly-qa.md` (sections A–K)
+
+See `docs/cloud-writes-step12.md`.
+
 ## Rollback
 
 | Scenario | Action |
@@ -298,12 +308,14 @@ See `docs/cloud-writes-step11.md`.
 | Staging bad migration | Forward-fix migration file; avoid destructive drops |
 | RLS lockout | Apply hotfix policy migration; emergency disable RLS on staging only |
 
-## Not in Phase 1
+## Not in Phase 2 (Phase 3)
 
-- CloudComplianceStore / app wiring
-- Login UI
-- Evidence Storage buckets
-- Backup JSON import tooling
+- Notes editing in cloud
+- Evidence Storage buckets and uploads
+- Delete / archive RPCs
+- Backup JSON and CSV import into cloud
+- Reminder settings writes in cloud
+- `CloudComplianceStore.save()` / broad sync
 
 ## GDPR note
 

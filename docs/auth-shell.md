@@ -50,12 +50,15 @@ npm run verify-supabase-auth
 
 Requires `.env` test user credentials (see `.env.example`). Uses staging alpha users from `docs/cloud-setup.md`.
 
-## Phase 2 Step 6 — Read-only cloud QA
+## Phase 2 — Cloud permissions
 
-All signed-in roles (admin, editor, viewer) can **load** the same organisation data. The app blocks **mutations** in cloud mode until a future write step (`canMutateData()` is false for all cloud users).
+All signed-in roles (admin, editor, viewer) can **load** the same organisation data. `canMutateData()` is **always false** in cloud mode.
+
+Granular cloud writes (when `CLOUD_WRITES_ENABLED` or `?cloudWrites=1` on allowed hosts) use `canMarkReminderSent()`, `canSetActionStatus()`, `canRenewCompliance()`, `canAddComplianceRecord()`, and `canEditComplianceRecord()` — all require `canEdit()` (admin or editor). Viewers cannot invoke RPC write paths.
 
 ```bash
+npm run verify:phase2
 npm run verify-cloud-role-load
 ```
 
-Manual browser checklist: `docs/cloud-readonly-qa.md`. Staging deploy: `docs/staging-deployment.md`.
+Manual QA: `docs/cloud-readonly-qa.md`. Close-out: `docs/cloud-phase2-completion.md`. Staging: `docs/staging-deployment.md`.

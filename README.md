@@ -37,17 +37,19 @@ The browser loads **`app.bundle.js`**, not `app.js` directly. Rebuild after chan
 npm run build
 ```
 
-## Cloud mode (read-only alpha)
+## Cloud mode (alpha)
 
-Default build is **local**. To test cloud against staging Supabase:
+Default build is **local** (`DATA_BACKEND=local`, `CLOUD_WRITES_ENABLED=false`). Cloud loads organisation data from Supabase when you use `?backend=cloud`. **Limited RPC writes** (mark sent, actions, renew, add/edit record) require `?cloudWrites=1` on localhost or configured staging hostnames only.
+
+To test cloud against staging Supabase:
 
 1. Copy `.env.example` → `.env`, configure staging URL/keys and test users (`docs/cloud-setup.md`).
 2. `npm run sync-env` then `npm run build` and `npm run serve`.
 3. Open [http://127.0.0.1:8877/?backend=cloud](http://127.0.0.1:8877/?backend=cloud) and sign in.
 
-Staging deployment and QA: `docs/staging-deployment.md`, `docs/cloud-readonly-qa.md`.
+Full automated check: `npm run verify:phase2`.
 
-Verify: `npm run verify-cloud-role-load` (admin / editor / viewer load parity).
+Staging deployment and manual QA: `docs/staging-deployment.md`, `docs/cloud-readonly-qa.md`, `docs/cloud-phase2-completion.md`.
 
 ## Key files
 

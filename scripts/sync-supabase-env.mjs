@@ -47,6 +47,13 @@ try {
 
 const supabaseUrl = readEnvValue(envContent, "SUPABASE_URL");
 const supabaseAnonKey = readEnvValue(envContent, "SUPABASE_ANON_KEY");
+const stagingHostsRaw = readEnvValue(envContent, "STAGING_APP_HOSTNAMES");
+const stagingHostnames = stagingHostsRaw
+  ? stagingHostsRaw
+      .split(",")
+      .map((host) => host.trim())
+      .filter(Boolean)
+  : [];
 
 if (!supabaseUrl || !supabaseAnonKey) {
   console.error(
@@ -65,6 +72,9 @@ export const SUPABASE_URL = ${JSON.stringify(supabaseUrl)};
 
 /** @type {string} */
 export const SUPABASE_ANON_KEY = ${JSON.stringify(supabaseAnonKey)};
+
+/** Hostnames allowed for ?cloudWrites=1 (staging only — never production). */
+export const STAGING_APP_HOSTNAMES = ${JSON.stringify(stagingHostnames)};
 `;
 
 writeFileSync(outPath, fileBody, "utf8");

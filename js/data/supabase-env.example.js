@@ -12,3 +12,6 @@ export const SUPABASE_URL = "";
 
 /** @type {string} */
 export const SUPABASE_ANON_KEY = "";
+
+/** Staging hostnames for ?cloudWrites=1 (from STAGING_APP_HOSTNAMES in .env via sync-env). */
+export const STAGING_APP_HOSTNAMES = [];

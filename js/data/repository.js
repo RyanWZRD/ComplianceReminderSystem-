@@ -1,4 +1,4 @@
-import { DATA_BACKEND } from "./config.js";
+import { CLOUD_WRITES_ENABLED, DATA_BACKEND } from "./config.js";
 import { CloudComplianceStore } from "./cloud-store.js";
 import { CloudSettingsStore } from "./cloud-settings-store.js";
 import { LocalComplianceStore } from "./local-store.js";
@@ -33,5 +33,5 @@ export const repository = createComplianceStore();
 /** @type {LocalSettingsStore | CloudSettingsStore} */
 export const settingsRepository = createSettingsStore();
 
-export { DATA_BACKEND } from "./config.js";
+export { CLOUD_WRITES_ENABLED, DATA_BACKEND } from "./config.js";
 export { APP_VERSION } from "./config.js";

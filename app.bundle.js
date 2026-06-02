@@ -20946,6 +20946,7 @@ ${suffix}`;
   // js/data/supabase-env.js
   var SUPABASE_URL = "https://vmrotpztwoeifbdjwdis.supabase.co";
   var SUPABASE_ANON_KEY = "sb_publishable_lBhDngN7brtfBR84jkEUcQ_hqgQn1sg";
+  var STAGING_APP_HOSTNAMES = [];
 
   // js/data/supabase-client.js
   var client = null;
@@ -21189,6 +21190,13 @@ ${suffix}`;
   function getCurrentUserRole() {
     return currentUser?.role ?? null;
   }
+  function canEdit() {
+    if (!isAuthenticated()) {
+      return false;
+    }
+    const role = getCurrentUserRole();
+    return role === "admin" || role === "editor";
+  }
   function canAdmin() {
     return getCurrentUserRole() === "admin";
   }
@@ -21262,6 +21270,67 @@ ${suffix}`;
     }
   }
 
+  // js/data/config.js
+  function readBackendFromLocation() {
+    if (typeof window === "undefined" || !window.location?.search) {
+      return null;
+    }
+    const backend = new URLSearchParams(window.location.search).get("backend");
+    if (backend === "cloud") {
+      return "cloud";
+    }
+    if (backend === "local") {
+      return "local";
+    }
+    return null;
+  }
+  function isCloudWritesUrlOverrideHostAllowed(hostname) {
+    if (hostname === "localhost" || hostname === "127.0.0.1") {
+      return true;
+    }
+    return Array.isArray(STAGING_APP_HOSTNAMES) && STAGING_APP_HOSTNAMES.includes(hostname);
+  }
+  function readCloudWritesFromLocation() {
+    if (typeof window === "undefined" || !window.location?.search) {
+      return null;
+    }
+    const hostname = window.location.hostname;
+    if (!isCloudWritesUrlOverrideHostAllowed(hostname)) {
+      return null;
+    }
+    const value = new URLSearchParams(window.location.search).get("cloudWrites");
+    if (value === "1" || value === "true") {
+      return true;
+    }
+    return null;
+  }
+  var DATA_BACKEND = readBackendFromLocation() ?? (typeof process !== "undefined" && process.env?.DATA_BACKEND === "cloud" ? "cloud" : "local");
+  var CLOUD_WRITES_ENABLED = readCloudWritesFromLocation() ?? (typeof process !== "undefined" && process.env?.CLOUD_WRITES_ENABLED === "true");
+  var APP_VERSION = "v3.0.0-alpha-phase2-step7";
+
+  // js/app/permissions.js
+  function isCloudMode() {
+    return DATA_BACKEND === "cloud";
+  }
+  function canMutateData() {
+    if (isCloudMode()) {
+      return false;
+    }
+    return true;
+  }
+  function canMarkReminderSent() {
+    if (!isCloudMode()) {
+      return canMutateData();
+    }
+    if (!CLOUD_WRITES_ENABLED) {
+      return false;
+    }
+    return canEdit();
+  }
+  function canMutateReminderSettings() {
+    return canMutateData() && canAdmin();
+  }
+
   // js/auth/login-panel.js
   var onAuthenticatedCallback = null;
   function initLoginPanel({ onAuthenticated }) {
@@ -21319,7 +21388,21 @@ ${suffix}`;
     }
     if (readOnlyBanner) {
       readOnlyBanner.classList.remove("hidden");
+      readOnlyBanner.textContent = getCloudModeBannerText();
     }
+  }
+  function getCloudModeBannerText() {
+    if (!CLOUD_WRITES_ENABLED) {
+      return "Cloud mode is read-only. You can view and export data; changes are not saved to the cloud yet.";
+    }
+    if (canMarkReminderSent()) {
+      return "Cloud mode (limited writes). Only Mark Reminder Sent is saved to the cloud.";
+    }
+    const role = getCurrentUserRole();
+    if (role === "viewer") {
+      return "Cloud mode (view only). Your role cannot save changes to the cloud.";
+    }
+    return "Cloud mode is read-only. Enable cloud writes on localhost or staging to mark reminders sent.";
   }
   function showLoginError(message) {
     const errorEl = document.getElementById("auth-login-error");
@@ -21367,37 +21450,6 @@ ${suffix}`;
     document.documentElement.dataset.appReady = "false";
     showLoginScreen();
     clearLoginError();
-  }
-
-  // js/data/config.js
-  function readBackendFromLocation() {
-    if (typeof window === "undefined" || !window.location?.search) {
-      return null;
-    }
-    const backend = new URLSearchParams(window.location.search).get("backend");
-    if (backend === "cloud") {
-      return "cloud";
-    }
-    if (backend === "local") {
-      return "local";
-    }
-    return null;
-  }
-  var DATA_BACKEND = readBackendFromLocation() ?? (typeof process !== "undefined" && process.env?.DATA_BACKEND === "cloud" ? "cloud" : "local");
-  var APP_VERSION = "3.0.0-alpha-phase2-step5";
-
-  // js/app/permissions.js
-  function isCloudMode() {
-    return DATA_BACKEND === "cloud";
-  }
-  function isCloudReadOnly() {
-    return isCloudMode();
-  }
-  function canMutateData() {
-    return !isCloudReadOnly();
-  }
-  function canMutateReminderSettings() {
-    return canMutateData() && canAdmin();
   }
 
   // js/data/cloud-mapper.js
@@ -21500,6 +21552,35 @@ ${suffix}`;
       personRole: row.person_role,
       record: row.record_snapshot && typeof row.record_snapshot === "object" ? row.record_snapshot : {}
     }));
+  }
+
+  // js/data/reminder-sent.js
+  var REMINDER_UI_LABELS = {
+    30: "30 Day Reminder",
+    14: "14 Day Reminder",
+    7: "7 Day Reminder",
+    expired: "Expired"
+  };
+  function getReminderSentText(reminderType) {
+    if (reminderType === REMINDER_UI_LABELS.expired) {
+      return "Expired Reminder Sent";
+    }
+    return `${reminderType} Sent`;
+  }
+  function mapReminderTypeToRpcCode(reminderType) {
+    if (reminderType === REMINDER_UI_LABELS.expired) {
+      return "expired";
+    }
+    if (reminderType === REMINDER_UI_LABELS[30]) {
+      return "30";
+    }
+    if (reminderType === REMINDER_UI_LABELS[14]) {
+      return "14";
+    }
+    if (reminderType === REMINDER_UI_LABELS[7]) {
+      return "7";
+    }
+    return null;
   }
 
   // js/data/constants.js
@@ -21998,6 +22079,57 @@ ${suffix}`;
       throw new Error(READ_ONLY_MESSAGE);
     }
     /**
+     * @param {string} recordId
+     * @param {string} reminderType UI reminder label (e.g. "14 Day Reminder")
+     * @returns {Promise<
+     *   | { ok: true; status: 'marked' | 'skipped' | 'not_found'; reason?: string; notes?: string }
+     *   | { ok: false; error: string }
+     * >}
+     */
+    async markReminderSent(recordId, reminderType) {
+      if (!isSupabaseConfigured()) {
+        return { ok: false, error: "Supabase is not configured." };
+      }
+      await waitForAuthReady();
+      if (!isAuthenticated()) {
+        return { ok: false, error: "Not signed in." };
+      }
+      const rpcCode = mapReminderTypeToRpcCode(reminderType);
+      if (!rpcCode) {
+        return { ok: false, error: `Unknown reminder type: ${reminderType}` };
+      }
+      const supabase = getSupabaseClient();
+      const { data, error } = await supabase.rpc("mark_reminder_sent", {
+        p_record_id: recordId,
+        p_reminder_type: rpcCode
+      });
+      if (error) {
+        return { ok: false, error: error.message };
+      }
+      if (!data || typeof data !== "object") {
+        return { ok: false, error: "Unexpected response from mark_reminder_sent." };
+      }
+      const status = data.status;
+      if (status === "not_found") {
+        return { ok: true, status: "not_found" };
+      }
+      if (status === "skipped") {
+        return {
+          ok: true,
+          status: "skipped",
+          reason: typeof data.reason === "string" ? data.reason : "already_sent"
+        };
+      }
+      if (status === "marked") {
+        return {
+          ok: true,
+          status: "marked",
+          notes: typeof data.notes === "string" ? data.notes : ""
+        };
+      }
+      return { ok: false, error: `Unexpected mark_reminder_sent status: ${String(status)}` };
+    }
+    /**
      * @param {{ onLoadError?: (error: Error) => void }} [options]
      * @returns {Promise<LoadResult>}
      */
@@ -22263,12 +22395,7 @@ ${suffix}`;
     "Evidence uploaded",
     "Renewal verified"
   ];
-  var REMINDER_LABELS = {
-    30: "30 Day Reminder",
-    14: "14 Day Reminder",
-    7: "7 Day Reminder",
-    expired: "Expired"
-  };
+  var REMINDER_LABELS = REMINDER_UI_LABELS;
   var REMINDER_URGENCY = { expired: 0, 7: 1, 14: 2, 30: 3 };
   var HISTORY_ACTION_LABELS = {
     created: "Created",
@@ -22553,6 +22680,34 @@ ${suffix}`;
       "Cloud mode is read-only. Changes are not saved to the cloud.",
       "error"
     );
+  }
+  function notifyMarkReminderBlocked() {
+    if (isCloudMode() && CLOUD_WRITES_ENABLED) {
+      showMessage(
+        appMessage,
+        "Your role cannot mark reminders sent in cloud mode.",
+        "error"
+      );
+      return;
+    }
+    notifyReadOnlyBlocked();
+  }
+  async function reloadCloudDataAfterWrite() {
+    const loaded = await loadPeople();
+    if (!loaded) {
+      showMessage(
+        appMessage,
+        "Saved to the cloud but the register could not be refreshed. Please reload the page.",
+        "error"
+      );
+      return false;
+    }
+    renderTable();
+    refreshActionRequiredUI();
+    if (workspaceContext) {
+      renderRecordWorkspace();
+    }
+    return true;
   }
   function rejectIfReadOnly() {
     if (canMutateData()) {
@@ -24946,12 +25101,6 @@ This cannot be undone.`
     }
     return null;
   }
-  function getReminderSentText(reminderType) {
-    if (reminderType === REMINDER_LABELS.expired) {
-      return "Expired Reminder Sent";
-    }
-    return `${reminderType} Sent`;
-  }
   function formatAuditDate(date = /* @__PURE__ */ new Date()) {
     const day = String(date.getDate()).padStart(2, "0");
     const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -24997,15 +25146,52 @@ ${auditLine}` : auditLine;
     );
     return { status: "marked", notes: result.record.notes };
   }
-  function markReminderSent(personId, recordId, reminderType, { silent = false } = {}) {
-    if (!canMutateData()) {
+  async function markReminderSent(personId, recordId, reminderType, { silent = false } = {}) {
+    if (!canMarkReminderSent()) {
+      notifyMarkReminderBlocked();
       return false;
     }
-    const outcome = applyReminderSent(personId, recordId, reminderType);
-    if (outcome.status === "not_found") {
+    if (!isCloudMode()) {
+      const outcome = applyReminderSent(personId, recordId, reminderType);
+      if (outcome.status === "not_found") {
+        return outcome;
+      }
+      if (outcome.status === "skipped") {
+        if (!silent) {
+          showMessage(
+            appMessage,
+            `This ${getReminderSentText(reminderType).toLowerCase()} entry is already recorded.`,
+            "error"
+          );
+        }
+        return outcome;
+      }
+      savePeople();
+      syncNotesInTable(personId, recordId, outcome.notes);
+      refreshActionRequiredUI();
+      if (!silent) {
+        const sentText = getReminderSentText(reminderType);
+        showMessage(appMessage, `Recorded: ${formatAuditDate()} - ${sentText}`, "success");
+      }
       return outcome;
     }
-    if (outcome.status === "skipped") {
+    if (typeof repository.markReminderSent !== "function") {
+      showMessage(appMessage, "Cloud mark reminder sent is not available.", "error");
+      return false;
+    }
+    const persistResult = await repository.markReminderSent(recordId, reminderType);
+    if (!persistResult.ok) {
+      showMessage(
+        appMessage,
+        persistResult.error || "Could not save reminder sent to the cloud.",
+        "error"
+      );
+      return { status: "error", error: persistResult.error };
+    }
+    if (persistResult.status === "not_found") {
+      return { status: "not_found" };
+    }
+    if (persistResult.status === "skipped") {
       if (!silent) {
         showMessage(
           appMessage,
@@ -25013,16 +25199,17 @@ ${auditLine}` : auditLine;
           "error"
         );
       }
-      return outcome;
+      return { status: "skipped", reason: persistResult.reason };
     }
-    savePeople();
-    syncNotesInTable(personId, recordId, outcome.notes);
-    refreshActionRequiredUI();
+    const refreshed = await reloadCloudDataAfterWrite();
+    if (!refreshed) {
+      return { status: "error", error: "reload_failed" };
+    }
     if (!silent) {
       const sentText = getReminderSentText(reminderType);
       showMessage(appMessage, `Recorded: ${formatAuditDate()} - ${sentText}`, "success");
     }
-    return outcome;
+    return { status: "marked", notes: persistResult.notes };
   }
   function bulkMarkSelectedRemindersSent() {
     if (rejectIfReadOnly()) {
@@ -25419,7 +25606,7 @@ ${auditLine}` : auditLine;
           data-person-id="${reminder.personId}"
           data-record-id="${reminder.recordId}"
           data-reminder-type="${reminder.reminderType}"
-          ${alreadySent || !canMutateData() ? "disabled" : ""}
+          ${alreadySent || !canMarkReminderSent() ? "disabled" : ""}
         >${alreadySent ? "Sent" : "Mark Sent"}</button>
       </td>
     `;
@@ -26915,7 +27102,7 @@ Your current data will be overwritten. Continue?`
       if (!button || button.disabled) {
         return;
       }
-      markReminderSent(
+      void markReminderSent(
         parseEntityId(button.dataset.personId),
         parseEntityId(button.dataset.recordId),
         button.dataset.reminderType
@@ -27089,7 +27276,17 @@ Your current data will be overwritten. Continue?`
     syncAddFormRenewalCycleDefault();
     const dataBackendBadge = document.getElementById("data-backend-badge");
     if (dataBackendBadge) {
-      dataBackendBadge.textContent = DATA_BACKEND === "local" ? "Local storage mode" : "Cloud mode (read-only)";
+      if (DATA_BACKEND === "local") {
+        dataBackendBadge.textContent = "Local storage mode";
+      } else if (CLOUD_WRITES_ENABLED && canMarkReminderSent()) {
+        dataBackendBadge.textContent = "Cloud mode (limited writes)";
+      } else {
+        dataBackendBadge.textContent = "Cloud mode (read-only)";
+      }
+    }
+    const readOnlyBanner = document.getElementById("cloud-read-only-banner");
+    if (readOnlyBanner && isCloudMode()) {
+      readOnlyBanner.textContent = getCloudModeBannerText();
     }
     const complianceTypeInput = document.getElementById("compliance-type");
     if (complianceTypeInput) {

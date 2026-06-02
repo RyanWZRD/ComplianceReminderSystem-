@@ -84,6 +84,22 @@ Repeat B1–B8 as **admin**, **editor**, and **viewer** at `?backend=cloud`.
 
 ---
 
+## F. Limited writes — Mark Reminder Sent (Step 7)
+
+Requires migration `20260203000001` and `?backend=cloud&cloudWrites=1` on **localhost or staging only** (never production).
+
+| # | Check | Editor | Viewer |
+|---|--------|:------:|:------:|
+| F1 | Banner shows limited writes / view only | ☐ | ☐ |
+| F2 | Mark Sent on Action Required row — success, persists after refresh | ☐ | N/A |
+| F3 | Second click — already recorded message | ☐ | N/A |
+| F4 | Bulk mark button stays disabled | ☐ | ☐ |
+| F5 | Add/edit/renew still blocked | ☐ | ☐ |
+| F6 | Viewer: Mark Sent disabled | N/A | ☐ |
+| F7 | `?backend=cloud` without `cloudWrites` — Step 6 read-only (B-section) | ☐ | ☐ |
+
+---
+
 ## E. RLS (database — optional manual)
 
 Postgres write policies are validated in `docs/cloud-phase1-rls-checklist.md` (SQL Editor). No app write tests in Step 6.

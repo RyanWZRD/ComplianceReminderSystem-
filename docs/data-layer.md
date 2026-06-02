@@ -6,7 +6,8 @@ Persistence is handled through a **repository** instead of direct `localStorage`
 
 ```
 js/data/
-  config.js                 DATA_BACKEND flag and APP_VERSION
+  config.js                 DATA_BACKEND, CLOUD_WRITES_ENABLED, APP_VERSION
+  reminder-sent.js          Reminder-sent labels and RPC type mapping
   constants.js              Storage keys, compliance types, history actions
   dates.js                  Date parsing and validation helpers
   local-store.js            LocalComplianceStore (localStorage)
@@ -16,7 +17,7 @@ js/data/
   supabase-env.js           Gitignored — generated via npm run sync-env
   supabase-client.js        Browser Supabase client
   cloud-mapper.js           Internal Postgres row → nested app shape
-  cloud-store.js            CloudComplianceStore (load-only; save is no-op)
+  cloud-store.js            CloudComplianceStore (load; markReminderSent RPC; save is no-op)
   cloud-settings-store.js   CloudSettingsStore (load-only; setSettings throws)
 ```
 
@@ -41,7 +42,7 @@ export const DATA_BACKEND = "local"; // committed default
 
 Browser cloud dev: `?backend=cloud` in the URL. Node verify scripts: `process.env.DATA_BACKEND=cloud`.
 
-Cloud **load** is implemented; cloud **writes** are not — see `js/app/permissions.js` (`canMutateData()` false in cloud mode).
+Cloud **load** is implemented. **Mark Reminder Sent** (single record) uses RPC when `CLOUD_WRITES_ENABLED` is true. All other cloud mutations remain blocked (`canMutateData()` false in cloud). See `js/app/permissions.js` (`canMarkReminderSent()`).
 
 ## Verify scripts
 
@@ -55,6 +56,7 @@ Cloud **load** is implemented; cloud **writes** are not — see `js/app/permissi
 | `npm run verify-repository-cloud` | Repository singleton + cloud load |
 | `npm run verify-local-mode` | Local works without Supabase |
 | `npm run verify-read-only-guards` | `canMutateData()` false in cloud |
+| `npm run verify-cloud-mark-reminder-sent` | Editor mark-sent RPC + reload; viewer denied |
 | `npm run verify-staging-config` | `.env` + `supabase-env.js` present |
 
 See `docs/cloud-setup.md` and `docs/staging-deployment.md`.

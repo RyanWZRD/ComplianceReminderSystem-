@@ -1,9 +1,8 @@
 process.env.DATA_BACKEND = "cloud";
 process.env.AUTH_MODE = "supabase";
 
-const { canMutateData, canMutateReminderSettings, isCloudMode } = await import(
-  "../js/app/permissions.js"
-);
+const { canMarkReminderSent, canMutateData, canMutateReminderSettings, isCloudMode } =
+  await import("../js/app/permissions.js");
 
 if (!isCloudMode()) {
   console.error("Expected cloud mode.");
@@ -17,6 +16,11 @@ if (canMutateData()) {
 
 if (canMutateReminderSettings()) {
   console.error("canMutateReminderSettings() must be false in cloud read-only mode.");
+  process.exit(1);
+}
+
+if (canMarkReminderSent()) {
+  console.error("canMarkReminderSent() must be false when CLOUD_WRITES_ENABLED is not set.");
   process.exit(1);
 }
 

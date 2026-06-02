@@ -2,7 +2,9 @@
  * Cloud login UI — uses session.js only (public auth facade).
  */
 
-import { signInWithPassword, signOut } from "./session.js";
+import { CLOUD_WRITES_ENABLED } from "../data/config.js";
+import { canMarkReminderSent } from "../app/permissions.js";
+import { getCurrentUserRole, signInWithPassword, signOut } from "./session.js";
 
 /** @type {(() => void | Promise<void>) | null} */
 let onAuthenticatedCallback = null;
@@ -84,7 +86,27 @@ export function updateAuthChromeForCloud() {
 
   if (readOnlyBanner) {
     readOnlyBanner.classList.remove("hidden");
+    readOnlyBanner.textContent = getCloudModeBannerText();
   }
+}
+
+/** @returns {string} */
+export function getCloudModeBannerText() {
+  if (!CLOUD_WRITES_ENABLED) {
+    return "Cloud mode is read-only. You can view and export data; changes are not saved to the cloud yet.";
+  }
+
+  if (canMarkReminderSent()) {
+    return "Cloud mode (limited writes). Only Mark Reminder Sent is saved to the cloud.";
+  }
+
+  const role = getCurrentUserRole();
+
+  if (role === "viewer") {
+    return "Cloud mode (view only). Your role cannot save changes to the cloud.";
+  }
+
+  return "Cloud mode is read-only. Enable cloud writes on localhost or staging to mark reminders sent.";
 }
 
 /**

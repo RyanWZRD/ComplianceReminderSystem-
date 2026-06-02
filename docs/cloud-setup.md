@@ -221,6 +221,22 @@ npm run build
 
 `verify-cloud-role-load` signs in as admin, editor, and viewer and asserts identical seed load counts plus `canMutateData() === false`. RLS write tests stay in `docs/cloud-phase1-rls-checklist.md` (not automated in Step 6).
 
+## Phase 2 Step 7 — Mark Reminder Sent (single-record RPC)
+
+- Migration: `supabase/migrations/20260203000001_mark_reminder_sent_rpc.sql` (apply before verify)
+- `CLOUD_WRITES_ENABLED` default `false`; Node: `CLOUD_WRITES_ENABLED=true` for verify
+- Browser: `?cloudWrites=1` only on **localhost** or hostnames in `STAGING_APP_HOSTNAMES` — **never production**
+- `canMutateData()` stays false in cloud; only `canMarkReminderSent()` enables Mark Sent
+- After RPC success the app reloads cloud data and re-renders (no full `save()`)
+
+```bash
+supabase db push
+npm run sync-env
+npm run verify-cloud-mark-reminder-sent
+```
+
+See `docs/cloud-writes-step7.md`.
+
 ## Rollback
 
 | Scenario | Action |

@@ -5,6 +5,7 @@ import {
 } from "../auth/session.js";
 import { getSupabaseClient, isSupabaseConfigured } from "./supabase-client.js";
 import { buildPeopleTree, mapDeletedSnapshots } from "./cloud-mapper.js";
+import { mapReminderTypeToRpcCode } from "./reminder-sent.js";
 import { LocalComplianceStore } from "./local-store.js";
 
 const READ_ONLY_MESSAGE =
@@ -37,6 +38,70 @@ export class CloudComplianceStore extends LocalComplianceStore {
 
   applyBackup() {
     throw new Error(READ_ONLY_MESSAGE);
+  }
+
+  /**
+   * @param {string} recordId
+   * @param {string} reminderType UI reminder label (e.g. "14 Day Reminder")
+   * @returns {Promise<
+   *   | { ok: true; status: 'marked' | 'skipped' | 'not_found'; reason?: string; notes?: string }
+   *   | { ok: false; error: string }
+   * >}
+   */
+  async markReminderSent(recordId, reminderType) {
+    if (!isSupabaseConfigured()) {
+      return { ok: false, error: "Supabase is not configured." };
+    }
+
+    await waitForAuthReady();
+
+    if (!isAuthenticated()) {
+      return { ok: false, error: "Not signed in." };
+    }
+
+    const rpcCode = mapReminderTypeToRpcCode(reminderType);
+
+    if (!rpcCode) {
+      return { ok: false, error: `Unknown reminder type: ${reminderType}` };
+    }
+
+    const supabase = getSupabaseClient();
+    const { data, error } = await supabase.rpc("mark_reminder_sent", {
+      p_record_id: recordId,
+      p_reminder_type: rpcCode,
+    });
+
+    if (error) {
+      return { ok: false, error: error.message };
+    }
+
+    if (!data || typeof data !== "object") {
+      return { ok: false, error: "Unexpected response from mark_reminder_sent." };
+    }
+
+    const status = data.status;
+
+    if (status === "not_found") {
+      return { ok: true, status: "not_found" };
+    }
+
+    if (status === "skipped") {
+      return {
+        ok: true,
+        status: "skipped",
+        reason: typeof data.reason === "string" ? data.reason : "already_sent",
+      };
+    }
+
+    if (status === "marked") {
+      return {
+        ok: true,
+        status: "marked",
+        notes: typeof data.notes === "string" ? data.notes : "",
+      };
+    }
+
+    return { ok: false, error: `Unexpected mark_reminder_sent status: ${String(status)}` };
   }
 
   /**

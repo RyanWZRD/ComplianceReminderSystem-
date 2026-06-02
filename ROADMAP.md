@@ -6,22 +6,31 @@ A local-first safeguarding compliance tracker. All data is stored in the browser
 
 # Current Release
 
-## v2.7.0
+## v2.9.0 Released
 
-### Dashboard & Management Insights
+### Visual Insights & Compliance Charts
 
-- Management Insights dashboard
-- Total Open Actions, expired-linked actions, missing evidence, and expiry insight cards
-- Compliance Health Score
-- Clickable insight cards with preview table, Export Insight CSV, and Clear Preview
+- Expiry by Month chart
+- Compliance Status Breakdown
+- Evidence Coverage chart
+- Action Workload chart
+- Management Snapshot
+- Snapshot CSV export
+- Snapshot print support
+
+QA Status: PASS with warnings
 
 ---
 
 # Next Planned Release
 
-## v2.8.0
+## v3.0.0 — Cloud Platform Foundation
 
-- Supabase Auth integration (real login)
+- Shared data, user accounts, login, and role permissions (Supabase)
+- Cloud persistence and multi-device access
+- Migration from existing backup JSON import
+
+See [Future Releases](#future-releases) below for full architecture and goals.
 
 ---
 
@@ -69,6 +78,25 @@ A local-first safeguarding compliance tracker. All data is stored in the browser
 ---
 
 # Recent Releases
+
+## v2.9.0 Released
+
+### Visual Insights & Compliance Charts
+
+- Expiry by Month chart
+- Compliance Status Breakdown
+- Evidence Coverage chart
+- Action Workload chart
+- Management Snapshot
+- Snapshot CSV export
+- Snapshot print support
+
+QA Status: PASS with warnings
+
+Status: Released  
+Tag: v2.9.0
+
+---
 
 ## v2.7.0 (Released)
 
@@ -151,7 +179,7 @@ Tag: v2.7.0
 
 ## Version Roadmap
 
-Versions are listed **oldest to newest**. Everything through **v2.7.0** is shipped. **v2.8.0** is next.
+Versions are listed **oldest to newest**. Everything through **v2.9.0** is shipped. **v3.0.0** is next.
 
 ### v1.0 — Working prototype · Shipped
 
@@ -328,6 +356,18 @@ Benefits:
 * Improved management oversight
 * Better prioritisation of actions and evidence collection
 * Simplified reporting and operational monitoring
+
+### v2.9.0 — Visual Insights & Compliance Charts · Shipped
+
+- Expiry by Month chart
+- Compliance Status Breakdown
+- Evidence Coverage chart
+- Action Workload chart
+- Management Snapshot
+- Snapshot CSV export
+- Snapshot print support
+
+QA Status: PASS with warnings
 
 ### v2.8 — Supabase Auth · Planned
 

@@ -3,15 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Compliance Reminder System v2.5.1</title>
-  <link rel="stylesheet" href="styles.css?v=2.5.1">
+  <title>Compliance Reminder System v2.7.0</title>
+  <link rel="stylesheet" href="styles.css?v=2.7.0">
 </head>
 <body>
   <div class="container">
     <header>
       <h1>Compliance Reminder System</h1>
       <div class="header-badges">
-        <p class="version-badge">Version 2.5.1</p>
+        <p class="version-badge">Version 2.7.0</p>
         <p id="data-backend-badge" class="data-backend-badge">Local storage mode</p>
         <p id="auth-mode-badge" class="auth-mode-badge hidden">Local auth</p>
       </div>
@@ -279,6 +279,59 @@
       </div>
     </section>
 
+    <section class="card management-insights-section" id="management-insights-section">
+      <h2>Management Insights</h2>
+      <p class="settings-hint">Click an insight to preview affected records. Export Insight CSV downloads the current preview.</p>
+
+      <button type="button" class="insight-card insight-card-positive insight-health-card" data-insight="health-score">
+        <p class="insight-label">Compliance Health Score</p>
+        <p id="insight-health-score" class="insight-health-score">0%</p>
+        <p class="insight-hint">Valid records with evidence attached</p>
+      </button>
+
+      <div class="management-insight-cards">
+        <button type="button" class="insight-card insight-card-risk" data-insight="open-actions">
+          <p class="insight-label">Total Open Actions</p>
+          <p id="insight-open-actions" class="insight-number">0</p>
+        </button>
+        <button type="button" class="insight-card insight-card-risk" data-insight="expired-linked-actions">
+          <p class="insight-label">Actions Linked to Expired Records</p>
+          <p id="insight-expired-linked-actions" class="insight-number">0</p>
+        </button>
+        <button type="button" class="insight-card insight-card-warning" data-insight="missing-evidence">
+          <p class="insight-label">Records Missing Evidence</p>
+          <p id="insight-missing-evidence" class="insight-number">0</p>
+        </button>
+        <button type="button" class="insight-card insight-card-warning" data-insight="expiring-this-month">
+          <p class="insight-label">Expiring This Month</p>
+          <p id="insight-expiring-this-month" class="insight-number">0</p>
+        </button>
+        <button type="button" class="insight-card insight-card-warning" data-insight="expiring-next-month">
+          <p class="insight-label">Expiring Next Month</p>
+          <p id="insight-expiring-next-month" class="insight-number">0</p>
+        </button>
+      </div>
+
+      <p id="insight-empty-hint" class="settings-hint insight-empty-hint">Select an insight above to preview records.</p>
+
+      <div id="insight-preview" class="insight-preview hidden">
+        <div class="insight-preview-header">
+          <h3 id="insight-preview-title" class="insight-preview-title"></h3>
+          <p id="insight-preview-meta" class="insight-preview-meta"></p>
+        </div>
+        <div class="table-wrapper insight-table-wrapper">
+          <table class="insight-table">
+            <thead id="insight-table-head"></thead>
+            <tbody id="insight-table-body"></tbody>
+          </table>
+        </div>
+        <div class="insight-preview-actions no-print">
+          <button type="button" id="export-insight-csv-btn" class="export-btn">Export Insight CSV</button>
+          <button type="button" id="clear-insight-preview-btn" class="quick-action-btn">Clear Preview</button>
+        </div>
+      </div>
+    </section>
+
     <section class="card reports-section" id="reports-section">
       <h2>Reports &amp; Audit Pack</h2>
       <p class="settings-hint">Generate on-screen reports for audits and compliance reviews. Viewing and exporting reports does not create history entries.</p>
@@ -418,10 +471,22 @@
         </div>
         <p id="pagination-summary" class="pagination-summary"></p>
       </div>
+      <div id="bulk-selection-toolbar" class="bulk-selection-toolbar hidden" aria-live="polite">
+        <p id="bulk-selection-count" class="bulk-selection-count">0 records selected</p>
+        <div class="bulk-selection-actions">
+          <button type="button" id="bulk-clear-selection-btn" class="bulk-toolbar-btn">Clear selection</button>
+          <button type="button" id="bulk-export-csv-btn" class="bulk-toolbar-btn export-btn">Export selected CSV</button>
+          <button type="button" id="bulk-add-action-btn" class="bulk-toolbar-btn">Add action to selected</button>
+          <button type="button" id="bulk-mark-reminders-btn" class="bulk-toolbar-btn">Mark selected reminders sent</button>
+        </div>
+      </div>
       <div class="table-wrapper">
         <table class="compliance-register-table">
           <thead>
             <tr>
+              <th class="select-column">
+                <input type="checkbox" id="select-all-page" aria-label="Select all records on this page">
+              </th>
               <th>Name</th>
               <th>Role</th>
               <th>Compliance Type</th>
@@ -527,6 +592,39 @@
     </div>
   </div>
 
+  <div id="bulk-action-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="bulk-action-modal-title">
+    <div class="modal-dialog action-modal">
+      <div class="renew-modal-header">
+        <h2 id="bulk-action-modal-title" class="renew-modal-title">Add Action to Selected Records</h2>
+        <button type="button" id="bulk-action-modal-close-btn" class="renew-modal-close" aria-label="Close bulk action dialog">&times;</button>
+      </div>
+      <p id="bulk-action-modal-record-label" class="renew-modal-record"></p>
+
+      <div class="bulk-action-templates">
+        <span class="bulk-action-templates-label">Quick fill:</span>
+        <button type="button" class="bulk-action-template-btn" data-title="Chase renewal">Chase renewal</button>
+        <button type="button" class="bulk-action-template-btn" data-title="Request certificate">Request certificate</button>
+        <button type="button" class="bulk-action-template-btn" data-title="Verify evidence">Verify evidence</button>
+      </div>
+
+      <div class="form-row">
+        <label for="bulk-action-title">Action Title</label>
+        <input type="text" id="bulk-action-title" name="bulk-action-title" placeholder="e.g. Chase renewal" required>
+      </div>
+      <div class="form-row">
+        <label for="bulk-action-notes">Notes</label>
+        <textarea id="bulk-action-notes" name="bulk-action-notes" rows="3" placeholder="Optional notes about this action..."></textarea>
+      </div>
+
+      <p id="bulk-action-modal-message" class="form-message hidden"></p>
+
+      <div class="modal-actions">
+        <button type="button" id="bulk-action-save-btn" class="renew-primary-btn">Add to Selected</button>
+        <button type="button" id="bulk-action-cancel-btn" class="cancel-btn">Cancel</button>
+      </div>
+    </div>
+  </div>
+
   <div id="action-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="action-modal-title">
     <div class="modal-dialog action-modal">
       <div class="renew-modal-header">
@@ -577,7 +675,7 @@
     </div>
   </div>
 
-  <script src="app.bundle.js?v=2.5.1"></script>
+  <script src="app.bundle.js?v=2.7.0"></script>
   <script>
     window.addEventListener("load", function () {
       window.setTimeout(function () {

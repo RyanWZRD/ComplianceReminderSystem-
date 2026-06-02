@@ -6,7 +6,68 @@ A local-first safeguarding compliance tracker. All data is stored in the browser
 
 # Current Release
 
-## v2.5.1
+## v2.7.0
+
+### Dashboard & Management Insights
+
+- Management Insights dashboard
+- Total Open Actions, expired-linked actions, missing evidence, and expiry insight cards
+- Compliance Health Score
+- Clickable insight cards with preview table, Export Insight CSV, and Clear Preview
+
+---
+
+# Next Planned Release
+
+## v2.8.0
+
+- Supabase Auth integration (real login)
+
+---
+
+# Recent Releases
+
+## v2.7.0 (Released)
+
+### Dashboard & Management Insights
+
+Features:
+
+* Management Insights dashboard
+* Total Open Actions card
+* Actions Linked to Expired Records card
+* Records Missing Evidence card
+* Expiring This Month card
+* Expiring Next Month card
+* Compliance Health Score
+* Clickable insight cards
+* Insight preview table
+* Export Insight CSV
+* Clear Preview functionality
+
+Benefits:
+
+* Faster identification of compliance risks
+* Improved management oversight
+* Better prioritisation of actions and evidence collection
+* Simplified reporting and operational monitoring
+
+Status: Released  
+Tag: v2.7.0
+
+---
+
+## v2.6.0 (Released)
+
+- Bulk record selection
+- Bulk actions
+- Bulk reminder management
+- Export selected CSV
+- Selection state improvements
+
+---
+
+## v2.5.1 (Released)
 
 - `app.bundle.js` for opening `index.html` directly (`file://`) without a web server
 - Import/export and backup buttons wired early with safer null checks
@@ -14,16 +75,6 @@ A local-first safeguarding compliance tracker. All data is stored in the browser
 - `npm run build` to rebuild the bundle after editing `app.js`
 
 ---
-
-# Next Planned Release
-
-## v2.6.0
-
-- Supabase Auth integration (real login)
-
----
-
-# Recent Releases
 
 ## v2.5.0 (Released)
 
@@ -57,7 +108,7 @@ A local-first safeguarding compliance tracker. All data is stored in the browser
 
 ## Version Roadmap
 
-Versions are listed **oldest to newest**. Everything through **v2.5.1** is shipped. **v2.6.0** is next.
+Versions are listed **oldest to newest**. Everything through **v2.7.0** is shipped. **v2.8.0** is next.
 
 ### v1.0 — Working prototype · Shipped
 
@@ -204,7 +255,38 @@ Versions are listed **oldest to newest**. Everything through **v2.5.1** is shipp
 - Off-screen file inputs and startup error banner
 - `npm run build` / `serve.ps1` documented in README
 
-### v2.6 — Supabase Auth · Planned
+### v2.6.0 — Bulk actions · Shipped
+
+- Bulk record selection
+- Bulk actions
+- Bulk reminder management
+- Export selected CSV
+- Selection state improvements
+
+### v2.7.0 — Dashboard & Management Insights · Shipped
+
+Features:
+
+* Management Insights dashboard
+* Total Open Actions card
+* Actions Linked to Expired Records card
+* Records Missing Evidence card
+* Expiring This Month card
+* Expiring Next Month card
+* Compliance Health Score
+* Clickable insight cards
+* Insight preview table
+* Export Insight CSV
+* Clear Preview functionality
+
+Benefits:
+
+* Faster identification of compliance risks
+* Improved management oversight
+* Better prioritisation of actions and evidence collection
+* Simplified reporting and operational monitoring
+
+### v2.8 — Supabase Auth · Planned
 
 - Supabase Auth login/logout
 - Real user sessions replacing mock preview user

@@ -64,7 +64,7 @@
 
   // js/data/config.js
   var DATA_BACKEND = "local";
-  var APP_VERSION = "2.5.1";
+  var APP_VERSION = "2.7.0";
 
   // js/data/constants.js
   var STORAGE_KEY = "complianceReminderPeople";
@@ -670,6 +670,7 @@
   var expandedHistoryRows = /* @__PURE__ */ new Set();
   var expandedEvidenceRows = /* @__PURE__ */ new Set();
   var expandedActionRows = /* @__PURE__ */ new Set();
+  var selectedRecordKeys = /* @__PURE__ */ new Set();
   var DUE_SOON_DAYS = 90;
   var RECORDS_PER_PAGE = 25;
   var DEFAULT_ACTION_TEMPLATES = [
@@ -714,6 +715,18 @@
   var paginationControls = document.getElementById("pagination-controls");
   var paginationPrevBtn = document.getElementById("pagination-prev");
   var paginationNextBtn = document.getElementById("pagination-next");
+  var bulkSelectionToolbar = document.getElementById("bulk-selection-toolbar");
+  var bulkSelectionCount = document.getElementById("bulk-selection-count");
+  var bulkClearSelectionBtn = document.getElementById("bulk-clear-selection-btn");
+  var bulkExportCsvBtn = document.getElementById("bulk-export-csv-btn");
+  var bulkAddActionBtn = document.getElementById("bulk-add-action-btn");
+  var bulkMarkRemindersBtn = document.getElementById("bulk-mark-reminders-btn");
+  var selectAllPageCheckbox = document.getElementById("select-all-page");
+  var bulkActionModal = document.getElementById("bulk-action-modal");
+  var bulkActionModalRecordLabel = document.getElementById("bulk-action-modal-record-label");
+  var bulkActionTitleInput = document.getElementById("bulk-action-title");
+  var bulkActionNotesInput = document.getElementById("bulk-action-notes");
+  var bulkActionModalMessage = document.getElementById("bulk-action-modal-message");
   var stripTotal = document.getElementById("strip-total");
   var stripValid = document.getElementById("strip-valid");
   var stripDueSoon = document.getElementById("strip-due-soon");
@@ -802,6 +815,21 @@
   var activeFilterChips = document.getElementById("active-filter-chips");
   var clearFiltersBtn = document.getElementById("clear-filters-btn");
   var analyticsCards = document.querySelectorAll("[data-analytics-filter]");
+  var insightHealthScore = document.getElementById("insight-health-score");
+  var insightOpenActions = document.getElementById("insight-open-actions");
+  var insightExpiredLinkedActions = document.getElementById("insight-expired-linked-actions");
+  var insightMissingEvidence = document.getElementById("insight-missing-evidence");
+  var insightExpiringThisMonth = document.getElementById("insight-expiring-this-month");
+  var insightExpiringNextMonth = document.getElementById("insight-expiring-next-month");
+  var insightEmptyHint = document.getElementById("insight-empty-hint");
+  var insightPreview = document.getElementById("insight-preview");
+  var insightPreviewTitle = document.getElementById("insight-preview-title");
+  var insightPreviewMeta = document.getElementById("insight-preview-meta");
+  var insightTableHead = document.getElementById("insight-table-head");
+  var insightTableBody = document.getElementById("insight-table-body");
+  var exportInsightCsvBtn = document.getElementById("export-insight-csv-btn");
+  var clearInsightPreviewBtn = document.getElementById("clear-insight-preview-btn");
+  var insightCards = document.querySelectorAll("[data-insight]");
   var reportPreview = document.getElementById("report-preview");
   var reportTitle = document.getElementById("report-title");
   var reportMeta = document.getElementById("report-meta");
@@ -834,6 +862,24 @@
     EXPIRED_WITH_OPEN_ACTIONS: "expired-with-open-actions"
   };
   var currentReport = null;
+  var INSIGHT_TYPES = {
+    OPEN_ACTIONS: "open-actions",
+    EXPIRED_LINKED_ACTIONS: "expired-linked-actions",
+    MISSING_EVIDENCE: "missing-evidence",
+    EXPIRING_THIS_MONTH: "expiring-this-month",
+    EXPIRING_NEXT_MONTH: "expiring-next-month",
+    HEALTH_SCORE: "health-score"
+  };
+  var INSIGHT_PREVIEW_COLUMNS = [
+    { key: "name", label: "Name" },
+    { key: "role", label: "Role" },
+    { key: "complianceType", label: "Compliance Type" },
+    { key: "expiryDate", label: "Expiry Date" },
+    { key: "status", label: "Status" },
+    { key: "openActionCount", label: "Open Actions" },
+    { key: "evidenceCount", label: "Evidence Count" }
+  ];
+  var currentInsight = null;
   var STATUS_FILTER_LABELS = {
     valid: "Valid",
     dueSoon: "Due Soon",
@@ -1206,11 +1252,315 @@ This cannot be undone.`
     });
     return { openActions, completedActions, expiredWithOpenActions };
   }
+  function getMonthDateRange(monthOffset = 0) {
+    const now = /* @__PURE__ */ new Date();
+    const start = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1);
+    const end = new Date(now.getFullYear(), now.getMonth() + monthOffset + 1, 0);
+    start.setHours(0, 0, 0, 0);
+    end.setHours(23, 59, 59, 999);
+    return { start, end };
+  }
+  function isExpiryInMonthRange(expiryDate, monthOffset) {
+    const expiry = parseDateAtMidnight(expiryDate);
+    if (Number.isNaN(expiry.getTime())) {
+      return false;
+    }
+    const { start, end } = getMonthDateRange(monthOffset);
+    return expiry >= start && expiry <= end;
+  }
+  function getManagementInsightMetrics() {
+    const rows = getAllComplianceRows();
+    let totalOpenActions = 0;
+    let expiredLinkedOpenActions = 0;
+    let missingEvidenceRecords = 0;
+    let expiringThisMonth = 0;
+    let expiringNextMonth = 0;
+    let validWithEvidence = 0;
+    rows.forEach((row) => {
+      const actionSummary = getActionSummary(row.actions);
+      const evidenceCount = getEvidenceSummary(row.evidence).count;
+      const status = getStatus(row.expiryDate);
+      totalOpenActions += actionSummary.openCount;
+      if (status.key === "expired") {
+        expiredLinkedOpenActions += actionSummary.openCount;
+      }
+      if (evidenceCount === 0) {
+        missingEvidenceRecords += 1;
+      }
+      if (status.key !== "expired" && isExpiryInMonthRange(row.expiryDate, 0)) {
+        expiringThisMonth += 1;
+      }
+      if (isExpiryInMonthRange(row.expiryDate, 1)) {
+        expiringNextMonth += 1;
+      }
+      if (status.key === "valid" && evidenceCount > 0) {
+        validWithEvidence += 1;
+      }
+    });
+    const totalRecords = rows.length;
+    const healthScore = totalRecords === 0 ? 0 : Math.round(validWithEvidence / totalRecords * 100);
+    return {
+      totalOpenActions,
+      expiredLinkedOpenActions,
+      missingEvidenceRecords,
+      expiringThisMonth,
+      expiringNextMonth,
+      healthScore,
+      validWithEvidence,
+      totalRecords
+    };
+  }
+  function getInsightTitle(insightType) {
+    const titles = {
+      [INSIGHT_TYPES.OPEN_ACTIONS]: "Records with Open Actions",
+      [INSIGHT_TYPES.EXPIRED_LINKED_ACTIONS]: "Expired Records with Open Actions",
+      [INSIGHT_TYPES.MISSING_EVIDENCE]: "Records Missing Evidence",
+      [INSIGHT_TYPES.EXPIRING_THIS_MONTH]: "Expiring This Month",
+      [INSIGHT_TYPES.EXPIRING_NEXT_MONTH]: "Expiring Next Month",
+      [INSIGHT_TYPES.HEALTH_SCORE]: "Valid Records with Evidence"
+    };
+    return titles[insightType] || "Management Insight";
+  }
+  function getInsightFilename(insightType) {
+    return `management-insight-${insightType.replace(/-/g, "_")}.csv`;
+  }
+  function getInsightRowsForType(insightType) {
+    const rows = getAllComplianceRows();
+    if (insightType === INSIGHT_TYPES.OPEN_ACTIONS) {
+      return rows.filter((row) => getActionSummary(row.actions).openCount > 0);
+    }
+    if (insightType === INSIGHT_TYPES.EXPIRED_LINKED_ACTIONS) {
+      return rows.filter(
+        (row) => getStatus(row.expiryDate).key === "expired" && getActionSummary(row.actions).openCount > 0
+      );
+    }
+    if (insightType === INSIGHT_TYPES.MISSING_EVIDENCE) {
+      return rows.filter((row) => getEvidenceSummary(row.evidence).count === 0);
+    }
+    if (insightType === INSIGHT_TYPES.EXPIRING_THIS_MONTH) {
+      return rows.filter(
+        (row) => getStatus(row.expiryDate).key !== "expired" && isExpiryInMonthRange(row.expiryDate, 0)
+      );
+    }
+    if (insightType === INSIGHT_TYPES.EXPIRING_NEXT_MONTH) {
+      return rows.filter((row) => isExpiryInMonthRange(row.expiryDate, 1));
+    }
+    if (insightType === INSIGHT_TYPES.HEALTH_SCORE) {
+      return rows.filter(
+        (row) => getStatus(row.expiryDate).key === "valid" && getEvidenceSummary(row.evidence).count > 0
+      );
+    }
+    return rows;
+  }
+  function buildInsightPreviewRow(row) {
+    const status = getStatus(row.expiryDate);
+    const evidenceSummary = getEvidenceSummary(row.evidence);
+    const actionSummary = getActionSummary(row.actions);
+    return {
+      name: row.name,
+      role: row.role,
+      complianceType: row.complianceType,
+      expiryDate: formatDate(row.expiryDate),
+      status: getStatusBadgeLabel(status.key),
+      openActionCount: String(actionSummary.openCount),
+      evidenceCount: String(evidenceSummary.count)
+    };
+  }
+  function buildInsightReport(insightType) {
+    const generatedAt = /* @__PURE__ */ new Date();
+    const rows = getInsightRowsForType(insightType).sort(
+      (a, b) => a.expiryDate.localeCompare(b.expiryDate) || a.name.localeCompare(b.name)
+    );
+    return {
+      type: insightType,
+      title: getInsightTitle(insightType),
+      generatedAt: generatedAt.toISOString(),
+      generatedDisplay: generatedAt.toLocaleString("en-GB", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit"
+      }),
+      totalCount: rows.length,
+      columns: INSIGHT_PREVIEW_COLUMNS,
+      tableRows: rows.map(buildInsightPreviewRow),
+      filename: getInsightFilename(insightType)
+    };
+  }
+  function renderManagementInsights() {
+    if (!insightHealthScore) {
+      return;
+    }
+    const metrics = getManagementInsightMetrics();
+    insightOpenActions.textContent = metrics.totalOpenActions;
+    insightExpiredLinkedActions.textContent = metrics.expiredLinkedOpenActions;
+    insightMissingEvidence.textContent = metrics.missingEvidenceRecords;
+    insightExpiringThisMonth.textContent = metrics.expiringThisMonth;
+    insightExpiringNextMonth.textContent = metrics.expiringNextMonth;
+    insightHealthScore.textContent = `${metrics.healthScore}%`;
+    insightHealthScore.classList.remove("health-high", "health-medium", "health-low");
+    if (metrics.healthScore >= 80) {
+      insightHealthScore.classList.add("health-high");
+    } else if (metrics.healthScore >= 50) {
+      insightHealthScore.classList.add("health-medium");
+    } else {
+      insightHealthScore.classList.add("health-low");
+    }
+  }
+  function updateInsightCardActiveState() {
+    insightCards.forEach((card) => {
+      card.classList.toggle(
+        "active",
+        Boolean(currentInsight && card.dataset.insight === currentInsight.type)
+      );
+    });
+  }
+  function renderInsightPreview(insight) {
+    if (!insightPreview || !insightPreviewTitle || !insightPreviewMeta || !insightTableHead || !insightTableBody) {
+      return;
+    }
+    currentInsight = insight;
+    insightPreviewTitle.textContent = insight.title;
+    insightPreviewMeta.textContent = `Generated: ${insight.generatedDisplay} \xB7 Records included: ${insight.totalCount}`;
+    insightTableHead.innerHTML = `
+    <tr>
+      ${insight.columns.map((column) => `<th>${escapeHtml(column.label)}</th>`).join("")}
+    </tr>
+  `;
+    if (insight.tableRows.length === 0) {
+      insightTableBody.innerHTML = `
+      <tr>
+        <td colspan="${insight.columns.length}" class="insight-empty-cell">No records match this insight.</td>
+      </tr>
+    `;
+    } else {
+      insightTableBody.innerHTML = insight.tableRows.map(
+        (row) => `
+          <tr>
+            ${insight.columns.map((column) => `<td>${escapeHtml(row[column.key] ?? "")}</td>`).join("")}
+          </tr>
+        `
+      ).join("");
+    }
+    insightPreview.classList.remove("hidden");
+    if (insightEmptyHint) {
+      insightEmptyHint.classList.add("hidden");
+    }
+    updateInsightCardActiveState();
+  }
+  function showManagementInsight(insightType) {
+    renderInsightPreview(buildInsightReport(insightType));
+    if (insightPreview) {
+      insightPreview.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+  }
+  function clearInsightPreview() {
+    currentInsight = null;
+    if (insightPreview) {
+      insightPreview.classList.add("hidden");
+    }
+    if (insightTableHead) {
+      insightTableHead.innerHTML = "";
+    }
+    if (insightTableBody) {
+      insightTableBody.innerHTML = "";
+    }
+    if (insightEmptyHint) {
+      insightEmptyHint.classList.remove("hidden");
+    }
+    updateInsightCardActiveState();
+  }
+  function exportInsightCsv() {
+    if (!currentInsight) {
+      showMessage(appMessage, "Select an insight to preview first.", "error");
+      return;
+    }
+    const headerRow = currentInsight.columns.map((column) => escapeCsvValue(column.label)).join(",");
+    const dataRows = currentInsight.tableRows.map(
+      (row) => currentInsight.columns.map((column) => escapeCsvValue(row[column.key] ?? "")).join(",")
+    );
+    const summaryLines = [
+      `"Insight","${escapeCsvValue(currentInsight.title)}"`,
+      `"Generated","${escapeCsvValue(currentInsight.generatedDisplay)}"`,
+      `"Records included","${currentInsight.totalCount}"`,
+      ""
+    ];
+    const csvContent = [...summaryLines, headerRow, ...dataRows].join("\n");
+    downloadFile(csvContent, currentInsight.filename, "text/csv");
+    showMessage(appMessage, "Insight CSV downloaded.", "success");
+  }
+  function setupManagementInsightListeners() {
+    insightCards.forEach((card) => {
+      card.addEventListener("click", () => {
+        showManagementInsight(card.dataset.insight);
+      });
+    });
+    exportInsightCsvBtn?.addEventListener("click", exportInsightCsv);
+    clearInsightPreviewBtn?.addEventListener("click", clearInsightPreview);
+  }
   function isRecordActionRequired(row) {
     if (getStatus(row.expiryDate).key === "expired") {
       return true;
     }
     return Boolean(getReminderForRecord(row));
+  }
+  function actionRowKey(personId, recordId) {
+    return `${personId}:${recordId}`;
+  }
+  function clearRecordSelection() {
+    selectedRecordKeys.clear();
+    renderBulkSelectionToolbar();
+  }
+  function getSelectedComplianceRows() {
+    return getAllComplianceRows().filter(
+      (row) => selectedRecordKeys.has(actionRowKey(row.personId, row.recordId))
+    );
+  }
+  function toggleRecordSelection(personId, recordId, selected) {
+    const key = actionRowKey(personId, recordId);
+    if (selected) {
+      selectedRecordKeys.add(key);
+    } else {
+      selectedRecordKeys.delete(key);
+    }
+    renderBulkSelectionToolbar();
+  }
+  function toggleSelectAllOnPage(pageRows, selected) {
+    pageRows.forEach((row) => {
+      const key = actionRowKey(row.personId, row.recordId);
+      if (selected) {
+        selectedRecordKeys.add(key);
+      } else {
+        selectedRecordKeys.delete(key);
+      }
+    });
+    renderBulkSelectionToolbar();
+  }
+  function renderBulkSelectionToolbar() {
+    if (!bulkSelectionToolbar || !bulkSelectionCount) {
+      return;
+    }
+    const count = selectedRecordKeys.size;
+    bulkSelectionToolbar.classList.toggle("hidden", count === 0);
+    bulkSelectionCount.textContent = count === 1 ? "1 record selected" : `${count} records selected`;
+  }
+  function updateSelectAllPageCheckbox(pageRows) {
+    if (!selectAllPageCheckbox) {
+      return;
+    }
+    if (pageRows.length === 0) {
+      selectAllPageCheckbox.checked = false;
+      selectAllPageCheckbox.indeterminate = false;
+      selectAllPageCheckbox.disabled = true;
+      return;
+    }
+    selectAllPageCheckbox.disabled = false;
+    const selectedOnPage = pageRows.filter(
+      (row) => selectedRecordKeys.has(actionRowKey(row.personId, row.recordId))
+    ).length;
+    selectAllPageCheckbox.checked = selectedOnPage === pageRows.length;
+    selectAllPageCheckbox.indeterminate = selectedOnPage > 0 && selectedOnPage < pageRows.length;
   }
   function buildActionItemHtml(personId, recordId, item) {
     const statusLabel = item.completed ? "Completed" : "Open";
@@ -1275,6 +1625,12 @@ This cannot be undone.`
       return;
     }
     renderReportPreview(buildReport(currentReport.type));
+  }
+  function refreshActiveInsightPreview() {
+    if (!currentInsight?.type || !insightPreview || insightPreview.classList.contains("hidden")) {
+      return;
+    }
+    renderInsightPreview(buildInsightReport(currentInsight.type));
   }
   function openRecordWorkspace(personId, recordId) {
     const result = findPersonAndRecord(personId, recordId);
@@ -1499,21 +1855,10 @@ This cannot be undone.`
       hideMessage(actionModalMessage);
     }
   }
-  function handleSaveAction() {
-    if (!actionModalContext) {
-      return;
-    }
-    const title = actionTitleInput.value.trim();
-    const notes = actionNotesInput.value.trim();
-    if (!title) {
-      showMessage(actionModalMessage, "Action title is required.", "error");
-      return;
-    }
-    const { personId, recordId, recordLabel } = actionModalContext;
+  function addActionToRecord(personId, recordId, title, notes = "") {
     const result = findPersonAndRecord(personId, recordId);
     if (!result) {
-      closeActionModal();
-      return;
+      return false;
     }
     const actionItem = {
       id: repository.nextActionId++,
@@ -1532,6 +1877,82 @@ This cannot be undone.`
       HISTORY_ACTIONS.ACTION_ADDED,
       `Action added: ${title}.`
     );
+    return true;
+  }
+  function openBulkAddActionModal() {
+    const count = selectedRecordKeys.size;
+    if (count === 0 || !bulkActionModal) {
+      showMessage(appMessage, "Select one or more records first.", "error");
+      return;
+    }
+    bulkActionModalRecordLabel.textContent = count === 1 ? "This action will be added to 1 selected record." : `This action will be added to ${count} selected records.`;
+    bulkActionTitleInput.value = "";
+    bulkActionNotesInput.value = "";
+    hideMessage(bulkActionModalMessage);
+    bulkActionModal.classList.remove("hidden");
+    bulkActionModal.setAttribute("aria-hidden", "false");
+    bulkActionTitleInput.focus();
+  }
+  function closeBulkActionModal() {
+    if (!bulkActionModal) {
+      return;
+    }
+    bulkActionModal.classList.add("hidden");
+    bulkActionModal.setAttribute("aria-hidden", "true");
+    if (bulkActionModalMessage) {
+      hideMessage(bulkActionModalMessage);
+    }
+  }
+  function handleBulkSaveAction() {
+    const title = bulkActionTitleInput.value.trim();
+    const notes = bulkActionNotesInput.value.trim();
+    if (!title) {
+      showMessage(bulkActionModalMessage, "Action title is required.", "error");
+      return;
+    }
+    const rows = getSelectedComplianceRows();
+    if (rows.length === 0) {
+      closeBulkActionModal();
+      clearRecordSelection();
+      renderTable({ refreshDashboards: false });
+      return;
+    }
+    let addedCount = 0;
+    rows.forEach((row) => {
+      if (addActionToRecord(row.personId, row.recordId, title, notes)) {
+        addedCount += 1;
+      }
+    });
+    if (addedCount === 0) {
+      showMessage(bulkActionModalMessage, "No records could be updated.", "error");
+      return;
+    }
+    savePeople();
+    closeBulkActionModal();
+    showMessage(
+      appMessage,
+      `Added action "${title}" to ${addedCount} record${addedCount === 1 ? "" : "s"}.`,
+      "success"
+    );
+    renderTable({ refreshDashboards: false });
+  }
+  function handleSaveAction() {
+    if (!actionModalContext) {
+      return;
+    }
+    const title = actionTitleInput.value.trim();
+    const notes = actionNotesInput.value.trim();
+    if (!title) {
+      showMessage(actionModalMessage, "Action title is required.", "error");
+      return;
+    }
+    const { personId, recordId, recordLabel } = actionModalContext;
+    const result = findPersonAndRecord(personId, recordId);
+    if (!result) {
+      closeActionModal();
+      return;
+    }
+    addActionToRecord(personId, recordId, title, notes);
     savePeople();
     closeActionModal();
     showMessage(appMessage, `Action added to ${recordLabel}.`, "success");
@@ -1670,6 +2091,77 @@ This cannot be undone.`
     }
     if (actionSummaryExpiredOpen) {
       actionSummaryExpiredOpen.textContent = counts.expiredWithOpenActions;
+    }
+  }
+  function setupBulkActionModalListeners() {
+    if (!bulkActionModal) {
+      return;
+    }
+    bulkActionModal.addEventListener("click", (event) => {
+      const target = event.target instanceof Element ? event.target : event.target.parentElement;
+      if (!target) {
+        return;
+      }
+      if (target === bulkActionModal) {
+        closeBulkActionModal();
+        return;
+      }
+      const templateButton = target.closest(".bulk-action-template-btn");
+      if (templateButton) {
+        bulkActionTitleInput.value = templateButton.dataset.title || "";
+        bulkActionTitleInput.focus();
+        return;
+      }
+      const actionButton = target.closest(
+        "#bulk-action-save-btn, #bulk-action-cancel-btn, #bulk-action-modal-close-btn"
+      );
+      if (!actionButton) {
+        return;
+      }
+      event.preventDefault();
+      if (actionButton.id === "bulk-action-save-btn") {
+        handleBulkSaveAction();
+      } else {
+        closeBulkActionModal();
+      }
+    });
+  }
+  function setupBulkSelectionListeners() {
+    bulkClearSelectionBtn?.addEventListener("click", () => {
+      clearRecordSelection();
+      renderTable({ refreshDashboards: false });
+    });
+    bulkExportCsvBtn?.addEventListener("click", exportSelectedToCsv);
+    bulkAddActionBtn?.addEventListener("click", openBulkAddActionModal);
+    bulkMarkRemindersBtn?.addEventListener("click", bulkMarkSelectedRemindersSent);
+    selectAllPageCheckbox?.addEventListener("change", () => {
+      const filteredRows = sortComplianceRows(getFilteredComplianceRows());
+      const pageRows = paginateRows(filteredRows);
+      toggleSelectAllOnPage(pageRows, selectAllPageCheckbox.checked);
+      renderTable({ refreshDashboards: false });
+    });
+    if (tableBody) {
+      tableBody.addEventListener("change", (event) => {
+        const checkbox = event.target;
+        if (!checkbox.matches(".row-select-checkbox")) {
+          return;
+        }
+        toggleRecordSelection(
+          Number(checkbox.dataset.personId),
+          Number(checkbox.dataset.recordId),
+          checkbox.checked
+        );
+        const filteredRows = sortComplianceRows(getFilteredComplianceRows());
+        updateSelectAllPageCheckbox(paginateRows(filteredRows));
+        tableBody.querySelectorAll(".row-select-checkbox").forEach((input) => {
+          const row = input.closest("tr");
+          const isChecked = selectedRecordKeys.has(
+            actionRowKey(Number(input.dataset.personId), Number(input.dataset.recordId))
+          );
+          input.checked = isChecked;
+          row?.classList.toggle("row-selected", isChecked);
+        });
+      });
     }
   }
   function setupActionModalListeners() {
@@ -1846,6 +2338,7 @@ This cannot be undone.`
     expandedHistoryRows.clear();
     expandedEvidenceRows.clear();
     expandedActionRows.clear();
+    selectedRecordKeys.clear();
     closeRecordWorkspace();
     showMessage(appMessage, "Sample data has been restored.", "success");
     renderTable();
@@ -1959,7 +2452,10 @@ This cannot be undone.`
     paginationPrevBtn.disabled = currentTablePage <= 1;
     paginationNextBtn.disabled = currentTablePage >= Math.ceil(filteredCount / RECORDS_PER_PAGE);
   }
-  function refreshRegisterView({ resetPage = false } = {}) {
+  function refreshRegisterView({ resetPage = false, clearSelection = false } = {}) {
+    if (clearSelection) {
+      clearRecordSelection();
+    }
     if (resetPage) {
       resetTablePage();
     }
@@ -2027,20 +2523,15 @@ This cannot be undone.`
       renderReminders();
     });
   }
-  function markReminderSent(personId, recordId, reminderType) {
+  function applyReminderSent(personId, recordId, reminderType) {
     const result = findPersonAndRecord(personId, recordId);
     if (!result) {
-      return;
+      return { status: "not_found" };
     }
     const sentText = getReminderSentText(reminderType);
     const existingNotes = result.record.notes || "";
     if (isReminderTypeMarkedSent(existingNotes, reminderType)) {
-      showMessage(
-        appMessage,
-        `This ${sentText.toLowerCase()} entry is already recorded.`,
-        "error"
-      );
-      return;
+      return { status: "skipped", reason: "already_sent" };
     }
     const auditLine = `${formatAuditDate()} - ${sentText}`;
     result.record.notes = existingNotes ? `${existingNotes}
@@ -2050,10 +2541,93 @@ ${auditLine}` : auditLine;
       HISTORY_ACTIONS.REMINDER_SENT,
       `${sentText} recorded.`
     );
+    return { status: "marked", notes: result.record.notes };
+  }
+  function markReminderSent(personId, recordId, reminderType, { silent = false } = {}) {
+    const outcome = applyReminderSent(personId, recordId, reminderType);
+    if (outcome.status === "not_found") {
+      return outcome;
+    }
+    if (outcome.status === "skipped") {
+      if (!silent) {
+        showMessage(
+          appMessage,
+          `This ${getReminderSentText(reminderType).toLowerCase()} entry is already recorded.`,
+          "error"
+        );
+      }
+      return outcome;
+    }
     savePeople();
-    syncNotesInTable(personId, recordId, result.record.notes);
+    syncNotesInTable(personId, recordId, outcome.notes);
     refreshActionRequiredUI();
-    showMessage(appMessage, `Recorded: ${auditLine}`, "success");
+    if (!silent) {
+      const sentText = getReminderSentText(reminderType);
+      showMessage(appMessage, `Recorded: ${formatAuditDate()} - ${sentText}`, "success");
+    }
+    return outcome;
+  }
+  function bulkMarkSelectedRemindersSent() {
+    const rows = getSelectedComplianceRows();
+    if (rows.length === 0) {
+      showMessage(appMessage, "Select one or more records first.", "error");
+      return;
+    }
+    let markedCount = 0;
+    let skippedNoReminder = 0;
+    let skippedAlreadySent = 0;
+    rows.forEach((row) => {
+      const reminder = getReminderForRecord({ expiryDate: row.expiryDate });
+      if (!reminder) {
+        skippedNoReminder += 1;
+        return;
+      }
+      const outcome = applyReminderSent(
+        row.personId,
+        row.recordId,
+        reminder.reminderType
+      );
+      if (outcome.status === "marked") {
+        markedCount += 1;
+        syncNotesInTable(row.personId, row.recordId, outcome.notes);
+      } else if (outcome.status === "skipped") {
+        skippedAlreadySent += 1;
+      }
+    });
+    if (markedCount > 0) {
+      savePeople();
+      refreshActionRequiredUI();
+      renderTable({ refreshDashboards: false });
+    }
+    if (markedCount === 0 && skippedNoReminder === rows.length) {
+      showMessage(
+        appMessage,
+        "None of the selected records have an active reminder.",
+        "error"
+      );
+      return;
+    }
+    const parts = [];
+    if (markedCount > 0) {
+      parts.push(
+        `Marked reminders sent for ${markedCount} record${markedCount === 1 ? "" : "s"}`
+      );
+    }
+    if (skippedAlreadySent > 0) {
+      parts.push(
+        `skipped ${skippedAlreadySent} already sent`
+      );
+    }
+    if (skippedNoReminder > 0) {
+      parts.push(
+        `skipped ${skippedNoReminder} with no active reminder`
+      );
+    }
+    showMessage(
+      appMessage,
+      parts.join("; ") + ".",
+      markedCount > 0 ? "success" : "error"
+    );
   }
   function syncNotesInTable(personId, recordId, notes) {
     const textarea = tableBody.querySelector(
@@ -2224,7 +2798,7 @@ ${auditLine}` : auditLine;
       setExpiryWindowFilter(null);
     }
     updateFilterActiveState();
-    refreshRegisterView({ resetPage: true });
+    refreshRegisterView({ resetPage: true, clearSelection: true });
   }
   function renderActiveFilters() {
     if (!activeFilterChips || !clearFiltersBtn) {
@@ -2312,6 +2886,7 @@ ${auditLine}` : auditLine;
     summaryDueSoon.textContent = counts.dueSoon;
     summaryExpired.textContent = counts.expired;
     renderActionSummaryCards();
+    renderManagementInsights();
     updateSummaryActiveState();
   }
   function renderAnalytics() {
@@ -2462,10 +3037,12 @@ ${auditLine}` : auditLine;
   }
   function showAllPeople() {
     clearAllFilters();
+    clearRecordSelection();
     renderTable();
     peopleSection.scrollIntoView({ behavior: "smooth" });
   }
   function filterByExpiryWindow(days) {
+    clearRecordSelection();
     setExpiryWindowFilter(days);
     searchInput.value = "";
     statusFilter.value = "all";
@@ -2478,6 +3055,7 @@ ${auditLine}` : auditLine;
     peopleSection.scrollIntoView({ behavior: "smooth" });
   }
   function filterByStatus(statusKey) {
+    clearRecordSelection();
     setExpiryWindowFilter(null);
     searchInput.value = "";
     statusFilter.value = statusKey;
@@ -2645,6 +3223,7 @@ This cannot be undone.`
       }
     });
     expandedHistoryRows.delete(historyRowKey(personId, recordId));
+    selectedRecordKeys.delete(actionRowKey(personId, recordId));
     if (Number(editIdInput.value) === personId && Number(editRecordIdInput.value) === recordId) {
       hideEditForm();
     }
@@ -2820,10 +3399,18 @@ ${auditLine}` : auditLine;
       const actionSummary = getActionSummary(row.actions);
       const openActionsClass = actionSummary.openCount > 0 ? "open-actions-count has-open" : "open-actions-count";
       const tableRow = document.createElement("tr");
+      const rowKey = actionRowKey(row.personId, row.recordId);
+      const isSelected = selectedRecordKeys.has(rowKey);
       if (workspaceContext && workspaceContext.personId === row.personId && workspaceContext.recordId === row.recordId) {
         tableRow.classList.add("workspace-active-row");
       }
+      if (isSelected) {
+        tableRow.classList.add("row-selected");
+      }
       tableRow.innerHTML = `
+      <td class="select-column">
+        <input type="checkbox" class="row-select-checkbox" data-person-id="${row.personId}" data-record-id="${row.recordId}" aria-label="Select ${escapeHtml(row.name)} \u2014 ${escapeHtml(row.complianceType)}"${isSelected ? " checked" : ""}>
+      </td>
       <td>${row.name}</td>
       <td>${row.role}</td>
       <td class="compliance-type-cell">${row.complianceType}</td>
@@ -2854,6 +3441,9 @@ ${auditLine}` : auditLine;
       renderRecordWorkspace();
     }
     refreshActiveReportPreview();
+    refreshActiveInsightPreview();
+    renderBulkSelectionToolbar();
+    updateSelectAllPageCheckbox(pageRows);
   }
   function escapeHtml(value) {
     return String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -3229,42 +3819,59 @@ ${auditLine}` : auditLine;
       printReportBtn.addEventListener("click", printReport);
     }
   }
+  var COMPLIANCE_CSV_HEADERS = [
+    "Name",
+    "Role",
+    "Compliance Type",
+    "Renewal Cycle",
+    "Expiry Date",
+    "Status",
+    "Reminder Status",
+    "Evidence Count",
+    "Latest Evidence Added",
+    "Open Action Count",
+    "Completed Action Count",
+    "Notes"
+  ];
+  function buildComplianceCsvRow(row) {
+    const status = getStatus(row.expiryDate);
+    const evidenceSummary = getEvidenceSummary(row.evidence);
+    const actionSummary = getActionSummary(row.actions);
+    return [
+      escapeCsvValue(row.name),
+      escapeCsvValue(row.role),
+      escapeCsvValue(row.complianceType),
+      escapeCsvValue(getRenewalCycleLabel(row.renewalCycle)),
+      escapeCsvValue(formatDate(row.expiryDate)),
+      escapeCsvValue(status.label),
+      escapeCsvValue(getReminderStatusLabel(row.expiryDate, row.notes)),
+      escapeCsvValue(String(evidenceSummary.count)),
+      escapeCsvValue(evidenceSummary.latestAdded),
+      escapeCsvValue(String(actionSummary.openCount)),
+      escapeCsvValue(String(actionSummary.completedCount)),
+      escapeCsvValue(row.notes || "")
+    ].join(",");
+  }
+  function buildComplianceCsvContent(rows) {
+    return [COMPLIANCE_CSV_HEADERS.join(","), ...rows.map(buildComplianceCsvRow)].join("\n");
+  }
   function exportToCsv() {
-    const headers = [
-      "Name",
-      "Role",
-      "Compliance Type",
-      "Renewal Cycle",
-      "Expiry Date",
-      "Status",
-      "Reminder Status",
-      "Evidence Count",
-      "Latest Evidence Added",
-      "Open Action Count",
-      "Completed Action Count",
-      "Notes"
-    ];
-    const rows = getAllComplianceRows().map((row) => {
-      const status = getStatus(row.expiryDate);
-      const evidenceSummary = getEvidenceSummary(row.evidence);
-      const actionSummary = getActionSummary(row.actions);
-      return [
-        escapeCsvValue(row.name),
-        escapeCsvValue(row.role),
-        escapeCsvValue(row.complianceType),
-        escapeCsvValue(getRenewalCycleLabel(row.renewalCycle)),
-        escapeCsvValue(formatDate(row.expiryDate)),
-        escapeCsvValue(status.label),
-        escapeCsvValue(getReminderStatusLabel(row.expiryDate, row.notes)),
-        escapeCsvValue(String(evidenceSummary.count)),
-        escapeCsvValue(evidenceSummary.latestAdded),
-        escapeCsvValue(String(actionSummary.openCount)),
-        escapeCsvValue(String(actionSummary.completedCount)),
-        escapeCsvValue(row.notes || "")
-      ].join(",");
-    });
-    const csvContent = [headers.join(","), ...rows].join("\n");
+    const csvContent = buildComplianceCsvContent(getAllComplianceRows());
     downloadFile(csvContent, "compliance-reminder-data.csv", "text/csv");
+  }
+  function exportSelectedToCsv() {
+    const rows = getSelectedComplianceRows();
+    if (rows.length === 0) {
+      showMessage(appMessage, "Select one or more records to export.", "error");
+      return;
+    }
+    const csvContent = buildComplianceCsvContent(rows);
+    downloadFile(csvContent, "compliance-reminder-selected.csv", "text/csv");
+    showMessage(
+      appMessage,
+      `Exported ${rows.length} selected record${rows.length === 1 ? "" : "s"} to CSV.`,
+      "success"
+    );
   }
   function exportBackup() {
     const backup = repository.buildBackup();
@@ -3280,6 +3887,7 @@ ${auditLine}` : auditLine;
     expandedHistoryRows.clear();
     expandedEvidenceRows.clear();
     expandedActionRows.clear();
+    selectedRecordKeys.clear();
     closeRecordWorkspace();
     hideEditForm();
     savePeople();
@@ -3692,6 +4300,8 @@ Your current data will be overwritten. Continue?`
         closeEvidenceModal();
       } else if (actionModalContext) {
         closeActionModal();
+      } else if (bulkActionModal && !bulkActionModal.classList.contains("hidden")) {
+        closeBulkActionModal();
       } else if (workspaceContext) {
         closeRecordWorkspace();
       }
@@ -3825,17 +4435,17 @@ Your current data will be overwritten. Continue?`
   });
   searchInput?.addEventListener("input", () => {
     updateFilterActiveState();
-    refreshRegisterView({ resetPage: true });
+    refreshRegisterView({ resetPage: true, clearSelection: true });
   });
   statusFilter?.addEventListener("change", () => {
     reconcileStatusExpiryFilters("status");
     updateFilterActiveState();
-    refreshRegisterView({ resetPage: true });
+    refreshRegisterView({ resetPage: true, clearSelection: true });
   });
   complianceTypeFilter?.addEventListener("change", () => {
     setExpiryWindowFilter(null);
     updateFilterActiveState();
-    refreshRegisterView({ resetPage: true });
+    refreshRegisterView({ resetPage: true, clearSelection: true });
   });
   if (expiryWindowFilterSelect) {
     expiryWindowFilterSelect.addEventListener("change", () => {
@@ -3843,7 +4453,7 @@ Your current data will be overwritten. Continue?`
       setExpiryWindowFilter(value === "all" ? null : Number(value));
       reconcileStatusExpiryFilters("expiry");
       updateFilterActiveState();
-      refreshRegisterView({ resetPage: true });
+      refreshRegisterView({ resetPage: true, clearSelection: true });
     });
   }
   if (activeFilterChips) {
@@ -3894,6 +4504,9 @@ Your current data will be overwritten. Continue?`
   setupRenewModalListeners();
   setupEvidenceModalListeners();
   setupActionModalListeners();
+  setupBulkActionModalListeners();
+  setupBulkSelectionListeners();
+  setupManagementInsightListeners();
   setupRecordWorkspaceListeners();
   setupReportListeners();
   loadReminderSettings();

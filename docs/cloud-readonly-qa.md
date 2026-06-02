@@ -151,6 +151,24 @@ Requires migration `20260203000004` and `?backend=cloud&cloudWrites=1` on **loca
 
 ---
 
+## J. Limited writes — Edit compliance record (Step 11)
+
+Requires migration `20260203000005` and `?backend=cloud&cloudWrites=1` on **localhost or staging only**.
+
+| # | Check | Editor | Viewer |
+|---|--------|:------:|:------:|
+| J1 | Banner mentions edit compliance records | ☐ | ☐ |
+| J2 | Edit role + compliance type + expiry + cycle — success, persists after refresh | ☐ | N/A |
+| J3 | Notes field disabled in edit form; existing notes unchanged after save | ☐ | N/A |
+| J4 | Rename to existing person name — error, no duplicate person | ☐ | N/A |
+| J5 | No changes submit — appropriate message | ☐ | N/A |
+| J6 | Delete / CSV / workspace Save Notes still blocked | ☐ | ☐ |
+| J7 | Mark Sent + renew + add + action complete/reopen still work | ☐ | N/A |
+| J8 | Viewer: Edit disabled | N/A | ☐ |
+| J9 | `?backend=cloud` without `cloudWrites` — edit form disabled | ☐ | ☐ |
+
+---
+
 ## E. RLS (database — optional manual)
 
 Postgres write policies are validated in `docs/cloud-phase1-rls-checklist.md` (SQL Editor). No app write tests in Step 6.

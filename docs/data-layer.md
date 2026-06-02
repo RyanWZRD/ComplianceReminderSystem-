@@ -18,7 +18,7 @@ js/data/
   supabase-client.js        Browser Supabase client
   cloud-mapper.js           Internal Postgres row → nested app shape
   renew-compliance.js       Renewal mode mapping + custom date validation (London today)
-  cloud-store.js            CloudComplianceStore (load; markReminderSent, setActionStatus, renewCompliance RPC; save is no-op)
+  cloud-store.js            CloudComplianceStore (load; markReminderSent, setActionStatus, renewCompliance, createComplianceRecord, updateComplianceRecord RPC; save is no-op)
   cloud-settings-store.js   CloudSettingsStore (load-only; setSettings throws)
 ```
 
@@ -43,7 +43,7 @@ export const DATA_BACKEND = "local"; // committed default
 
 Browser cloud dev: `?backend=cloud` in the URL. Node verify scripts: `process.env.DATA_BACKEND=cloud`.
 
-Cloud **load** is implemented. **Mark Reminder Sent**, **renew compliance**, **action complete/reopen**, and **add compliance record** use RPC when `CLOUD_WRITES_ENABLED` is true. All other cloud mutations remain blocked (`canMutateData()` false in cloud). See `js/app/permissions.js` (`canMarkReminderSent()`, `canRenewCompliance()`, `canSetActionStatus()`, `canAddComplianceRecord()`).
+Cloud **load** is implemented. **Mark Reminder Sent**, **renew compliance**, **action complete/reopen**, **add compliance record**, and **edit compliance record** use RPC when `CLOUD_WRITES_ENABLED` is true. All other cloud mutations remain blocked (`canMutateData()` false in cloud). See `js/app/permissions.js` (`canMarkReminderSent()`, `canRenewCompliance()`, `canSetActionStatus()`, `canAddComplianceRecord()`, `canEditComplianceRecord()`).
 
 ## Verify scripts
 

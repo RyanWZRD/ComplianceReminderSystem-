@@ -277,6 +277,19 @@ npm run verify-cloud-create-compliance-record
 
 See `docs/cloud-writes-step10.md`.
 
+## Phase 2 Step 11 — Edit compliance record RPC
+
+- Migration: `supabase/migrations/20260203000005_update_compliance_record_rpc.sql`
+- `canMutateData()` stays false; `canEditComplianceRecord()` enables edit form only (notes field disabled in cloud)
+- Person + record updated atomically; rename collision returns `name_conflict`; notes column untouched
+
+```bash
+supabase db push
+npm run verify-cloud-edit-compliance-record
+```
+
+See `docs/cloud-writes-step11.md`.
+
 ## Rollback
 
 | Scenario | Action |

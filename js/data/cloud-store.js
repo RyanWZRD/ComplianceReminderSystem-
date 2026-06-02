@@ -9,6 +9,7 @@ import { mapActionStatusToRpcTarget } from "./action-status.js";
 import { mapReminderTypeToRpcCode } from "./reminder-sent.js";
 import { mapRenewalModeToRpc } from "./renew-compliance.js";
 import { mapCreateComplianceRecordToRpc } from "./create-compliance-record.js";
+import { mapEditComplianceRecordToRpc } from "./edit-compliance-record.js";
 import { LocalComplianceStore } from "./local-store.js";
 
 const READ_ONLY_MESSAGE =
@@ -360,6 +361,97 @@ export class CloudComplianceStore extends LocalComplianceStore {
     return {
       ok: false,
       error: `Unexpected create_compliance_record status: ${String(status)}`,
+    };
+  }
+
+  /**
+   * @param {{
+   *   personId: string;
+   *   recordId: string;
+   *   name: string;
+   *   role: string;
+   *   complianceType: string;
+   *   expiryDate: string;
+   *   renewalCycle: string;
+   * }} input
+   * @returns {Promise<
+   *   | {
+   *       ok: true;
+   *       status: "updated";
+   *       personId: string;
+   *       recordId: string;
+   *     }
+   *   | {
+   *       ok: true;
+   *       status: "no_changes" | "not_found" | "name_conflict";
+   *     }
+   *   | {
+   *       ok: true;
+   *       status: "validation_error";
+   *       field?: string;
+   *       reason?: string;
+   *     }
+   *   | { ok: false; error: string }
+   * >}
+   */
+  async updateComplianceRecord(input) {
+    if (!isSupabaseConfigured()) {
+      return { ok: false, error: "Supabase is not configured." };
+    }
+
+    await waitForAuthReady();
+
+    if (!isAuthenticated()) {
+      return { ok: false, error: "Not signed in." };
+    }
+
+    const supabase = getSupabaseClient();
+    const rpcArgs = mapEditComplianceRecordToRpc(input);
+    const { data, error } = await supabase.rpc("update_compliance_record", rpcArgs);
+
+    if (error) {
+      return { ok: false, error: error.message };
+    }
+
+    if (!data || typeof data !== "object") {
+      return { ok: false, error: "Unexpected response from update_compliance_record." };
+    }
+
+    const status = data.status;
+
+    if (status === "validation_error") {
+      return {
+        ok: true,
+        status: "validation_error",
+        field: typeof data.field === "string" ? data.field : undefined,
+        reason: typeof data.reason === "string" ? data.reason : undefined,
+      };
+    }
+
+    if (status === "not_found") {
+      return { ok: true, status: "not_found" };
+    }
+
+    if (status === "no_changes") {
+      return { ok: true, status: "no_changes" };
+    }
+
+    if (status === "name_conflict") {
+      return { ok: true, status: "name_conflict" };
+    }
+
+    if (status === "updated") {
+      return {
+        ok: true,
+        status: "updated",
+        personId: String(data.person_id ?? input.personId),
+        recordId: String(data.record_id ?? input.recordId),
+      };
+    }
+
+    return {
+      ok: false,
+      error: `Unexpected update_compliance_record status: ${String(status)}`,
     };
   }
 

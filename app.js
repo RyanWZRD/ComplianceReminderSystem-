@@ -14,6 +14,7 @@ import {
 } from "./js/auth/login-panel.js";
 import {
   canAddComplianceRecord,
+  canEditComplianceRecord,
   canMarkReminderSent,
   canMutateData,
   canMutateReminderSettings,
@@ -34,6 +35,7 @@ import {
   RENEWAL_MODES,
   validateCustomRenewalDate,
 } from "./js/data/renew-compliance.js";
+import { validateEditComplianceRecordInput } from "./js/data/edit-compliance-record.js";
 import {
   ACTION_STATUSES,
   ACTION_STATUS_LABELS,
@@ -460,6 +462,19 @@ function notifyAddComplianceRecordBlocked() {
     showMessage(
       appMessage,
       "Your role cannot add compliance records in cloud mode.",
+      "error"
+    );
+    return;
+  }
+
+  notifyReadOnlyBlocked();
+}
+
+function notifyEditComplianceRecordBlocked() {
+  if (isCloudMode() && CLOUD_WRITES_ENABLED) {
+    showMessage(
+      appMessage,
+      "Your role cannot edit compliance records in cloud mode.",
       "error"
     );
     return;
@@ -4569,7 +4584,12 @@ function filterByAnalyticsCard(filterKey) {
 
 // Show the edit form for one compliance record
 function startEdit(personId, recordId) {
-  if (rejectIfReadOnly()) {
+  if (isCloudMode()) {
+    if (!canEditComplianceRecord()) {
+      notifyEditComplianceRecordBlocked();
+      return;
+    }
+  } else if (rejectIfReadOnly()) {
     return;
   }
 
@@ -4687,6 +4707,86 @@ function updatePerson(
   );
   renderTable();
   return true;
+}
+
+async function persistUpdateComplianceRecord(
+  personId,
+  recordId,
+  name,
+  role,
+  complianceType,
+  expiryDate,
+  renewalCycle
+) {
+  if (!canEditComplianceRecord()) {
+    notifyEditComplianceRecordBlocked();
+    return;
+  }
+
+  const normalizedCycle = repository.normalizeRenewalCycle(renewalCycle);
+
+  const result = await repository.updateComplianceRecord({
+    personId: String(personId),
+    recordId: String(recordId),
+    name,
+    role,
+    complianceType: repository.normalizeComplianceType(complianceType),
+    expiryDate,
+    renewalCycle: normalizedCycle,
+  });
+
+  if (!result.ok) {
+    showMessage(editFormMessage, result.error || "Could not update record.", "error");
+    return;
+  }
+
+  if (result.status === "validation_error") {
+    showMessage(
+      editFormMessage,
+      "Could not update record. Check name, role, compliance type, and expiry date.",
+      "error"
+    );
+    return;
+  }
+
+  if (result.status === "name_conflict") {
+    showMessage(
+      editFormMessage,
+      "Another person already has this name. Choose a different name.",
+      "error"
+    );
+    return;
+  }
+
+  if (result.status === "not_found") {
+    showMessage(editFormMessage, "Record not found.", "error");
+    hideEditForm();
+    return;
+  }
+
+  if (result.status === "no_changes") {
+    hideEditForm();
+    showMessage(appMessage, "No changes made.", "error");
+    return;
+  }
+
+  if (result.status !== "updated") {
+    showMessage(editFormMessage, "Could not update record.", "error");
+    return;
+  }
+
+  const refreshed = await reloadCloudDataAfterWrite();
+
+  if (!refreshed) {
+    return;
+  }
+
+  hideEditForm();
+  showMessage(
+    appMessage,
+    `Record updated: ${name} — ${repository.normalizeComplianceType(complianceType)}.`,
+    "success"
+  );
 }
 
 // Save notes for one compliance record
@@ -5131,7 +5231,7 @@ function renderTable({ refreshDashboards = true } = {}) {
       <td><span class="status status-badge ${status.className}">${getStatusBadgeLabel(status.key)}</span></td>
       <td class="${openActionsClass}">${actionSummary.activeCount}</td>
       <td class="table-action-cell"><button type="button" class="details-btn" data-person-id="${row.personId}" data-record-id="${row.recordId}">Details</button></td>
-      <td class="table-action-cell"><button type="button" class="edit-btn" data-person-id="${row.personId}" data-record-id="${row.recordId}"${canMutateData() ? "" : " disabled"}>Edit</button></td>
+      <td class="table-action-cell"><button type="button" class="edit-btn" data-person-id="${row.personId}" data-record-id="${row.recordId}"${canEditComplianceRecord() ? "" : " disabled"}>Edit</button></td>
       <td class="table-action-cell"><button type="button" class="renew-btn" data-person-id="${row.personId}" data-record-id="${row.recordId}"${canRenewCompliance() ? "" : " disabled"}>Renew</button></td>
     `;
 
@@ -6257,10 +6357,6 @@ if (editForm) {
   editForm.addEventListener("submit", (event) => {
   event.preventDefault();
 
-  if (rejectIfReadOnly()) {
-    return;
-  }
-
   const personId = parseEntityId(editIdInput.value);
   const recordId = parseEntityId(editRecordIdInput.value);
   const name = document.getElementById("edit-name").value.trim();
@@ -6269,6 +6365,43 @@ if (editForm) {
   const expiryDate = document.getElementById("edit-dbs-expiry").value;
   const notes = document.getElementById("edit-notes").value;
   const renewalCycle = document.getElementById("edit-renewal-cycle").value;
+
+  if (isCloudMode()) {
+    if (!canEditComplianceRecord()) {
+      notifyEditComplianceRecordBlocked();
+      return;
+    }
+
+    const validation = validateEditComplianceRecordInput({
+      name,
+      role,
+      complianceType,
+      expiryDate: normalizeExpiryDate(expiryDate),
+      renewalCycle,
+    });
+
+    if (!validation.valid) {
+      showMessage(editFormMessage, validation.errors.join(" "), "error");
+      return;
+    }
+
+    hideMessage(editFormMessage);
+
+    void persistUpdateComplianceRecord(
+      personId,
+      recordId,
+      validation.name,
+      validation.role,
+      validation.complianceType,
+      validation.expiryDate,
+      validation.renewalCycle
+    );
+    return;
+  }
+
+  if (rejectIfReadOnly()) {
+    return;
+  }
 
   updatePerson(
     personId,
@@ -6727,6 +6860,44 @@ function applyReadOnlyMode() {
       });
     }
   }
+
+  if (canEditComplianceRecord()) {
+    const editControlIds = [
+      "workspace-edit-btn",
+      "edit-name",
+      "edit-role",
+      "edit-compliance-type",
+      "edit-renewal-cycle",
+      "edit-dbs-expiry",
+    ];
+
+    editControlIds.forEach((id) => {
+      const element = document.getElementById(id);
+
+      if (element instanceof HTMLInputElement || element instanceof HTMLSelectElement) {
+        element.disabled = false;
+        element.classList.remove("read-only-disabled");
+      } else if (element instanceof HTMLButtonElement) {
+        element.disabled = false;
+        element.classList.remove("read-only-disabled");
+      }
+    });
+
+    if (editForm) {
+      editForm.querySelectorAll("input, select, button").forEach((element) => {
+        if (element.id === "edit-notes") {
+          return;
+        }
+
+        if (element instanceof HTMLInputElement || element instanceof HTMLSelectElement) {
+          element.disabled = false;
+        } else if (element instanceof HTMLButtonElement) {
+          element.disabled = false;
+        }
+        element.classList.remove("read-only-disabled");
+      });
+    }
+  }
 }
 
 async function finishAppBoot() {
@@ -6747,7 +6918,8 @@ async function finishAppBoot() {
       (canMarkReminderSent() ||
         canSetActionStatus() ||
         canRenewCompliance() ||
-        canAddComplianceRecord())
+        canAddComplianceRecord() ||
+        canEditComplianceRecord())
     ) {
       dataBackendBadge.textContent = "Cloud mode (limited writes)";
     } else {

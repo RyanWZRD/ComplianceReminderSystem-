@@ -21919,6 +21919,11 @@ ${suffix}`;
     return rpcArgs;
   }
 
+  // js/data/delete-evidence.js
+  function mapDeleteEvidenceToRpc(evidenceId) {
+    return { p_evidence_id: evidenceId };
+  }
+
   // js/data/default-action-templates.js
   var DEFAULT_ACTION_TEMPLATES = [
     "Reminder sent",
@@ -22734,6 +22739,57 @@ ${suffix}`;
       return {
         ok: false,
         error: `Unexpected create_evidence status: ${String(status)}`
+      };
+    }
+    /**
+     * @param {string} evidenceId
+     * @returns {Promise<
+     *   | {
+     *       ok: true;
+     *       status: "deleted";
+     *       evidenceId: string;
+     *       recordId: string;
+     *       documentType: string;
+     *     }
+     *   | { ok: true; status: "not_found" }
+     *   | { ok: false; error: string }
+     * >}
+     */
+    async deleteEvidence(evidenceId) {
+      if (!isSupabaseConfigured()) {
+        return { ok: false, error: "Supabase is not configured." };
+      }
+      await waitForAuthReady();
+      if (!isAuthenticated()) {
+        return { ok: false, error: "Not signed in." };
+      }
+      const supabase = getSupabaseClient();
+      const { data, error } = await supabase.rpc(
+        "delete_evidence",
+        mapDeleteEvidenceToRpc(evidenceId)
+      );
+      if (error) {
+        return { ok: false, error: error.message };
+      }
+      if (!data || typeof data !== "object") {
+        return { ok: false, error: "Unexpected response from delete_evidence." };
+      }
+      const status = data.status;
+      if (status === "not_found") {
+        return { ok: true, status: "not_found" };
+      }
+      if (status === "deleted") {
+        return {
+          ok: true,
+          status: "deleted",
+          evidenceId: String(data.evidence_id ?? evidenceId),
+          recordId: String(data.record_id ?? ""),
+          documentType: typeof data.document_type === "string" ? data.document_type : ""
+        };
+      }
+      return {
+        ok: false,
+        error: `Unexpected delete_evidence status: ${String(status)}`
       };
     }
     /**
@@ -24013,7 +24069,7 @@ ${suffix}`;
           ${notesLine}
           <div class="evidence-item-actions">
             ${downloadButton}
-            ${canMutateData() ? `<button type="button" class="delete-evidence-btn" data-person-id="${personId}" data-record-id="${recordId}" data-evidence-id="${item.id}">Delete</button>` : ""}
+            ${canMutateEvidence() ? `<button type="button" class="delete-evidence-btn" data-person-id="${personId}" data-record-id="${recordId}" data-evidence-id="${item.id}">Delete</button>` : ""}
           </div>
         </li>
       `;
@@ -24203,8 +24259,9 @@ ${suffix}`;
     closeEvidenceModal();
     showMessage(appMessage, `Evidence added to ${recordLabel}.`, "success");
   }
-  function deleteEvidenceItem(personId, recordId, evidenceId) {
-    if (rejectIfReadOnly()) {
+  async function persistDeleteEvidence(personId, recordId, evidenceId) {
+    if (!canMutateEvidence()) {
+      notifyMutateEvidenceBlocked();
       return;
     }
     const result = findPersonAndRecord(personId, recordId);
@@ -24227,19 +24284,63 @@ This cannot be undone.`
     if (!confirmed) {
       return;
     }
-    record.evidence = (record.evidence || []).filter((item) => item.id !== evidenceId);
-    appendHistoryEntry(
-      record,
-      HISTORY_ACTIONS.EVIDENCE_DELETED,
-      `Evidence deleted: ${evidenceItem.documentType}.`
-    );
-    savePeople();
+    if (!isCloudMode()) {
+      record.evidence = (record.evidence || []).filter((item) => item.id !== evidenceId);
+      appendHistoryEntry(
+        record,
+        HISTORY_ACTIONS.EVIDENCE_DELETED,
+        `Evidence deleted: ${evidenceItem.documentType}.`
+      );
+      savePeople();
+      showMessage(
+        appMessage,
+        `Evidence deleted: ${person.name} \u2014 ${evidenceItem.documentType}.`,
+        "success"
+      );
+      renderTable();
+      return;
+    }
+    if (typeof repository.deleteEvidence !== "function") {
+      showMessage(appMessage, "Cloud evidence delete is not available.", "error");
+      return;
+    }
+    const persistResult = await repository.deleteEvidence(String(evidenceId));
+    if (!persistResult.ok) {
+      showMessage(
+        appMessage,
+        persistResult.error || "Could not delete evidence from the cloud.",
+        "error"
+      );
+      return;
+    }
+    if (persistResult.status === "not_found") {
+      showMessage(appMessage, "Evidence not found.", "error");
+      return;
+    }
+    if (persistResult.status !== "deleted") {
+      showMessage(appMessage, "Could not delete evidence.", "error");
+      return;
+    }
+    const refreshed = await reloadCloudDataAfterWrite();
+    if (!refreshed) {
+      return;
+    }
     showMessage(
       appMessage,
       `Evidence deleted: ${person.name} \u2014 ${evidenceItem.documentType}.`,
       "success"
     );
-    renderTable();
+  }
+  async function deleteEvidenceItem(personId, recordId, evidenceId) {
+    if (isCloudMode()) {
+      if (!canMutateEvidence()) {
+        notifyMutateEvidenceBlocked();
+        return;
+      }
+    } else if (rejectIfReadOnly()) {
+      return;
+    }
+    await persistDeleteEvidence(personId, recordId, evidenceId);
   }
   function downloadEvidenceFile(personId, recordId, evidenceId) {
     const result = findPersonAndRecord(personId, recordId);
@@ -25196,7 +25297,7 @@ This cannot be undone.`
     if (button.classList.contains("evidence-add-btn")) {
       openAddEvidenceModal(personId, recordId);
     } else if (button.classList.contains("delete-evidence-btn")) {
-      deleteEvidenceItem(personId, recordId, parseEntityId(button.dataset.evidenceId));
+      void deleteEvidenceItem(personId, recordId, parseEntityId(button.dataset.evidenceId));
     } else if (button.classList.contains("evidence-download-btn")) {
       downloadEvidenceFile(personId, recordId, parseEntityId(button.dataset.evidenceId));
     } else if (button.classList.contains("actions-add-btn")) {

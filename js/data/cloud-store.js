@@ -13,6 +13,7 @@ import { mapEditComplianceRecordToRpc } from "./edit-compliance-record.js";
 import { mapUpdateComplianceRecordNotesToRpc } from "./update-compliance-record-notes.js";
 import { mapCreateActionToRpc } from "./create-action.js";
 import { mapCreateEvidenceToRpc } from "./create-evidence.js";
+import { mapDeleteEvidenceToRpc } from "./delete-evidence.js";
 import {
   mapAddDefaultActionsToRpc,
   parseAddDefaultActionsResponse,
@@ -500,6 +501,68 @@ export class CloudComplianceStore extends LocalComplianceStore {
     return {
       ok: false,
       error: `Unexpected create_evidence status: ${String(status)}`,
+    };
+  }
+
+  /**
+   * @param {string} evidenceId
+   * @returns {Promise<
+   *   | {
+   *       ok: true;
+   *       status: "deleted";
+   *       evidenceId: string;
+   *       recordId: string;
+   *       documentType: string;
+   *     }
+   *   | { ok: true; status: "not_found" }
+   *   | { ok: false; error: string }
+   * >}
+   */
+  async deleteEvidence(evidenceId) {
+    if (!isSupabaseConfigured()) {
+      return { ok: false, error: "Supabase is not configured." };
+    }
+
+    await waitForAuthReady();
+
+    if (!isAuthenticated()) {
+      return { ok: false, error: "Not signed in." };
+    }
+
+    const supabase = getSupabaseClient();
+    const { data, error } = await supabase.rpc(
+      "delete_evidence",
+      mapDeleteEvidenceToRpc(evidenceId)
+    );
+
+    if (error) {
+      return { ok: false, error: error.message };
+    }
+
+    if (!data || typeof data !== "object") {
+      return { ok: false, error: "Unexpected response from delete_evidence." };
+    }
+
+    const status = data.status;
+
+    if (status === "not_found") {
+      return { ok: true, status: "not_found" };
+    }
+
+    if (status === "deleted") {
+      return {
+        ok: true,
+        status: "deleted",
+        evidenceId: String(data.evidence_id ?? evidenceId),
+        recordId: String(data.record_id ?? ""),
+        documentType:
+          typeof data.document_type === "string" ? data.document_type : "",
+      };
+    }
+
+    return {
+      ok: false,
+      error: `Unexpected delete_evidence status: ${String(status)}`,
     };
   }
 

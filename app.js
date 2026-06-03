@@ -867,7 +867,7 @@ function buildEvidencePanelHtml(personId, recordId) {
           <div class="evidence-item-actions">
             ${downloadButton}
             ${
-              canMutateData()
+              canMutateEvidence()
                 ? `<button type="button" class="delete-evidence-btn" data-person-id="${personId}" data-record-id="${recordId}" data-evidence-id="${item.id}">Delete</button>`
                 : ""
             }
@@ -1117,11 +1117,14 @@ async function persistCreateEvidence(personId, recordId, payload) {
   showMessage(appMessage, `Evidence added to ${recordLabel}.`, "success");
 }
 
-function deleteEvidenceItem(personId, recordId, evidenceId) {
-  if (rejectIfReadOnly()) {
+async function persistDeleteEvidence(personId, recordId, evidenceId) {
+  if (!canMutateEvidence()) {
+    notifyMutateEvidenceBlocked();
     return;
   }
+
   const result = findPersonAndRecord(personId, recordId);
+
   if (!result) {
     return;
   }
@@ -1141,21 +1144,75 @@ function deleteEvidenceItem(personId, recordId, evidenceId) {
     return;
   }
 
-  record.evidence = (record.evidence || []).filter((item) => item.id !== evidenceId);
+  if (!isCloudMode()) {
+    record.evidence = (record.evidence || []).filter((item) => item.id !== evidenceId);
 
-  appendHistoryEntry(
-    record,
-    HISTORY_ACTIONS.EVIDENCE_DELETED,
-    `Evidence deleted: ${evidenceItem.documentType}.`
-  );
+    appendHistoryEntry(
+      record,
+      HISTORY_ACTIONS.EVIDENCE_DELETED,
+      `Evidence deleted: ${evidenceItem.documentType}.`
+    );
 
-  savePeople();
+    savePeople();
+    showMessage(
+      appMessage,
+      `Evidence deleted: ${person.name} — ${evidenceItem.documentType}.`,
+      "success"
+    );
+    renderTable();
+    return;
+  }
+
+  if (typeof repository.deleteEvidence !== "function") {
+    showMessage(appMessage, "Cloud evidence delete is not available.", "error");
+    return;
+  }
+
+  const persistResult = await repository.deleteEvidence(String(evidenceId));
+
+  if (!persistResult.ok) {
+    showMessage(
+      appMessage,
+      persistResult.error || "Could not delete evidence from the cloud.",
+      "error"
+    );
+    return;
+  }
+
+  if (persistResult.status === "not_found") {
+    showMessage(appMessage, "Evidence not found.", "error");
+    return;
+  }
+
+  if (persistResult.status !== "deleted") {
+    showMessage(appMessage, "Could not delete evidence.", "error");
+    return;
+  }
+
+  const refreshed = await reloadCloudDataAfterWrite();
+
+  if (!refreshed) {
+    return;
+  }
+
   showMessage(
     appMessage,
     `Evidence deleted: ${person.name} — ${evidenceItem.documentType}.`,
     "success"
   );
-  renderTable();
+}
+
+async function deleteEvidenceItem(personId, recordId, evidenceId) {
+  if (isCloudMode()) {
+    if (!canMutateEvidence()) {
+      notifyMutateEvidenceBlocked();
+      return;
+    }
+  } else if (rejectIfReadOnly()) {
+    return;
+  }
+
+  await persistDeleteEvidence(personId, recordId, evidenceId);
 }
 
 function downloadEvidenceFile(personId, recordId, evidenceId) {
@@ -2400,7 +2457,7 @@ function handleWorkspaceRecordAction(event) {
   if (button.classList.contains("evidence-add-btn")) {
     openAddEvidenceModal(personId, recordId);
   } else if (button.classList.contains("delete-evidence-btn")) {
-    deleteEvidenceItem(personId, recordId, parseEntityId(button.dataset.evidenceId));
+    void deleteEvidenceItem(personId, recordId, parseEntityId(button.dataset.evidenceId));
   } else if (button.classList.contains("evidence-download-btn")) {
     downloadEvidenceFile(personId, recordId, parseEntityId(button.dataset.evidenceId));
   } else if (button.classList.contains("actions-add-btn")) {

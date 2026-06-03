@@ -330,11 +330,23 @@ npm run verify-cloud-default-bulk-actions
 - `canMutateData()` stays false; `canMutateEvidence()` enables Add Evidence modal + workspace button (editor/admin)
 - Inserts into `evidence_items` with `evidence_added` history; optional `file_name` only — no Storage upload
 - Cloud UI rejects file attachments on save (local mode unchanged)
-- Not in scope: evidence edit/delete
+- Not in scope: evidence edit, Storage uploads
 
 ```bash
 supabase db push
 npm run verify-cloud-create-evidence
+```
+
+## Phase 3 Step 6B — Delete evidence (metadata only)
+
+- Migration: `20260203000014_delete_evidence_rpc.sql`
+- `canMutateData()` stays false; `canMutateEvidence()` enables Delete on evidence items (editor/admin)
+- `delete_evidence` — `evidence_deleted` history before row removal; `not_found` for missing ids
+- Not in scope: evidence edit, Storage uploads, record archive/delete
+
+```bash
+supabase db push
+npm run verify-cloud-delete-evidence
 ```
 
 ## Rollback

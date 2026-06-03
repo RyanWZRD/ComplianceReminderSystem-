@@ -1,3 +1,7 @@
+/**
+ * Cloud read-only defaults: DATA_BACKEND=cloud, CLOUD_WRITES_ENABLED unset.
+ * Asserts canMutateData() false and every granular write helper false.
+ */
 process.env.DATA_BACKEND = "cloud";
 process.env.AUTH_MODE = "supabase";
 

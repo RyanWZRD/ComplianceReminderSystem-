@@ -293,12 +293,39 @@ See `docs/cloud-writes-step11.md`.
 ## Phase 2 Step 12 — Hardening and release readiness
 
 - No new migrations or RPCs
-- `npm run verify:phase2` — full automated Phase 2 verification + build
+- `npm run verify:phase2` — automated verification + build
 - Completion runbook: `docs/cloud-phase2-completion.md`
 - Release notes: `docs/phase2-release-notes.md`
 - QA checklist: `docs/cloud-readonly-qa.md` (sections A–K)
 
 See `docs/cloud-writes-step12.md`.
+
+## Phase 3 — Cloud writes complete (v3.0.0-rc1)
+
+All Phase 3 RPC migrations (`20260203000006` through `20260203000016`) extend the write surface documented in Phase 2 steps 7–11. Summary:
+
+| Step | Migration | Capability |
+|------|-----------|------------|
+| P3-2 | `20260203000006` | Reminder settings (admin) |
+| P3-4 | `20260203000007` | Workspace notes |
+| P3-5 | `20260203000008`–`12` | Action CRUD, in-progress, metadata, defaults |
+| P3-6 | `20260203000013`–`15` | Evidence metadata CRUD |
+| P3-7A | `20260203000016` | Archive / delete record |
+
+**Release gate:**
+
+```powershell
+npx supabase migration list
+npm run verify:phase2
+```
+
+- Checklist: `docs/v3-release-checklist.md`
+- Completion: `docs/cloud-phase3-completion.md`
+- Staging reset: `node scripts/reset-alpha-staging-data.mjs` (canonical counts 5/6/2/2/3/1)
+
+**Browser dev:** `http://127.0.0.1:8877/?backend=cloud&cloudWrites=1` (localhost or `STAGING_APP_HOSTNAMES` only).
+
+**Defaults (unchanged):** `DATA_BACKEND=local`, `CLOUD_WRITES_ENABLED=false` in `js/data/config.js`.
 
 ## Phase 3 Step 5B — Action in-progress and metadata edit RPCs
 
@@ -384,14 +411,13 @@ npm run verify-cloud-archive-compliance-record
 | Staging bad migration | Forward-fix migration file; avoid destructive drops |
 | RLS lockout | Apply hotfix policy migration; emergency disable RLS on staging only |
 
-## Not in Phase 2 (Phase 3)
+## Out of scope (v3.0.0-rc1)
 
-- Notes editing in cloud
-- Evidence Storage buckets and uploads
-- Delete / archive RPCs (record archive in P3-7A)
+- Supabase Storage / evidence file upload
+- Bulk archive or delete; restore / unarchive
 - Backup JSON and CSV import into cloud
-- Reminder settings writes in cloud
-- `CloudComplianceStore.save()` / broad sync
+- `CloudComplianceStore.save()` / direct browser table writes
+- Enabling `?cloudWrites=1` on production domains
 
 ## GDPR note
 

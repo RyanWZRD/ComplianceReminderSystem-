@@ -15,29 +15,13 @@ Canonical checklist to close **Phase 2** (cloud operational lifecycle, default-s
 
 ## 2. Automated verification (single command)
 
-From repository root:
+**Superseded for v3.0.0-rc1:** use `docs/v3-release-checklist.md` and `docs/cloud-phase3-completion.md`. The release gate remains:
 
 ```powershell
 npm run verify:phase2
 ```
 
-This runs, in order:
-
-1. `sync-env`
-2. `verify-staging-config`
-3. `verify-read-only-guards` — `canMutateData()` false; granular writes false without flag
-4. `verify-local-mode`
-5. `verify-supabase`
-6. `verify-supabase-auth`
-7. `verify-cloud-load`
-8. `verify-cloud-role-load`
-9. `verify-repository-cloud`
-10. `verify-cloud-mark-reminder-sent`
-11. `verify-cloud-set-action-status`
-12. `verify-cloud-renew-compliance`
-13. `verify-cloud-create-compliance-record`
-14. `verify-cloud-edit-compliance-record`
-15. `build`
+This runs sync-env, staging config, read-only guards, local mode, Supabase client/auth, **pre-reset**, all Phase 2 and Phase 3 RPC smoke tests (migrations through `20260203000016`), **post-reset**, and build.
 
 **Tier 1 only** (no Supabase RPC tests): stop after `verify-local-mode` if you only need local regression.
 

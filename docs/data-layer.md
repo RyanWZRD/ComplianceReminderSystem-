@@ -54,13 +54,32 @@ Browser cloud dev: `?backend=cloud` in the URL. Browser limited writes: `?cloudW
 
 Node verify scripts: `process.env.DATA_BACKEND=cloud` and per-script `CLOUD_WRITES_ENABLED=true` for RPC tests.
 
-Cloud **load** is implemented. **Mark Reminder Sent**, **renew compliance**, **action complete/reopen**, **action create/delete/update/in-progress**, **default action templates**, **bulk add actions**, **evidence metadata CRUD (create/update/delete)**, **add compliance record**, **edit compliance record**, **archive/delete compliance record**, **workspace notes**, and **reminder settings (admin)** use RPC when `CLOUD_WRITES_ENABLED` is true. All other cloud mutations remain blocked (`canMutateData()` false in cloud). See `js/app/permissions.js`.
+Cloud **load** uses SELECT on org-scoped tables. All cloud **writes** use RPC only (no browser `insert`/`update`/`delete` on operational tables).
+
+When `CLOUD_WRITES_ENABLED` is true, mutations are gated by granular helpers in `js/app/permissions.js` (`canMutateData()` stays **false** in cloud):
+
+| Helper | Writes |
+|--------|--------|
+| `canMarkReminderSent()` | Mark reminder sent |
+| `canSetActionStatus()` | Action complete / reopen |
+| `canMutateActions()` | Action create, delete, metadata edit, in-progress, default templates, bulk add |
+| `canMutateEvidence()` | Evidence metadata create, update, delete |
+| `canRenewCompliance()` | Renew compliance |
+| `canAddComplianceRecord()` | Add compliance record |
+| `canEditComplianceRecord()` | Edit record (notes column excluded) |
+| `canUpdateComplianceRecordNotes()` | Workspace save notes |
+| `canArchiveComplianceRecord()` | Archive / delete record (snapshot) |
+| `canMutateReminderSettings()` | Reminder settings (admin only) |
+
+**Out of scope:** Storage uploads, bulk archive/delete, restore/unarchive, backup/CSV import, `repository.save()` in cloud.
+
+Release gate: `npm run verify:phase2`. Checklist: `docs/v3-release-checklist.md`.
 
 ## Verify scripts
 
 | Script | Purpose |
 |--------|---------|
-| `npm run verify:phase2` | **Full Phase 2 suite** (all rows below + build) |
+| `npm run verify:phase2` | **v3.0.0 release gate** (Phase 2 + Phase 3 RPC smokes, pre/post reset, build) |
 | `npm run sync-env` | Generate `supabase-env.js` from `.env` |
 | `npm run verify-supabase` | Client configured |
 | `npm run verify-supabase-auth` | Sign-in / profile / sign-out |
@@ -85,7 +104,7 @@ Cloud **load** is implemented. **Mark Reminder Sent**, **renew compliance**, **a
 | `npm run verify-cloud-archive-compliance-record` | Editor archive record RPC + reload; deleted snapshot; viewer denied; not_found |
 | `npm run verify-staging-config` | `.env` + `supabase-env.js` present |
 
-See `docs/cloud-phase2-completion.md`, `docs/cloud-setup.md`, and `docs/staging-deployment.md`.
+See `docs/cloud-phase3-completion.md`, `docs/v3-release-checklist.md`, `docs/cloud-setup.md`, and `docs/staging-deployment.md`.
 
 ## v3 migration
 

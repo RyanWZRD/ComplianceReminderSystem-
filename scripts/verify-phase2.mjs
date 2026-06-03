@@ -1,7 +1,10 @@
 /**
- * Phase 2 full verification — runs all automated checks in order.
+ * v3.0.0 release gate — full automated verification (Phase 2 + Phase 3 cloud writes).
  * Requires .env + staging Supabase with migrations through 20260203000016.
- * Does not enable CLOUD_WRITES_ENABLED globally; RPC scripts set env internally.
+ * Does not enable CLOUD_WRITES_ENABLED globally; RPC smoke scripts set env internally.
+ *
+ * RPC migrations (20260203*): 000001 mark_reminder_sent … 000016 archive_compliance_record.
+ * Pre/post reset: reset-alpha-staging-data.mjs (service role; canonical seed counts).
  */
 
 import { spawnSync } from "node:child_process";
@@ -67,7 +70,7 @@ const STEPS = [
   { label: "build", script: "build" },
 ];
 
-console.log("Phase 2 verification (verify:phase2)\n");
+console.log("v3.0.0 release verification (verify:phase2)\n");
 
 for (const step of STEPS) {
   const label = step.label;

@@ -24,11 +24,18 @@ QA Status: PASS with warnings
 
 # Next Planned Release
 
-## v3.0.0 — Cloud Platform Foundation
+## v3.0.0-rc1 — Cloud writes (release candidate)
+
+- Phase 3 cloud-write slices complete (P3-5 actions, P3-6 evidence metadata, P3-7A archive/delete)
+- RPC-only mutations when `?backend=cloud&cloudWrites=1`; defaults stay local + read-only cloud
+- Release gate: `npm run verify:phase2` — see `docs/v3-release-checklist.md` and `docs/cloud-phase3-completion.md`
+
+## v3.0.0 — Cloud Platform Foundation (GA)
 
 - Shared data, user accounts, login, and role permissions (Supabase)
 - Cloud persistence and multi-device access
 - Migration from existing backup JSON import
+- Evidence Storage, backup import, restore/unarchive (post-RC)
 
 See [Future Releases](#future-releases) below for full architecture and goals.
 
@@ -396,6 +403,18 @@ QA Status: PASS with warnings
 | P3-6B Evidence delete | **COMPLETE** ✅ |
 | P3-6C Evidence update | **COMPLETE** ✅ |
 | P3-7A Record archive/delete | **COMPLETE** ✅ |
+| P3-8 Final hardening / RC | **COMPLETE** ✅ |
+
+#### P3-8 Final hardening / release candidate · Complete
+
+**Status:** COMPLETE ✅
+
+- Phase 3 cloud-write audit (RPC-only browser writes; permission gating documented)
+- `npm run verify:phase2` — v3.0.0 release gate (migrations through `20260203000016`, pre/post reset)
+- `reset-alpha-staging-data.mjs` — canonical counts (5/6/2/2/3/1); Step10 + P37A cleanup
+- Docs: `docs/v3-release-checklist.md`, `docs/cloud-phase3-completion.md`, README/data-layer/cloud-setup
+- Application version: `v3.0.0-rc1`
+- Recommended tag: `v3.0.0-rc1` (after `verify:phase2` passes on staging)
 
 #### P3-1 Verification hardening · Complete
 
@@ -515,14 +534,14 @@ QA Status: PASS with warnings
 
 - Metadata create, update, delete via RPC; Storage buckets / uploads follow-on
 
-**Phase 3 (remaining):** CSV/backup import; backup migration tooling; optional notes protection negative test / local parity.
+**Phase 3 (remaining for GA):** CSV/backup import; backup migration tooling; evidence Storage/uploads; restore/unarchive; bulk archive/delete; production cloud-writes policy and GDPR checklist.
 
-### v3.0.0 — Cloud Platform Foundation (remaining) · Planned
+### v3.0.0 — Cloud Platform Foundation (remaining after RC) · Planned
 
 - Production cloud writes policy and GDPR checklist
 - Evidence storage buckets and uploads
 - CSV/backup import migration path
-- Full local parity in cloud (import — reminder settings and workspace notes in P3-2 / P3-4; action writes in P3-5; evidence metadata CRUD in P3-6)
+- Restore/unarchive and bulk archive/delete
 
 See [v3.0.0 — Cloud Platform Foundation](#v300--cloud-platform-foundation) above for full goals and architecture.
 

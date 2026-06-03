@@ -11,7 +11,7 @@ import {
 } from "./reminder-settings.js";
 
 const READ_ONLY_MESSAGE =
-  "Cloud settings store is read-only in this release. Writes are not enabled yet.";
+  "Cloud settings store does not support setSettings(). Use updateReminderSettings() RPC when cloud writes are enabled.";
 
 /**
  * @typedef {Object} SettingsLoadResult

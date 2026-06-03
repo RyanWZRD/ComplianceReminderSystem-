@@ -382,6 +382,13 @@ QA Status: PASS with warnings
 - `canMutateData()` false in cloud; no `CloudComplianceStore.save()`
 - Verify: `npm run verify:phase2` — see `docs/cloud-phase2-completion.md`
 
+### v3.0.0 Hardening · Planned
+
+- Make cloud verification scripts idempotent.
+- Remove Step10 Verify artefacts after successful runs.
+- Remove Alex Volunteer merge artefacts after successful runs.
+- Allow `verify:phase2` to run repeatedly without manual reset.
+
 **Phase 3 (planned):** notes, evidence, delete/archive, CSV/backup import, reminder settings writes, full action CRUD in cloud, backup migration tooling.
 
 ### v3.0.0 — Cloud Platform Foundation (remaining) · Planned

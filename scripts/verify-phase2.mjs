@@ -11,7 +11,9 @@ import { fileURLToPath } from "node:url";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, "..");
 
-/** @type {readonly { label: string; script: string }[]} */
+const resetScriptPath = join(__dirname, "reset-alpha-staging-data.mjs");
+
+/** @type {readonly ({ label: string; script: string } | { label: string; node: string })[]} */
 const STEPS = [
   { label: "sync-env", script: "sync-env" },
   { label: "verify-staging-config", script: "verify-staging-config" },
@@ -19,6 +21,7 @@ const STEPS = [
   { label: "verify-local-mode", script: "verify-local-mode" },
   { label: "verify-supabase", script: "verify-supabase" },
   { label: "verify-supabase-auth", script: "verify-supabase-auth" },
+  { label: "reset-alpha-staging-pre", node: resetScriptPath },
   { label: "verify-cloud-load", script: "verify-cloud-load" },
   { label: "verify-cloud-role-load", script: "verify-cloud-role-load" },
   { label: "verify-repository-cloud", script: "verify-repository-cloud" },
@@ -27,19 +30,27 @@ const STEPS = [
   { label: "verify-cloud-renew-compliance", script: "verify-cloud-renew-compliance" },
   { label: "verify-cloud-create-compliance-record", script: "verify-cloud-create-compliance-record" },
   { label: "verify-cloud-edit-compliance-record", script: "verify-cloud-edit-compliance-record" },
+  { label: "reset-alpha-staging-post", node: resetScriptPath },
   { label: "build", script: "build" },
 ];
 
 console.log("Phase 2 verification (verify:phase2)\n");
 
-for (const { label, script } of STEPS) {
+for (const step of STEPS) {
+  const label = step.label;
   console.log(`--- ${label} ---`);
 
-  const result = spawnSync("npm", ["run", script], {
-    cwd: root,
-    stdio: "inherit",
-    shell: true,
-  });
+  const result =
+    "node" in step
+      ? spawnSync(process.execPath, [step.node], {
+          cwd: root,
+          stdio: "inherit",
+        })
+      : spawnSync("npm", ["run", step.script], {
+          cwd: root,
+          stdio: "inherit",
+          shell: true,
+        });
 
   if (result.status !== 0) {
     console.error(`\nverify:phase2 failed at: ${label}`);

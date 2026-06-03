@@ -11,6 +11,7 @@ import { mapRenewalModeToRpc } from "./renew-compliance.js";
 import { mapCreateComplianceRecordToRpc } from "./create-compliance-record.js";
 import { mapEditComplianceRecordToRpc } from "./edit-compliance-record.js";
 import { mapUpdateComplianceRecordNotesToRpc } from "./update-compliance-record-notes.js";
+import { mapCreateActionToRpc } from "./create-action.js";
 import { LocalComplianceStore } from "./local-store.js";
 
 const READ_ONLY_MESSAGE =
@@ -177,6 +178,145 @@ export class CloudComplianceStore extends LocalComplianceStore {
     }
 
     return { ok: false, error: `Unexpected set_action_status status: ${String(status)}` };
+  }
+
+  /**
+   * @param {{
+   *   recordId: string;
+   *   title: string;
+   *   notes?: string;
+   *   dueDate?: string | null;
+   *   owner?: string;
+   * }} input
+   * @returns {Promise<
+   *   | {
+   *       ok: true;
+   *       status: "created";
+   *       actionId: string;
+   *       recordId: string;
+   *       title: string;
+   *     }
+   *   | {
+   *       ok: true;
+   *       status: "not_found" | "validation_error";
+   *       field?: string;
+   *       reason?: string;
+   *     }
+   *   | { ok: false; error: string }
+   * >}
+   */
+  async createAction(input) {
+    if (!isSupabaseConfigured()) {
+      return { ok: false, error: "Supabase is not configured." };
+    }
+
+    await waitForAuthReady();
+
+    if (!isAuthenticated()) {
+      return { ok: false, error: "Not signed in." };
+    }
+
+    const supabase = getSupabaseClient();
+    const rpcArgs = mapCreateActionToRpc(input);
+    const { data, error } = await supabase.rpc("create_action", rpcArgs);
+
+    if (error) {
+      return { ok: false, error: error.message };
+    }
+
+    if (!data || typeof data !== "object") {
+      return { ok: false, error: "Unexpected response from create_action." };
+    }
+
+    const status = data.status;
+
+    if (status === "validation_error") {
+      return {
+        ok: true,
+        status: "validation_error",
+        field: typeof data.field === "string" ? data.field : undefined,
+        reason: typeof data.reason === "string" ? data.reason : undefined,
+      };
+    }
+
+    if (status === "not_found") {
+      return { ok: true, status: "not_found" };
+    }
+
+    if (status === "created") {
+      return {
+        ok: true,
+        status: "created",
+        actionId: String(data.action_id ?? ""),
+        recordId: String(data.record_id ?? input.recordId),
+        title: typeof data.title === "string" ? data.title : input.title,
+      };
+    }
+
+    return {
+      ok: false,
+      error: `Unexpected create_action status: ${String(status)}`,
+    };
+  }
+
+  /**
+   * @param {string} actionId
+   * @returns {Promise<
+   *   | {
+   *       ok: true;
+   *       status: "deleted";
+   *       actionId: string;
+   *       recordId: string;
+   *       title: string;
+   *     }
+   *   | { ok: true; status: "not_found" }
+   *   | { ok: false; error: string }
+   * >}
+   */
+  async deleteAction(actionId) {
+    if (!isSupabaseConfigured()) {
+      return { ok: false, error: "Supabase is not configured." };
+    }
+
+    await waitForAuthReady();
+
+    if (!isAuthenticated()) {
+      return { ok: false, error: "Not signed in." };
+    }
+
+    const supabase = getSupabaseClient();
+    const { data, error } = await supabase.rpc("delete_action", {
+      p_action_id: actionId,
+    });
+
+    if (error) {
+      return { ok: false, error: error.message };
+    }
+
+    if (!data || typeof data !== "object") {
+      return { ok: false, error: "Unexpected response from delete_action." };
+    }
+
+    const status = data.status;
+
+    if (status === "not_found") {
+      return { ok: true, status: "not_found" };
+    }
+
+    if (status === "deleted") {
+      return {
+        ok: true,
+        status: "deleted",
+        actionId: String(data.action_id ?? actionId),
+        recordId: String(data.record_id ?? ""),
+        title: typeof data.title === "string" ? data.title : "",
+      };
+    }
+
+    return {
+      ok: false,
+      error: `Unexpected delete_action status: ${String(status)}`,
+    };
   }
 
   /**

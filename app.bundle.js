@@ -21336,6 +21336,15 @@ ${suffix}`;
     }
     return canEdit();
   }
+  function canMutateActions() {
+    if (!isCloudMode()) {
+      return canMutateData();
+    }
+    if (!CLOUD_WRITES_ENABLED) {
+      return false;
+    }
+    return canEdit();
+  }
   function canRenewCompliance() {
     if (!isCloudMode()) {
       return canMutateData();
@@ -21446,8 +21455,8 @@ ${suffix}`;
     if (!CLOUD_WRITES_ENABLED) {
       return "Cloud mode is read-only. You can view and export data; changes are not saved to the cloud yet.";
     }
-    if (canMarkReminderSent() || canSetActionStatus() || canRenewCompliance() || canAddComplianceRecord() || canEditComplianceRecord() || canUpdateComplianceRecordNotes() || canMutateReminderSettings()) {
-      return "Cloud mode (limited writes). Mark Reminder Sent, renew compliance, action complete/reopen, add compliance records, edit compliance records, workspace notes, and reminder settings (admin) are saved to the cloud.";
+    if (canMarkReminderSent() || canSetActionStatus() || canMutateActions() || canRenewCompliance() || canAddComplianceRecord() || canEditComplianceRecord() || canUpdateComplianceRecordNotes() || canMutateReminderSettings()) {
+      return "Cloud mode (limited writes). Mark Reminder Sent, renew compliance, action complete/reopen, add/delete actions, add compliance records, edit compliance records, workspace notes, and reminder settings (admin) are saved to the cloud.";
     }
     const role = getCurrentUserRole();
     if (role === "viewer") {
@@ -21868,6 +21877,20 @@ ${suffix}`;
       p_record_id: input.recordId,
       p_notes: input.notes ?? ""
     };
+  }
+
+  // js/data/create-action.js
+  function mapCreateActionToRpc(input) {
+    const rpcArgs = {
+      p_record_id: input.recordId,
+      p_title: input.title,
+      p_notes: input.notes ?? "",
+      p_owner: input.owner ?? ""
+    };
+    if (input.dueDate) {
+      rpcArgs.p_due_date = input.dueDate;
+    }
+    return rpcArgs;
   }
 
   // js/data/local-store.js
@@ -22364,6 +22387,124 @@ ${suffix}`;
         };
       }
       return { ok: false, error: `Unexpected set_action_status status: ${String(status)}` };
+    }
+    /**
+     * @param {{
+     *   recordId: string;
+     *   title: string;
+     *   notes?: string;
+     *   dueDate?: string | null;
+     *   owner?: string;
+     * }} input
+     * @returns {Promise<
+     *   | {
+     *       ok: true;
+     *       status: "created";
+     *       actionId: string;
+     *       recordId: string;
+     *       title: string;
+     *     }
+     *   | {
+     *       ok: true;
+     *       status: "not_found" | "validation_error";
+     *       field?: string;
+     *       reason?: string;
+     *     }
+     *   | { ok: false; error: string }
+     * >}
+     */
+    async createAction(input) {
+      if (!isSupabaseConfigured()) {
+        return { ok: false, error: "Supabase is not configured." };
+      }
+      await waitForAuthReady();
+      if (!isAuthenticated()) {
+        return { ok: false, error: "Not signed in." };
+      }
+      const supabase = getSupabaseClient();
+      const rpcArgs = mapCreateActionToRpc(input);
+      const { data, error } = await supabase.rpc("create_action", rpcArgs);
+      if (error) {
+        return { ok: false, error: error.message };
+      }
+      if (!data || typeof data !== "object") {
+        return { ok: false, error: "Unexpected response from create_action." };
+      }
+      const status = data.status;
+      if (status === "validation_error") {
+        return {
+          ok: true,
+          status: "validation_error",
+          field: typeof data.field === "string" ? data.field : void 0,
+          reason: typeof data.reason === "string" ? data.reason : void 0
+        };
+      }
+      if (status === "not_found") {
+        return { ok: true, status: "not_found" };
+      }
+      if (status === "created") {
+        return {
+          ok: true,
+          status: "created",
+          actionId: String(data.action_id ?? ""),
+          recordId: String(data.record_id ?? input.recordId),
+          title: typeof data.title === "string" ? data.title : input.title
+        };
+      }
+      return {
+        ok: false,
+        error: `Unexpected create_action status: ${String(status)}`
+      };
+    }
+    /**
+     * @param {string} actionId
+     * @returns {Promise<
+     *   | {
+     *       ok: true;
+     *       status: "deleted";
+     *       actionId: string;
+     *       recordId: string;
+     *       title: string;
+     *     }
+     *   | { ok: true; status: "not_found" }
+     *   | { ok: false; error: string }
+     * >}
+     */
+    async deleteAction(actionId) {
+      if (!isSupabaseConfigured()) {
+        return { ok: false, error: "Supabase is not configured." };
+      }
+      await waitForAuthReady();
+      if (!isAuthenticated()) {
+        return { ok: false, error: "Not signed in." };
+      }
+      const supabase = getSupabaseClient();
+      const { data, error } = await supabase.rpc("delete_action", {
+        p_action_id: actionId
+      });
+      if (error) {
+        return { ok: false, error: error.message };
+      }
+      if (!data || typeof data !== "object") {
+        return { ok: false, error: "Unexpected response from delete_action." };
+      }
+      const status = data.status;
+      if (status === "not_found") {
+        return { ok: true, status: "not_found" };
+      }
+      if (status === "deleted") {
+        return {
+          ok: true,
+          status: "deleted",
+          actionId: String(data.action_id ?? actionId),
+          recordId: String(data.record_id ?? ""),
+          title: typeof data.title === "string" ? data.title : ""
+        };
+      }
+      return {
+        ok: false,
+        error: `Unexpected delete_action status: ${String(status)}`
+      };
     }
     /**
      * @param {string} recordId
@@ -23262,6 +23403,17 @@ ${suffix}`;
       showMessage(
         appMessage,
         "Your role cannot update action status in cloud mode.",
+        "error"
+      );
+      return;
+    }
+    notifyReadOnlyBlocked();
+  }
+  function notifyMutateActionsBlocked() {
+    if (isCloudMode() && CLOUD_WRITES_ENABLED) {
+      showMessage(
+        appMessage,
+        "Your role cannot add or delete actions in cloud mode.",
         "error"
       );
       return;
@@ -24341,19 +24493,22 @@ This cannot be undone.`
   }
   function buildActionMutationButtons(personId, recordId, item) {
     const status = getActionStatus(item);
+    const deleteButton = canMutateActions() ? `<button type="button" class="delete-action-btn" data-person-id="${personId}" data-record-id="${recordId}" data-action-id="${item.id}">Delete</button>` : "";
     if (canMutateData()) {
-      return `${status === ACTION_STATUSES.OPEN ? `<button type="button" class="action-progress-btn" data-person-id="${personId}" data-record-id="${recordId}" data-action-id="${item.id}">Mark in progress</button>` : ""}${!isActionCompleted(item) ? `<button type="button" class="action-complete-btn" data-person-id="${personId}" data-record-id="${recordId}" data-action-id="${item.id}">Mark complete</button>` : ""}${isActionCompleted(item) ? `<button type="button" class="action-reopen-btn" data-person-id="${personId}" data-record-id="${recordId}" data-action-id="${item.id}">Reopen</button>` : ""}<button type="button" class="action-edit-btn" data-person-id="${personId}" data-record-id="${recordId}" data-action-id="${item.id}">Edit</button><button type="button" class="delete-action-btn" data-person-id="${personId}" data-record-id="${recordId}" data-action-id="${item.id}">Delete</button>`;
+      return `${status === ACTION_STATUSES.OPEN ? `<button type="button" class="action-progress-btn" data-person-id="${personId}" data-record-id="${recordId}" data-action-id="${item.id}">Mark in progress</button>` : ""}${!isActionCompleted(item) ? `<button type="button" class="action-complete-btn" data-person-id="${personId}" data-record-id="${recordId}" data-action-id="${item.id}">Mark complete</button>` : ""}${isActionCompleted(item) ? `<button type="button" class="action-reopen-btn" data-person-id="${personId}" data-record-id="${recordId}" data-action-id="${item.id}">Reopen</button>` : ""}<button type="button" class="action-edit-btn" data-person-id="${personId}" data-record-id="${recordId}" data-action-id="${item.id}">Edit</button>${deleteButton}`;
     }
-    if (!canSetActionStatus()) {
+    let statusButtons = "";
+    if (canSetActionStatus()) {
+      if (status === ACTION_STATUSES.OPEN) {
+        statusButtons = `<button type="button" class="action-complete-btn" data-person-id="${personId}" data-record-id="${recordId}" data-action-id="${item.id}">Mark complete</button>`;
+      } else if (status === ACTION_STATUSES.COMPLETED) {
+        statusButtons = `<button type="button" class="action-reopen-btn" data-person-id="${personId}" data-record-id="${recordId}" data-action-id="${item.id}">Reopen</button>`;
+      }
+    }
+    if (!statusButtons && !deleteButton) {
       return "";
     }
-    if (status === ACTION_STATUSES.OPEN) {
-      return `<button type="button" class="action-complete-btn" data-person-id="${personId}" data-record-id="${recordId}" data-action-id="${item.id}">Mark complete</button>`;
-    }
-    if (status === ACTION_STATUSES.COMPLETED) {
-      return `<button type="button" class="action-reopen-btn" data-person-id="${personId}" data-record-id="${recordId}" data-action-id="${item.id}">Reopen</button>`;
-    }
-    return "";
+    return `${statusButtons}${deleteButton}`;
   }
   function buildActionItemHtml(personId, recordId, item) {
     const status = getActionStatus(item);
@@ -24604,11 +24759,18 @@ This cannot be undone.`
         saveNotesBtn.classList.add("read-only-disabled");
       }
     }
-    if (!canMutateData()) {
-      workspaceContent.querySelectorAll(".evidence-add-btn, .action-add-btn").forEach((button) => {
+    if (!canMutateData() && !canMutateActions()) {
+      workspaceContent.querySelectorAll(".evidence-add-btn, .actions-add-btn").forEach((button) => {
         if (button instanceof HTMLButtonElement) {
           button.disabled = true;
           button.classList.add("read-only-disabled");
+        }
+      });
+    } else if (canMutateActions() && !canMutateData()) {
+      workspaceContent.querySelectorAll(".actions-add-btn").forEach((button) => {
+        if (button instanceof HTMLButtonElement) {
+          button.disabled = false;
+          button.classList.remove("read-only-disabled");
         }
       });
     }
@@ -24639,7 +24801,7 @@ This cannot be undone.`
     } else if (button.classList.contains("action-reopen-btn")) {
       void reopenActionItem(personId, recordId, parseEntityId(button.dataset.actionId));
     } else if (button.classList.contains("delete-action-btn")) {
-      deleteActionItem(personId, recordId, parseEntityId(button.dataset.actionId));
+      void deleteActionItem(personId, recordId, parseEntityId(button.dataset.actionId));
     }
   }
   async function handleWorkspaceNotesSave() {
@@ -24708,7 +24870,12 @@ This cannot be undone.`
     });
   }
   function openAddActionModal(personId, recordId) {
-    if (rejectIfReadOnly()) {
+    if (isCloudMode()) {
+      if (!canMutateActions()) {
+        notifyMutateActionsBlocked();
+        return;
+      }
+    } else if (rejectIfReadOnly()) {
       return;
     }
     const result = findPersonAndRecord(personId, recordId);
@@ -24915,10 +25082,20 @@ This cannot be undone.`
     renderTable();
   }
   function handleSaveAction() {
-    if (rejectIfReadOnly()) {
+    if (!actionModalContext) {
       return;
     }
-    if (!actionModalContext) {
+    const { personId, recordId, recordLabel, actionId } = actionModalContext;
+    if (actionId) {
+      if (rejectIfReadOnly()) {
+        return;
+      }
+    } else if (isCloudMode()) {
+      if (!canMutateActions()) {
+        notifyMutateActionsBlocked();
+        return;
+      }
+    } else if (rejectIfReadOnly()) {
       return;
     }
     const title = actionTitleInput.value.trim();
@@ -24929,7 +25106,6 @@ This cannot be undone.`
       showMessage(actionModalMessage, "Action title is required.", "error");
       return;
     }
-    const { personId, recordId, recordLabel, actionId } = actionModalContext;
     const result = findPersonAndRecord(personId, recordId);
     if (!result) {
       closeActionModal();
@@ -24950,11 +25126,7 @@ This cannot be undone.`
       renderTable();
       return;
     }
-    addActionToRecord(personId, recordId, title, notes, dueDate, owner);
-    savePeople();
-    closeActionModal();
-    showMessage(appMessage, `Action added to ${recordLabel}.`, "success");
-    renderTable();
+    void persistCreateAction(personId, recordId, title, notes, dueDate, owner, recordLabel);
   }
   function addDefaultActions(personId, recordId) {
     if (rejectIfReadOnly()) {
@@ -25119,8 +25291,64 @@ This cannot be undone.`
   async function reopenActionItem(personId, recordId, actionId) {
     await persistActionStatus(personId, recordId, actionId, ACTION_STATUSES.OPEN);
   }
-  function deleteActionItem(personId, recordId, actionId) {
-    if (rejectIfReadOnly()) {
+  async function persistCreateAction(personId, recordId, title, notes, dueDate, owner, recordLabel) {
+    if (!canMutateActions()) {
+      notifyMutateActionsBlocked();
+      return;
+    }
+    if (!isCloudMode()) {
+      const added = addActionToRecord(personId, recordId, title, notes, dueDate, owner);
+      if (!added) {
+        showMessage(actionModalMessage, "Could not add action.", "error");
+        return;
+      }
+      savePeople();
+      closeActionModal();
+      showMessage(appMessage, `Action added to ${recordLabel}.`, "success");
+      renderTable();
+      return;
+    }
+    if (typeof repository.createAction !== "function") {
+      showMessage(appMessage, "Cloud action create is not available.", "error");
+      return;
+    }
+    const persistResult = await repository.createAction({
+      recordId: String(recordId),
+      title,
+      notes,
+      dueDate,
+      owner
+    });
+    if (!persistResult.ok) {
+      showMessage(
+        appMessage,
+        persistResult.error || "Could not save action to the cloud.",
+        "error"
+      );
+      return;
+    }
+    if (persistResult.status === "not_found") {
+      showMessage(appMessage, "Record not found.", "error");
+      return;
+    }
+    if (persistResult.status === "validation_error") {
+      showMessage(actionModalMessage, "Action title is required.", "error");
+      return;
+    }
+    if (persistResult.status !== "created") {
+      showMessage(appMessage, "Could not add action.", "error");
+      return;
+    }
+    const refreshed = await reloadCloudDataAfterWrite();
+    if (!refreshed) {
+      return;
+    }
+    closeActionModal();
+    showMessage(appMessage, `Action added to ${recordLabel}.`, "success");
+  }
+  async function persistDeleteAction(personId, recordId, actionId) {
+    if (!canMutateActions()) {
+      notifyMutateActionsBlocked();
       return;
     }
     const result = findPersonAndRecord(personId, recordId);
@@ -25142,19 +25370,63 @@ This cannot be undone.`
     if (!confirmed) {
       return;
     }
-    record.actions = (record.actions || []).filter((item) => item.id !== actionId);
-    appendHistoryEntry(
-      record,
-      HISTORY_ACTIONS.ACTION_DELETED,
-      `Action deleted: ${actionItem.title}.`
-    );
-    savePeople();
+    if (!isCloudMode()) {
+      record.actions = (record.actions || []).filter((item) => item.id !== actionId);
+      appendHistoryEntry(
+        record,
+        HISTORY_ACTIONS.ACTION_DELETED,
+        `Action deleted: ${actionItem.title}.`
+      );
+      savePeople();
+      showMessage(
+        appMessage,
+        `Action deleted: ${person.name} \u2014 ${actionItem.title}.`,
+        "success"
+      );
+      renderTable();
+      return;
+    }
+    if (typeof repository.deleteAction !== "function") {
+      showMessage(appMessage, "Cloud action delete is not available.", "error");
+      return;
+    }
+    const persistResult = await repository.deleteAction(String(actionId));
+    if (!persistResult.ok) {
+      showMessage(
+        appMessage,
+        persistResult.error || "Could not delete action from the cloud.",
+        "error"
+      );
+      return;
+    }
+    if (persistResult.status === "not_found") {
+      showMessage(appMessage, "Action not found.", "error");
+      return;
+    }
+    if (persistResult.status !== "deleted") {
+      showMessage(appMessage, "Could not delete action.", "error");
+      return;
+    }
+    const refreshed = await reloadCloudDataAfterWrite();
+    if (!refreshed) {
+      return;
+    }
     showMessage(
       appMessage,
       `Action deleted: ${person.name} \u2014 ${actionItem.title}.`,
       "success"
     );
-    renderTable();
+  }
+  async function deleteActionItem(personId, recordId, actionId) {
+    if (isCloudMode()) {
+      if (!canMutateActions()) {
+        notifyMutateActionsBlocked();
+        return;
+      }
+    } else if (rejectIfReadOnly()) {
+      return;
+    }
+    await persistDeleteAction(personId, recordId, actionId);
   }
   function getActionDashboardTitle(dashboardType) {
     const titles = {
@@ -28361,6 +28633,27 @@ Your current data will be overwritten. Continue?`
         }
       });
     }
+    if (canMutateActions()) {
+      const actionModalControlIds = [
+        "action-save-btn",
+        "action-cancel-btn",
+        "action-modal-close-btn",
+        "action-title",
+        "action-notes",
+        "action-due-date",
+        "action-owner"
+      ];
+      actionModalControlIds.forEach((id) => {
+        const element = document.getElementById(id);
+        if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
+          element.disabled = false;
+          element.classList.remove("read-only-disabled");
+        } else if (element instanceof HTMLButtonElement) {
+          element.disabled = false;
+          element.classList.remove("read-only-disabled");
+        }
+      });
+    }
     if (canUpdateComplianceRecordNotes() && workspaceContext && workspaceContent) {
       const notesInput = workspaceContent.querySelector("#workspace-notes-input");
       const saveNotesBtn = workspaceContent.querySelector("#workspace-save-notes-btn");
@@ -28384,7 +28677,7 @@ Your current data will be overwritten. Continue?`
     if (dataBackendBadge) {
       if (DATA_BACKEND === "local") {
         dataBackendBadge.textContent = "Local storage mode";
-      } else if (CLOUD_WRITES_ENABLED && (canMarkReminderSent() || canSetActionStatus() || canRenewCompliance() || canAddComplianceRecord() || canEditComplianceRecord() || canUpdateComplianceRecordNotes() || canMutateReminderSettings())) {
+      } else if (CLOUD_WRITES_ENABLED && (canMarkReminderSent() || canSetActionStatus() || canMutateActions() || canRenewCompliance() || canAddComplianceRecord() || canEditComplianceRecord() || canUpdateComplianceRecordNotes() || canMutateReminderSettings())) {
         dataBackendBadge.textContent = "Cloud mode (limited writes)";
       } else {
         dataBackendBadge.textContent = "Cloud mode (read-only)";

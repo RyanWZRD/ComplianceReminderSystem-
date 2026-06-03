@@ -339,6 +339,30 @@ async function pruneNonSeedHistory(supabase) {
 /**
  * @param {import('@supabase/supabase-js').SupabaseClient} supabase
  */
+async function pruneNonSeedActions(supabase) {
+  const { data, error } = await supabase
+    .from("actions")
+    .select("id")
+    .eq("organisation_id", ALPHA_ORG_ID);
+
+  assertNoError("fetch actions", { error });
+
+  const seedSet = new Set(SEED_ACTION_IDS);
+  const extraIds = (data ?? []).map((row) => row.id).filter((id) => !seedSet.has(id));
+
+  if (extraIds.length === 0) {
+    return 0;
+  }
+
+  const { error: deleteError } = await supabase.from("actions").delete().in("id", extraIds);
+
+  assertNoError("delete non-seed actions", { error: deleteError });
+  return extraIds.length;
+}
+
+/**
+ * @param {import('@supabase/supabase-js').SupabaseClient} supabase
+ */
 async function restoreSeedActions(supabase) {
   for (const action of buildSeedActions()) {
     const { error } = await supabase
@@ -463,6 +487,7 @@ const deletedPeople = await deleteNonSeedPeople(supabase);
 await restoreSeedPeople(supabase);
 await restoreSeedRecords(supabase);
 const deletedHistory = await pruneNonSeedHistory(supabase);
+const deletedActions = await pruneNonSeedActions(supabase);
 await restoreSeedActions(supabase);
 await restoreSeedReminderSettings(supabase);
 await assertCanonicalState(supabase);
@@ -472,6 +497,7 @@ console.log(`  Organisation: ${ALPHA_ORG_ID}`);
 console.log(`  Removed non-seed records: ${deletedRecords}`);
 console.log(`  Removed non-seed people: ${deletedPeople}`);
 console.log(`  Removed non-seed history: ${deletedHistory}`);
+console.log(`  Removed non-seed actions: ${deletedActions}`);
 console.log(`  People: ${CANONICAL_COUNTS.people}`);
 console.log(`  Records: ${CANONICAL_COUNTS.records}`);
 console.log(`  History: ${CANONICAL_COUNTS.history}`);

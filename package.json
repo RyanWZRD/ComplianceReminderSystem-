@@ -18,6 +18,7 @@
     "verify-cloud-create-compliance-record": "node scripts/verify-cloud-create-compliance-record.mjs",
     "verify-cloud-edit-compliance-record": "node scripts/verify-cloud-edit-compliance-record.mjs",
     "verify-cloud-update-compliance-record-notes": "node scripts/verify-cloud-update-compliance-record-notes.mjs",
+    "verify-cloud-create-delete-action": "node scripts/verify-cloud-create-delete-action.mjs",
     "verify-cloud-update-reminder-settings": "node scripts/verify-cloud-update-reminder-settings.mjs",
     "verify-staging-config": "node scripts/verify-staging-config.mjs",
     "verify:phase2": "node scripts/verify-phase2.mjs"

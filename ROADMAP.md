@@ -382,14 +382,27 @@ QA Status: PASS with warnings
 - `canMutateData()` false in cloud; no `CloudComplianceStore.save()`
 - Verify: `npm run verify:phase2` — see `docs/cloud-phase2-completion.md`
 
-### v3.0.0 Hardening · Planned
+### Phase 3 — Cloud writes & verification
 
-- Make cloud verification scripts idempotent.
-- Remove Step10 Verify artefacts after successful runs.
-- Remove Alex Volunteer merge artefacts after successful runs.
-- Allow `verify:phase2` to run repeatedly without manual reset.
+| Item | Status |
+|------|--------|
+| P3-1 Verification hardening | **COMPLETE** |
+| P3-2 Reminder settings | **COMPLETE** |
+| P3-4 Compliance notes | **COMPLETE** |
+| P3-5 Action CRUD | **PLANNED** |
+| Delete/archive | **PLANNED** |
+| Evidence metadata | **PLANNED** |
 
-### Phase 3 — P3-2 Reminder settings · Complete
+#### P3-1 Verification hardening · Complete
+
+**Status:** COMPLETE
+
+- `npm run verify:phase2` — single entry point for automated cloud verification + build
+- Pre/post staging reset via `reset-alpha-staging-data.mjs` (idempotent; canonical seed counts)
+- Step10 Verify person cleanup and Alex Volunteer two-record invariant in reset
+- Per-feature cloud write smoke scripts wired into the phase2 suite
+
+#### P3-2 Reminder settings · Complete
 
 **Status:** COMPLETE
 
@@ -397,10 +410,10 @@ QA Status: PASS with warnings
 - Admin only (`canMutateReminderSettings()` when `CLOUD_WRITES_ENABLED`; editors/viewers denied)
 - `canMutateData()` stays false in cloud; RPC-first via `CloudSettingsStore.updateReminderSettings()`
 - Existing reminder settings UI works when cloud writes enabled (`?cloudWrites=1` on allowed hosts)
-- Verify: `npm run verify-cloud-update-reminder-settings` (included in `npm run verify:phase2`)
+- Verify: `npm run verify-cloud-update-reminder-settings` (included in `verify:phase2`)
 - Staging reset restores seed reminder settings (`reset-alpha-staging-data.mjs`)
 
-### Phase 3 — P3-4 Compliance notes (workspace) · Complete
+#### P3-4 Compliance notes · Complete
 
 **Status:** COMPLETE (minimal v1)
 
@@ -409,14 +422,34 @@ QA Status: PASS with warnings
 - Workspace Save Notes only; edit-form notes disabled in cloud
 - Verify: `npm run verify-cloud-update-compliance-record-notes` (in `verify:phase2`)
 
-**Phase 3 (remaining):** evidence metadata, delete/archive, CSV/backup import, full action CRUD in cloud, backup migration tooling; notes protection negative test / local parity (optional follow-up).
+#### P3-5 Action CRUD · Planned
+
+**Status:** PLANNED
+
+- Full action add/edit/delete in cloud (beyond current complete/reopen RPC)
+- RPC-first; `canMutateData()` stays false in cloud
+
+#### Delete/archive · Planned
+
+**Status:** PLANNED
+
+- Cloud delete compliance record and archive/snapshot flows
+- Import migration path for deleted-record history
+
+#### Evidence metadata · Planned
+
+**Status:** PLANNED
+
+- Evidence metadata writes in cloud (storage buckets / uploads follow-on)
+
+**Phase 3 (remaining):** P3-5 Action CRUD, delete/archive, evidence metadata; CSV/backup import; backup migration tooling; optional notes protection negative test / local parity.
 
 ### v3.0.0 — Cloud Platform Foundation (remaining) · Planned
 
 - Production cloud writes policy and GDPR checklist
 - Evidence storage buckets and uploads
-- Delete/archive and import migration path
-- Full local parity in cloud (notes, evidence, actions, import — reminder settings done in P3-2)
+- CSV/backup import migration path
+- Full local parity in cloud (actions, evidence, import — reminder settings and workspace notes done in P3-2 / P3-4)
 
 See [v3.0.0 — Cloud Platform Foundation](#v300--cloud-platform-foundation) above for full goals and architecture.
 

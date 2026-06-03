@@ -9,6 +9,7 @@ const {
   canMutateReminderSettings,
   canRenewCompliance,
   canSetActionStatus,
+  canMutateActions,
   canUpdateComplianceRecordNotes,
   isCloudMode,
 } = await import("../js/app/permissions.js");
@@ -35,6 +36,11 @@ if (canMarkReminderSent()) {
 
 if (canSetActionStatus()) {
   console.error("canSetActionStatus() must be false when CLOUD_WRITES_ENABLED is not set.");
+  process.exit(1);
+}
+
+if (canMutateActions()) {
+  console.error("canMutateActions() must be false when CLOUD_WRITES_ENABLED is not set.");
   process.exit(1);
 }
 

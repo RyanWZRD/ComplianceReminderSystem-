@@ -242,7 +242,7 @@ See `docs/cloud-writes-step7.md`.
 
 - Migration: `supabase/migrations/20260203000002_set_action_status_rpc.sql`
 - `canMutateData()` stays false; `canSetActionStatus()` enables Mark complete / Reopen only
-- No in-progress, edit, delete, or add-default-actions in cloud
+- Complete/reopen only via `set_action_status` (see P3-5B for in-progress and metadata edit)
 
 ```bash
 supabase db push
@@ -299,6 +299,18 @@ See `docs/cloud-writes-step11.md`.
 - QA checklist: `docs/cloud-readonly-qa.md` (sections A–K)
 
 See `docs/cloud-writes-step12.md`.
+
+## Phase 3 Step 5B — Action in-progress and metadata edit RPCs
+
+- Migrations: `20260203000010_set_action_in_progress_rpc.sql`, `20260203000011_update_action_rpc.sql`
+- `canMutateData()` stays false; `canMutateActions()` enables Mark in progress, Edit Action modal, create/delete
+- `canSetActionStatus()` unchanged — complete/reopen still use `set_action_status` only
+- `update_action` accepts metadata only (no status); edit modal status field hidden in cloud
+
+```bash
+supabase db push
+npm run verify-cloud-action-update-progress
+```
 
 ## Rollback
 

@@ -21893,6 +21893,20 @@ ${suffix}`;
     return rpcArgs;
   }
 
+  // js/data/update-action.js
+  function mapUpdateActionToRpc(input) {
+    const rpcArgs = {
+      p_action_id: input.actionId,
+      p_title: input.title,
+      p_notes: input.notes ?? "",
+      p_owner: input.owner ?? ""
+    };
+    if (input.dueDate) {
+      rpcArgs.p_due_date = input.dueDate;
+    }
+    return rpcArgs;
+  }
+
   // js/data/local-store.js
   var LocalComplianceStore = class {
     constructor() {
@@ -22387,6 +22401,131 @@ ${suffix}`;
         };
       }
       return { ok: false, error: `Unexpected set_action_status status: ${String(status)}` };
+    }
+    /**
+     * @param {string} actionId
+     * @returns {Promise<
+     *   | {
+     *       ok: true;
+     *       status: "updated" | "not_found" | "invalid_transition" | "no_changes";
+     *       reason?: string;
+     *       targetStatus?: string;
+     *     }
+     *   | { ok: false; error: string }
+     * >}
+     */
+    async setActionInProgress(actionId) {
+      if (!isSupabaseConfigured()) {
+        return { ok: false, error: "Supabase is not configured." };
+      }
+      await waitForAuthReady();
+      if (!isAuthenticated()) {
+        return { ok: false, error: "Not signed in." };
+      }
+      const supabase = getSupabaseClient();
+      const { data, error } = await supabase.rpc("set_action_in_progress", {
+        p_action_id: actionId
+      });
+      if (error) {
+        return { ok: false, error: error.message };
+      }
+      if (!data || typeof data !== "object") {
+        return { ok: false, error: "Unexpected response from set_action_in_progress." };
+      }
+      const status = data.status;
+      if (status === "not_found") {
+        return { ok: true, status: "not_found" };
+      }
+      if (status === "no_changes") {
+        return { ok: true, status: "no_changes" };
+      }
+      if (status === "invalid_transition") {
+        return {
+          ok: true,
+          status: "invalid_transition",
+          reason: typeof data.reason === "string" ? data.reason : "invalid_transition"
+        };
+      }
+      if (status === "updated") {
+        return {
+          ok: true,
+          status: "updated",
+          targetStatus: typeof data.target_status === "string" ? data.target_status : "in_progress"
+        };
+      }
+      return {
+        ok: false,
+        error: `Unexpected set_action_in_progress status: ${String(status)}`
+      };
+    }
+    /**
+     * @param {{
+     *   actionId: string;
+     *   title: string;
+     *   notes?: string;
+     *   dueDate?: string | null;
+     *   owner?: string;
+     * }} input
+     * @returns {Promise<
+     *   | {
+     *       ok: true;
+     *       status: "updated";
+     *       actionId: string;
+     *       title: string;
+     *     }
+     *   | {
+     *       ok: true;
+     *       status: "no_changes" | "not_found" | "validation_error";
+     *       field?: string;
+     *       reason?: string;
+     *     }
+     *   | { ok: false; error: string }
+     * >}
+     */
+    async updateAction(input) {
+      if (!isSupabaseConfigured()) {
+        return { ok: false, error: "Supabase is not configured." };
+      }
+      await waitForAuthReady();
+      if (!isAuthenticated()) {
+        return { ok: false, error: "Not signed in." };
+      }
+      const supabase = getSupabaseClient();
+      const rpcArgs = mapUpdateActionToRpc(input);
+      const { data, error } = await supabase.rpc("update_action", rpcArgs);
+      if (error) {
+        return { ok: false, error: error.message };
+      }
+      if (!data || typeof data !== "object") {
+        return { ok: false, error: "Unexpected response from update_action." };
+      }
+      const status = data.status;
+      if (status === "validation_error") {
+        return {
+          ok: true,
+          status: "validation_error",
+          field: typeof data.field === "string" ? data.field : void 0,
+          reason: typeof data.reason === "string" ? data.reason : void 0
+        };
+      }
+      if (status === "not_found") {
+        return { ok: true, status: "not_found" };
+      }
+      if (status === "no_changes") {
+        return { ok: true, status: "no_changes" };
+      }
+      if (status === "updated") {
+        return {
+          ok: true,
+          status: "updated",
+          actionId: String(data.action_id ?? input.actionId),
+          title: typeof data.title === "string" ? data.title : input.title
+        };
+      }
+      return {
+        ok: false,
+        error: `Unexpected update_action status: ${String(status)}`
+      };
     }
     /**
      * @param {{
@@ -24505,10 +24644,17 @@ This cannot be undone.`
         statusButtons = `<button type="button" class="action-reopen-btn" data-person-id="${personId}" data-record-id="${recordId}" data-action-id="${item.id}">Reopen</button>`;
       }
     }
-    if (!statusButtons && !deleteButton) {
+    let mutateButtons = "";
+    if (canMutateActions()) {
+      if (status === ACTION_STATUSES.OPEN) {
+        mutateButtons += `<button type="button" class="action-progress-btn" data-person-id="${personId}" data-record-id="${recordId}" data-action-id="${item.id}">Mark in progress</button>`;
+      }
+      mutateButtons += `<button type="button" class="action-edit-btn" data-person-id="${personId}" data-record-id="${recordId}" data-action-id="${item.id}">Edit</button>`;
+    }
+    if (!statusButtons && !mutateButtons && !deleteButton) {
       return "";
     }
-    return `${statusButtons}${deleteButton}`;
+    return `${statusButtons}${mutateButtons}${deleteButton}`;
   }
   function buildActionItemHtml(personId, recordId, item) {
     const status = getActionStatus(item);
@@ -24795,7 +24941,7 @@ This cannot be undone.`
     } else if (button.classList.contains("action-defaults-btn")) {
       addDefaultActions(personId, recordId);
     } else if (button.classList.contains("action-progress-btn")) {
-      setActionInProgress(personId, recordId, parseEntityId(button.dataset.actionId));
+      void persistSetActionInProgress(personId, recordId, parseEntityId(button.dataset.actionId));
     } else if (button.classList.contains("action-complete-btn")) {
       void completeActionItem(personId, recordId, parseEntityId(button.dataset.actionId));
     } else if (button.classList.contains("action-reopen-btn")) {
@@ -24910,7 +25056,12 @@ This cannot be undone.`
     actionTitleInput.focus();
   }
   function openEditActionModal(personId, recordId, actionId) {
-    if (rejectIfReadOnly()) {
+    if (isCloudMode()) {
+      if (!canMutateActions()) {
+        notifyMutateActionsBlocked();
+        return;
+      }
+    } else if (rejectIfReadOnly()) {
       return;
     }
     const result = findPersonAndRecord(personId, recordId);
@@ -24944,7 +25095,11 @@ This cannot be undone.`
       actionStatusInput.value = getActionStatus(actionItem);
     }
     if (actionStatusRow) {
-      actionStatusRow.classList.remove("hidden");
+      if (isCloudMode()) {
+        actionStatusRow.classList.add("hidden");
+      } else {
+        actionStatusRow.classList.remove("hidden");
+      }
     }
     hideMessage(actionModalMessage);
     actionModal.classList.remove("hidden");
@@ -24990,31 +25145,6 @@ This cannot be undone.`
       result.record,
       HISTORY_ACTIONS.ACTION_ADDED,
       `Action added: ${title}.`
-    );
-    return true;
-  }
-  function updateActionItem(personId, recordId, actionId, updates) {
-    if (!canMutateData()) {
-      return;
-    }
-    const result = findPersonAndRecord(personId, recordId);
-    if (!result) {
-      return false;
-    }
-    const actionItem = (result.record.actions || []).find((item) => item.id === actionId);
-    if (!actionItem) {
-      return false;
-    }
-    actionItem.title = updates.title;
-    actionItem.notes = updates.notes;
-    actionItem.dueDate = updates.dueDate;
-    actionItem.owner = updates.owner;
-    actionItem.status = updates.status;
-    syncActionCompletionFields(actionItem);
-    appendHistoryEntry(
-      result.record,
-      HISTORY_ACTIONS.ACTION_UPDATED,
-      `Action updated: ${actionItem.title}.`
     );
     return true;
   }
@@ -25087,7 +25217,12 @@ This cannot be undone.`
     }
     const { personId, recordId, recordLabel, actionId } = actionModalContext;
     if (actionId) {
-      if (rejectIfReadOnly()) {
+      if (isCloudMode()) {
+        if (!canMutateActions()) {
+          notifyMutateActionsBlocked();
+          return;
+        }
+      } else if (rejectIfReadOnly()) {
         return;
       }
     } else if (isCloudMode()) {
@@ -25112,18 +25247,7 @@ This cannot be undone.`
       return;
     }
     if (actionId) {
-      const status = actionStatusInput?.value || ACTION_STATUSES.OPEN;
-      updateActionItem(personId, recordId, actionId, {
-        title,
-        notes,
-        dueDate,
-        owner,
-        status
-      });
-      savePeople();
-      closeActionModal();
-      showMessage(appMessage, `Action updated for ${recordLabel}.`, "success");
-      renderTable();
+      void persistUpdateAction(personId, recordId, actionId, title, notes, dueDate, owner, recordLabel);
       return;
     }
     void persistCreateAction(personId, recordId, title, notes, dueDate, owner, recordLabel);
@@ -25183,17 +25307,23 @@ This cannot be undone.`
     );
     renderTable();
   }
-  function setActionInProgress(personId, recordId, actionId) {
-    if (rejectIfReadOnly()) {
-      return;
-    }
+  function applyActionInProgressLocal(personId, recordId, actionId) {
     const result = findPersonAndRecord(personId, recordId);
     if (!result) {
-      return;
+      return { status: "not_found" };
     }
     const actionItem = (result.record.actions || []).find((item) => item.id === actionId);
-    if (!actionItem || isActionCompleted(actionItem)) {
-      return;
+    if (!actionItem) {
+      return { status: "not_found" };
+    }
+    if (isActionCompleted(actionItem)) {
+      return { status: "invalid_transition" };
+    }
+    if (getActionStatus(actionItem) === ACTION_STATUSES.IN_PROGRESS) {
+      return { status: "no_changes", actionTitle: actionItem.title };
+    }
+    if (getActionStatus(actionItem) !== ACTION_STATUSES.OPEN) {
+      return { status: "invalid_transition" };
     }
     actionItem.status = ACTION_STATUSES.IN_PROGRESS;
     syncActionCompletionFields(actionItem);
@@ -25202,9 +25332,180 @@ This cannot be undone.`
       HISTORY_ACTIONS.ACTION_UPDATED,
       `Action marked in progress: ${actionItem.title}.`
     );
-    savePeople();
-    showMessage(appMessage, `Action in progress: ${actionItem.title}.`, "success");
-    renderTable();
+    return { status: "updated", actionTitle: actionItem.title };
+  }
+  async function persistSetActionInProgress(personId, recordId, actionId) {
+    if (!canMutateActions()) {
+      notifyMutateActionsBlocked();
+      return;
+    }
+    if (!isCloudMode()) {
+      const outcome = applyActionInProgressLocal(personId, recordId, actionId);
+      if (outcome.status === "not_found") {
+        return;
+      }
+      if (outcome.status === "invalid_transition") {
+        showMessage(appMessage, "This action cannot be marked in progress.", "error");
+        return;
+      }
+      if (outcome.status === "no_changes") {
+        showMessage(appMessage, `Action already in progress: ${outcome.actionTitle}.`, "success");
+        renderTable();
+        return;
+      }
+      savePeople();
+      showMessage(appMessage, `Action in progress: ${outcome.actionTitle}.`, "success");
+      renderTable();
+      return;
+    }
+    if (typeof repository.setActionInProgress !== "function") {
+      showMessage(appMessage, "Cloud action in-progress updates are not available.", "error");
+      return;
+    }
+    const persistResult = await repository.setActionInProgress(String(actionId));
+    if (!persistResult.ok) {
+      showMessage(
+        appMessage,
+        persistResult.error || "Could not save action progress to the cloud.",
+        "error"
+      );
+      return;
+    }
+    if (persistResult.status === "not_found") {
+      showMessage(appMessage, "Action not found.", "error");
+      return;
+    }
+    if (persistResult.status === "invalid_transition") {
+      showMessage(appMessage, "This action cannot be marked in progress.", "error");
+      return;
+    }
+    if (persistResult.status === "no_changes") {
+      const result2 = findPersonAndRecord(personId, recordId);
+      const actionItem2 = result2?.record.actions?.find((item) => item.id === actionId);
+      const title2 = actionItem2?.title || "Action";
+      showMessage(appMessage, `Action already in progress: ${title2}.`, "success");
+      return;
+    }
+    if (persistResult.status !== "updated") {
+      showMessage(appMessage, "Could not mark action in progress.", "error");
+      return;
+    }
+    const refreshed = await reloadCloudDataAfterWrite();
+    if (!refreshed) {
+      return;
+    }
+    const result = findPersonAndRecord(personId, recordId);
+    const actionItem = result?.record.actions?.find((item) => item.id === actionId);
+    const title = actionItem?.title || "Action";
+    showMessage(appMessage, `Action in progress: ${title}.`, "success");
+  }
+  function applyUpdateActionLocal(personId, recordId, actionId, updates) {
+    const result = findPersonAndRecord(personId, recordId);
+    if (!result) {
+      return { status: "not_found" };
+    }
+    const actionItem = (result.record.actions || []).find((item) => item.id === actionId);
+    if (!actionItem) {
+      return { status: "not_found" };
+    }
+    const unchanged = actionItem.title === updates.title && (actionItem.notes || "") === updates.notes && (actionItem.dueDate || null) === updates.dueDate && (actionItem.owner || "") === updates.owner && getActionStatus(actionItem) === updates.status;
+    if (unchanged) {
+      return { status: "no_changes", actionTitle: actionItem.title };
+    }
+    actionItem.title = updates.title;
+    actionItem.notes = updates.notes;
+    actionItem.dueDate = updates.dueDate;
+    actionItem.owner = updates.owner;
+    actionItem.status = updates.status;
+    syncActionCompletionFields(actionItem);
+    appendHistoryEntry(
+      result.record,
+      HISTORY_ACTIONS.ACTION_UPDATED,
+      `Action updated: ${actionItem.title}.`
+    );
+    return { status: "updated", actionTitle: actionItem.title };
+  }
+  async function persistUpdateAction(personId, recordId, actionId, title, notes, dueDate, owner, recordLabel) {
+    if (!canMutateActions()) {
+      notifyMutateActionsBlocked();
+      return;
+    }
+    const result = findPersonAndRecord(personId, recordId);
+    if (!result) {
+      closeActionModal();
+      return;
+    }
+    const actionItem = (result.record.actions || []).find((item) => item.id === actionId);
+    if (!actionItem) {
+      closeActionModal();
+      return;
+    }
+    if (!isCloudMode()) {
+      const status = actionStatusInput?.value || ACTION_STATUSES.OPEN;
+      const outcome = applyUpdateActionLocal(personId, recordId, actionId, {
+        title,
+        notes,
+        dueDate,
+        owner,
+        status
+      });
+      if (outcome.status === "not_found") {
+        closeActionModal();
+        return;
+      }
+      if (outcome.status === "no_changes") {
+        closeActionModal();
+        showMessage(appMessage, "No changes to save.", "success");
+        return;
+      }
+      savePeople();
+      closeActionModal();
+      showMessage(appMessage, `Action updated for ${recordLabel}.`, "success");
+      renderTable();
+      return;
+    }
+    if (typeof repository.updateAction !== "function") {
+      showMessage(appMessage, "Cloud action updates are not available.", "error");
+      return;
+    }
+    const persistResult = await repository.updateAction({
+      actionId: String(actionId),
+      title,
+      notes,
+      dueDate,
+      owner
+    });
+    if (!persistResult.ok) {
+      showMessage(
+        appMessage,
+        persistResult.error || "Could not save action to the cloud.",
+        "error"
+      );
+      return;
+    }
+    if (persistResult.status === "not_found") {
+      showMessage(appMessage, "Action not found.", "error");
+      return;
+    }
+    if (persistResult.status === "validation_error") {
+      showMessage(actionModalMessage, "Action title is required.", "error");
+      return;
+    }
+    if (persistResult.status === "no_changes") {
+      closeActionModal();
+      showMessage(appMessage, "No changes to save.", "success");
+      return;
+    }
+    if (persistResult.status !== "updated") {
+      showMessage(appMessage, "Could not update action.", "error");
+      return;
+    }
+    const refreshed = await reloadCloudDataAfterWrite();
+    if (!refreshed) {
+      return;
+    }
+    closeActionModal();
+    showMessage(appMessage, `Action updated for ${recordLabel}.`, "success");
   }
   function applyActionStatusLocal(personId, recordId, actionId, targetStatus, { cloudRules = false } = {}) {
     const result = findPersonAndRecord(personId, recordId);

@@ -378,7 +378,7 @@ QA Status: PASS with warnings
 ### v3.0.0 Alpha — Phase 2 (operational cloud) · Shipped (Step 12 hardening)
 
 - Supabase login, org-scoped load, admin/editor/viewer read parity
-- Limited RPC writes when explicitly enabled (not default): mark sent, action complete/reopen, renew, add record, edit record (no notes column write)
+- Limited RPC writes when explicitly enabled (not default): mark sent, action complete/reopen, action create/delete, renew, add record, edit record (no notes column write); workspace notes via P3-4 RPC
 - `canMutateData()` false in cloud; no `CloudComplianceStore.save()`
 - Verify: `npm run verify:phase2` — see `docs/cloud-phase2-completion.md`
 
@@ -389,7 +389,8 @@ QA Status: PASS with warnings
 | P3-1 Verification hardening | **COMPLETE** |
 | P3-2 Reminder settings | **COMPLETE** |
 | P3-4 Compliance notes | **COMPLETE** |
-| P3-5 Action CRUD | **PLANNED** |
+| P3-5A Action create/delete | **COMPLETE** ✅ |
+| P3-5B Action update & in-progress | **PLANNED** |
 | Delete/archive | **PLANNED** |
 | Evidence metadata | **PLANNED** |
 
@@ -422,12 +423,28 @@ QA Status: PASS with warnings
 - Workspace Save Notes only; edit-form notes disabled in cloud
 - Verify: `npm run verify-cloud-update-compliance-record-notes` (in `verify:phase2`)
 
-#### P3-5 Action CRUD · Planned
+#### P3-5A Action create/delete · Complete
 
-**Status:** PLANNED
+**Status:** COMPLETE ✅
 
-- Full action add/edit/delete in cloud (beyond current complete/reopen RPC)
-- RPC-first; `canMutateData()` stays false in cloud
+- RPC `create_action` (migration `20260203000008`) — open action + `action_added` history
+- RPC `delete_action` (migration `20260203000009`) — `action_deleted` history before removal
+- Editor/admin (`canMutateActions()` when `CLOUD_WRITES_ENABLED`; separate from `canSetActionStatus()`)
+- Add Action modal + workspace Add Action + delete button wired; bulk/defaults not in cloud yet
+- `canMutateData()` stays false in cloud; RPC-first via `CloudComplianceStore.createAction()` / `deleteAction()`
+- Reset: `pruneNonSeedActions()` in `reset-alpha-staging-data.mjs`
+- Verify: `npm run verify-cloud-create-delete-action` (in `verify:phase2`)
+
+#### P3-5B Action update & in-progress · Complete
+
+**Status:** COMPLETE ✅
+
+- RPC `set_action_in_progress` (migration `20260203000010`) — open → in_progress + `action_updated` history
+- RPC `update_action` (migration `20260203000011`) — metadata only (title, notes, due date, owner); no status/completed fields
+- Editor/admin (`canMutateActions()`); Mark in progress + Edit Action modal wired in cloud
+- Complete/reopen unchanged (`set_action_status` via `canSetActionStatus()`)
+- Edit modal status field hidden in cloud (dedicated RPCs for status transitions)
+- Verify: `npm run verify-cloud-action-update-progress` (in `verify:phase2`)
 
 #### Delete/archive · Planned
 
@@ -442,14 +459,14 @@ QA Status: PASS with warnings
 
 - Evidence metadata writes in cloud (storage buckets / uploads follow-on)
 
-**Phase 3 (remaining):** P3-5 Action CRUD, delete/archive, evidence metadata; CSV/backup import; backup migration tooling; optional notes protection negative test / local parity.
+**Phase 3 (remaining):** P3-5B action update/in-progress, delete/archive, evidence metadata; CSV/backup import; backup migration tooling; optional notes protection negative test / local parity.
 
 ### v3.0.0 — Cloud Platform Foundation (remaining) · Planned
 
 - Production cloud writes policy and GDPR checklist
 - Evidence storage buckets and uploads
 - CSV/backup import migration path
-- Full local parity in cloud (actions, evidence, import — reminder settings and workspace notes done in P3-2 / P3-4)
+- Full local parity in cloud (action edit/in-progress/defaults/bulk, evidence, import — reminder settings and workspace notes in P3-2 / P3-4; action create/delete in P3-5A)
 
 See [v3.0.0 — Cloud Platform Foundation](#v300--cloud-platform-foundation) above for full goals and architecture.
 

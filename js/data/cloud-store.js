@@ -12,6 +12,10 @@ import { mapCreateComplianceRecordToRpc } from "./create-compliance-record.js";
 import { mapEditComplianceRecordToRpc } from "./edit-compliance-record.js";
 import { mapUpdateComplianceRecordNotesToRpc } from "./update-compliance-record-notes.js";
 import { mapCreateActionToRpc } from "./create-action.js";
+import {
+  mapAddDefaultActionsToRpc,
+  parseAddDefaultActionsResponse,
+} from "./add-default-actions.js";
 import { mapUpdateActionToRpc } from "./update-action.js";
 import { LocalComplianceStore } from "./local-store.js";
 
@@ -408,6 +412,46 @@ export class CloudComplianceStore extends LocalComplianceStore {
       ok: false,
       error: `Unexpected create_action status: ${String(status)}`,
     };
+  }
+
+  /**
+   * @param {string} recordId
+   * @returns {Promise<
+   *   | {
+   *       ok: true;
+   *       status: "completed";
+   *       recordId: string;
+   *       addedCount: number;
+   *       skippedCount: number;
+   *       added: { actionId: string; title: string }[];
+   *       skippedTitles: string[];
+   *     }
+   *   | { ok: true; status: "not_found" }
+   *   | { ok: false; error: string }
+   * >}
+   */
+  async addDefaultActions(recordId) {
+    if (!isSupabaseConfigured()) {
+      return { ok: false, error: "Supabase is not configured." };
+    }
+
+    await waitForAuthReady();
+
+    if (!isAuthenticated()) {
+      return { ok: false, error: "Not signed in." };
+    }
+
+    const supabase = getSupabaseClient();
+    const { data, error } = await supabase.rpc(
+      "add_default_actions",
+      mapAddDefaultActionsToRpc(recordId)
+    );
+
+    if (error) {
+      return { ok: false, error: error.message };
+    }
+
+    return parseAddDefaultActionsResponse(data);
   }
 
   /**

@@ -312,6 +312,18 @@ supabase db push
 npm run verify-cloud-action-update-progress
 ```
 
+## Phase 3 Step 5C — Default & bulk actions
+
+- Migration: `20260203000012_add_default_actions_rpc.sql`
+- `canMutateData()` stays false; `canMutateActions()` enables Add default actions + bulk Add action to selected
+- `add_default_actions` — five templates; case-insensitive duplicate skip; structured `added` / `skipped_titles` response
+- Bulk add — client loop of `create_action` (one reload at end); partial failures keep successful creates
+
+```bash
+supabase db push
+npm run verify-cloud-default-bulk-actions
+```
+
 ## Rollback
 
 | Scenario | Action |

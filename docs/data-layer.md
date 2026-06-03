@@ -19,6 +19,9 @@ js/data/
   cloud-mapper.js           Internal Postgres row → nested app shape
   renew-compliance.js       Renewal mode mapping + custom date validation (London today)
   update-compliance-record-notes.js  Notes RPC mapping (cloud workspace save)
+  default-action-templates.js  Shared default action template titles
+  add-default-actions.js    add_default_actions RPC mapping + response parse
+  create-action.js          create_action RPC mapping + validation
   cloud-store.js            CloudComplianceStore (load; RPC writes; save is no-op)
   cloud-settings-store.js   CloudSettingsStore (load-only; setSettings throws)
 ```
@@ -47,7 +50,7 @@ Browser cloud dev: `?backend=cloud` in the URL. Browser limited writes: `?cloudW
 
 Node verify scripts: `process.env.DATA_BACKEND=cloud` and per-script `CLOUD_WRITES_ENABLED=true` for RPC tests.
 
-Cloud **load** is implemented. **Mark Reminder Sent**, **renew compliance**, **action complete/reopen**, **add compliance record**, **edit compliance record**, **workspace notes**, and **reminder settings (admin)** use RPC when `CLOUD_WRITES_ENABLED` is true. All other cloud mutations remain blocked (`canMutateData()` false in cloud). See `js/app/permissions.js`.
+Cloud **load** is implemented. **Mark Reminder Sent**, **renew compliance**, **action complete/reopen**, **action create/delete/update/in-progress**, **default action templates**, **bulk add actions**, **add compliance record**, **edit compliance record**, **workspace notes**, and **reminder settings (admin)** use RPC when `CLOUD_WRITES_ENABLED` is true. All other cloud mutations remain blocked (`canMutateData()` false in cloud). See `js/app/permissions.js`.
 
 ## Verify scripts
 
@@ -69,6 +72,9 @@ Cloud **load** is implemented. **Mark Reminder Sent**, **renew compliance**, **a
 | `npm run verify-cloud-edit-compliance-record` | Editor edit RPC; viewer denied |
 | `npm run verify-cloud-update-compliance-record-notes` | Editor notes RPC + reload; viewer denied |
 | `npm run verify-cloud-update-reminder-settings` | Admin settings RPC; editor/viewer denied |
+| `npm run verify-cloud-create-delete-action` | Editor create/delete action RPC; viewer denied |
+| `npm run verify-cloud-action-update-progress` | Editor in-progress + metadata edit RPC; viewer denied |
+| `npm run verify-cloud-default-bulk-actions` | Editor default templates + bulk create loop; viewer denied |
 | `npm run verify-staging-config` | `.env` + `supabase-env.js` present |
 
 See `docs/cloud-phase2-completion.md`, `docs/cloud-setup.md`, and `docs/staging-deployment.md`.

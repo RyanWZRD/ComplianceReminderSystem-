@@ -31,6 +31,7 @@ import {
   repository,
   settingsRepository,
 } from "./js/data/repository.js";
+import { DEFAULT_ACTION_TEMPLATES } from "./js/data/default-action-templates.js";
 import { REMINDER_UI_LABELS, getReminderSentText } from "./js/data/reminder-sent.js";
 import { isAllowedActionStatusTransition } from "./js/data/action-status.js";
 import {
@@ -93,13 +94,6 @@ const selectedRecordKeys = new Set();
 
 const DUE_SOON_DAYS = 90;
 const RECORDS_PER_PAGE = 25;
-const DEFAULT_ACTION_TEMPLATES = [
-  "Reminder sent",
-  "Renewal chased",
-  "Certificate received",
-  "Evidence uploaded",
-  "Renewal verified",
-];
 const REMINDER_LABELS = REMINDER_UI_LABELS;
 const REMINDER_URGENCY = { expired: 0, 7: 1, 14: 2, 30: 3 };
 
@@ -2003,7 +1997,7 @@ function buildActionsPanelHtml(personId, recordId) {
   const showDefaultButton = isRecordActionRequired(row);
 
   const defaultButton =
-    showDefaultButton && canMutateData()
+    showDefaultButton && (canMutateData() || canMutateActions())
       ? `<button type="button" class="action-defaults-btn" data-person-id="${personId}" data-record-id="${recordId}">Add default actions</button>`
       : "";
 
@@ -2574,7 +2568,12 @@ function updateActionItem(personId, recordId, actionId, updates) {
 }
 
 function openBulkAddActionModal() {
-  if (rejectIfReadOnly()) {
+  if (isCloudMode()) {
+    if (!canMutateActions()) {
+      notifyMutateActionsBlocked();
+      return;
+    }
+  } else if (rejectIfReadOnly()) {
     return;
   }
   const count = selectedRecordKeys.size;
@@ -2611,9 +2610,6 @@ function closeBulkActionModal() {
 }
 
 function handleBulkSaveAction() {
-  if (rejectIfReadOnly()) {
-    return;
-  }
   const title = bulkActionTitleInput.value.trim();
   const notes = bulkActionNotesInput.value.trim();
 
@@ -2622,36 +2618,7 @@ function handleBulkSaveAction() {
     return;
   }
 
-  const rows = getSelectedComplianceRows();
-
-  if (rows.length === 0) {
-    closeBulkActionModal();
-    clearRecordSelection();
-    renderTable({ refreshDashboards: false });
-    return;
-  }
-
-  let addedCount = 0;
-
-  rows.forEach((row) => {
-    if (addActionToRecord(row.personId, row.recordId, title, notes)) {
-      addedCount += 1;
-    }
-  });
-
-  if (addedCount === 0) {
-    showMessage(bulkActionModalMessage, "No records could be updated.", "error");
-    return;
-  }
-
-  savePeople();
-  closeBulkActionModal();
-  showMessage(
-    appMessage,
-    `Added action "${title}" to ${addedCount} record${addedCount === 1 ? "" : "s"}.`,
-    "success"
-  );
-  renderTable();
+  void persistBulkCreateAction(title, notes);
 }
 
 function handleSaveAction() {
@@ -2704,13 +2671,10 @@ function handleSaveAction() {
   void persistCreateAction(personId, recordId, title, notes, dueDate, owner, recordLabel);
 }
 
-function addDefaultActions(personId, recordId) {
-  if (rejectIfReadOnly()) {
-    return;
-  }
+function addDefaultActionsLocal(personId, recordId) {
   const result = findPersonAndRecord(personId, recordId);
   if (!result) {
-    return;
+    return { status: "not_found" };
   }
 
   const { person, record } = result;
@@ -2751,19 +2715,182 @@ function addDefaultActions(personId, recordId) {
     addedCount += 1;
   });
 
-  if (addedCount === 0) {
+  return {
+    status: addedCount === 0 ? "all_exist" : "added",
+    addedCount,
+    person,
+    record,
+  };
+}
+
+async function persistAddDefaultActions(personId, recordId) {
+  if (!canMutateActions()) {
+    notifyMutateActionsBlocked();
+    return;
+  }
+
+  const result = findPersonAndRecord(personId, recordId);
+
+  if (!result) {
+    return;
+  }
+
+  const { person, record } = result;
+  const recordLabel = `${person.name} — ${record.complianceType}`;
+
+  if (!isCloudMode()) {
+    const outcome = addDefaultActionsLocal(personId, recordId);
+
+    if (outcome.status === "not_found") {
+      return;
+    }
+
+    if (outcome.status === "all_exist") {
+      showMessage(appMessage, `All default actions already exist for ${recordLabel}.`, "error");
+      return;
+    }
+
+    savePeople();
     showMessage(
       appMessage,
-      `All default actions already exist for ${person.name} — ${record.complianceType}.`,
+      `Added ${outcome.addedCount} default action${outcome.addedCount === 1 ? "" : "s"} to ${recordLabel}.`,
+      "success"
+    );
+    renderTable();
+    return;
+  }
+
+  if (typeof repository.addDefaultActions !== "function") {
+    showMessage(appMessage, "Cloud default actions are not available.", "error");
+    return;
+  }
+
+  const persistResult = await repository.addDefaultActions(String(recordId));
+
+  if (!persistResult.ok) {
+    showMessage(
+      appMessage,
+      persistResult.error || "Could not add default actions to the cloud.",
       "error"
     );
     return;
   }
 
-  savePeople();
+  if (persistResult.status === "not_found") {
+    showMessage(appMessage, "Record not found.", "error");
+    return;
+  }
+
+  if (persistResult.status !== "completed") {
+    showMessage(appMessage, "Could not add default actions.", "error");
+    return;
+  }
+
+  if (persistResult.addedCount === 0) {
+    showMessage(appMessage, `All default actions already exist for ${recordLabel}.`, "error");
+    return;
+  }
+
+  const refreshed = await reloadCloudDataAfterWrite();
+
+  if (!refreshed) {
+    return;
+  }
+
   showMessage(
     appMessage,
-    `Added ${addedCount} default action${addedCount === 1 ? "" : "s"} to ${person.name} — ${record.complianceType}.`,
+    `Added ${persistResult.addedCount} default action${persistResult.addedCount === 1 ? "" : "s"} to ${recordLabel}.`,
+    "success"
+  );
+}
+
+function addDefaultActions(personId, recordId) {
+  if (isCloudMode()) {
+    void persistAddDefaultActions(personId, recordId);
+    return;
+  }
+
+  if (rejectIfReadOnly()) {
+    return;
+  }
+
+  void persistAddDefaultActions(personId, recordId);
+}
+
+async function persistBulkCreateAction(title, notes) {
+  if (!canMutateActions()) {
+    notifyMutateActionsBlocked();
+    return;
+  }
+
+  const rows = getSelectedComplianceRows();
+
+  if (rows.length === 0) {
+    closeBulkActionModal();
+    clearRecordSelection();
+    renderTable({ refreshDashboards: false });
+    return;
+  }
+
+  if (!isCloudMode()) {
+    let addedCount = 0;
+
+    rows.forEach((row) => {
+      if (addActionToRecord(row.personId, row.recordId, title, notes)) {
+        addedCount += 1;
+      }
+    });
+
+    if (addedCount === 0) {
+      showMessage(bulkActionModalMessage, "No records could be updated.", "error");
+      return;
+    }
+
+    savePeople();
+    closeBulkActionModal();
+    showMessage(
+      appMessage,
+      `Added action "${title}" to ${addedCount} record${addedCount === 1 ? "" : "s"}.`,
+      "success"
+    );
+    renderTable();
+    return;
+  }
+
+  if (typeof repository.createAction !== "function") {
+    showMessage(appMessage, "Cloud action create is not available.", "error");
+    return;
+  }
+
+  let addedCount = 0;
+
+  for (const row of rows) {
+    const persistResult = await repository.createAction({
+      recordId: String(row.recordId),
+      title,
+      notes,
+    });
+
+    if (persistResult.ok && persistResult.status === "created") {
+      addedCount += 1;
+    }
+  }
+
+  if (addedCount === 0) {
+    showMessage(bulkActionModalMessage, "No records could be updated.", "error");
+    return;
+  }
+
+  const refreshed = await reloadCloudDataAfterWrite();
+
+  if (!refreshed) {
+    return;
+  }
+
+  closeBulkActionModal();
+  showMessage(
+    appMessage,
+    `Added action "${title}" to ${addedCount} record${addedCount === 1 ? "" : "s"}.`,
     "success"
   );
   renderTable();
@@ -7490,6 +7617,12 @@ function applyReadOnlyMode() {
       "action-notes",
       "action-due-date",
       "action-owner",
+      "bulk-add-action-btn",
+      "bulk-action-save-btn",
+      "bulk-action-cancel-btn",
+      "bulk-action-modal-close-btn",
+      "bulk-action-title",
+      "bulk-action-notes",
     ];
 
     actionModalControlIds.forEach((id) => {

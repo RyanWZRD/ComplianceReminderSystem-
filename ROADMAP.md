@@ -390,7 +390,8 @@ QA Status: PASS with warnings
 | P3-2 Reminder settings | **COMPLETE** |
 | P3-4 Compliance notes | **COMPLETE** |
 | P3-5A Action create/delete | **COMPLETE** ✅ |
-| P3-5B Action update & in-progress | **PLANNED** |
+| P3-5B Action update & in-progress | **COMPLETE** ✅ |
+| P3-5C Default & bulk actions | **COMPLETE** ✅ |
 | Delete/archive | **PLANNED** |
 | Evidence metadata | **PLANNED** |
 
@@ -430,7 +431,7 @@ QA Status: PASS with warnings
 - RPC `create_action` (migration `20260203000008`) — open action + `action_added` history
 - RPC `delete_action` (migration `20260203000009`) — `action_deleted` history before removal
 - Editor/admin (`canMutateActions()` when `CLOUD_WRITES_ENABLED`; separate from `canSetActionStatus()`)
-- Add Action modal + workspace Add Action + delete button wired; bulk/defaults not in cloud yet
+- Add Action modal + workspace Add Action + delete button wired
 - `canMutateData()` stays false in cloud; RPC-first via `CloudComplianceStore.createAction()` / `deleteAction()`
 - Reset: `pruneNonSeedActions()` in `reset-alpha-staging-data.mjs`
 - Verify: `npm run verify-cloud-create-delete-action` (in `verify:phase2`)
@@ -446,6 +447,20 @@ QA Status: PASS with warnings
 - Edit modal status field hidden in cloud (dedicated RPCs for status transitions)
 - Verify: `npm run verify-cloud-action-update-progress` (in `verify:phase2`)
 
+#### P3-5C Default & bulk actions · Complete
+
+**Status:** COMPLETE ✅
+
+- RPC `add_default_actions` (migration `20260203000012`) — five templates; skip duplicate titles per record; one `action_added` history per new action
+- Bulk add uses client loop of `create_action` (no bulk SQL RPC); single reload after operation
+- Editor/admin (`canMutateActions()`); workspace Add default actions + bulk toolbar wired
+- `persistAddDefaultActions()` / `persistBulkCreateAction()` — no `savePeople()` in cloud
+- Verify: `npm run verify-cloud-default-bulk-actions` (in `verify:phase2`)
+
+#### P3-5 Action writes · Complete
+
+**Status:** COMPLETE ✅ (P3-5A + P3-5B + P3-5C)
+
 #### Delete/archive · Planned
 
 **Status:** PLANNED
@@ -459,14 +474,14 @@ QA Status: PASS with warnings
 
 - Evidence metadata writes in cloud (storage buckets / uploads follow-on)
 
-**Phase 3 (remaining):** P3-5B action update/in-progress, delete/archive, evidence metadata; CSV/backup import; backup migration tooling; optional notes protection negative test / local parity.
+**Phase 3 (remaining):** delete/archive, evidence metadata; CSV/backup import; backup migration tooling; optional notes protection negative test / local parity.
 
 ### v3.0.0 — Cloud Platform Foundation (remaining) · Planned
 
 - Production cloud writes policy and GDPR checklist
 - Evidence storage buckets and uploads
 - CSV/backup import migration path
-- Full local parity in cloud (action edit/in-progress/defaults/bulk, evidence, import — reminder settings and workspace notes in P3-2 / P3-4; action create/delete in P3-5A)
+- Full local parity in cloud (evidence, import — reminder settings and workspace notes in P3-2 / P3-4; action writes in P3-5)
 
 See [v3.0.0 — Cloud Platform Foundation](#v300--cloud-platform-foundation) above for full goals and architecture.
 

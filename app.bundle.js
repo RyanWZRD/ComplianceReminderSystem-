@@ -21893,6 +21893,49 @@ ${suffix}`;
     return rpcArgs;
   }
 
+  // js/data/default-action-templates.js
+  var DEFAULT_ACTION_TEMPLATES = [
+    "Reminder sent",
+    "Renewal chased",
+    "Certificate received",
+    "Evidence uploaded",
+    "Renewal verified"
+  ];
+
+  // js/data/add-default-actions.js
+  function mapAddDefaultActionsToRpc(recordId) {
+    return { p_record_id: recordId };
+  }
+  function parseAddDefaultActionsResponse(data) {
+    if (!data || typeof data !== "object") {
+      return { ok: false, error: "Unexpected response from add_default_actions." };
+    }
+    const status = data.status;
+    if (status === "not_found") {
+      return { ok: true, status: "not_found" };
+    }
+    if (status !== "completed") {
+      return {
+        ok: false,
+        error: `Unexpected add_default_actions status: ${String(status)}`
+      };
+    }
+    const added = Array.isArray(data.added) ? data.added.filter((item) => item && typeof item === "object").map((item) => ({
+      actionId: String(item.action_id ?? ""),
+      title: typeof item.title === "string" ? item.title : ""
+    })).filter((item) => item.actionId && item.title) : [];
+    const skippedTitles = Array.isArray(data.skipped_titles) ? data.skipped_titles.filter((title) => typeof title === "string") : [];
+    return {
+      ok: true,
+      status: "completed",
+      recordId: String(data.record_id ?? ""),
+      addedCount: Number(data.added_count ?? 0),
+      skippedCount: Number(data.skipped_count ?? 0),
+      added,
+      skippedTitles
+    };
+  }
+
   // js/data/update-action.js
   function mapUpdateActionToRpc(input) {
     const rpcArgs = {
@@ -22596,6 +22639,40 @@ ${suffix}`;
       };
     }
     /**
+     * @param {string} recordId
+     * @returns {Promise<
+     *   | {
+     *       ok: true;
+     *       status: "completed";
+     *       recordId: string;
+     *       addedCount: number;
+     *       skippedCount: number;
+     *       added: { actionId: string; title: string }[];
+     *       skippedTitles: string[];
+     *     }
+     *   | { ok: true; status: "not_found" }
+     *   | { ok: false; error: string }
+     * >}
+     */
+    async addDefaultActions(recordId) {
+      if (!isSupabaseConfigured()) {
+        return { ok: false, error: "Supabase is not configured." };
+      }
+      await waitForAuthReady();
+      if (!isAuthenticated()) {
+        return { ok: false, error: "Not signed in." };
+      }
+      const supabase = getSupabaseClient();
+      const { data, error } = await supabase.rpc(
+        "add_default_actions",
+        mapAddDefaultActionsToRpc(recordId)
+      );
+      if (error) {
+        return { ok: false, error: error.message };
+      }
+      return parseAddDefaultActionsResponse(data);
+    }
+    /**
      * @param {string} actionId
      * @returns {Promise<
      *   | {
@@ -23233,13 +23310,6 @@ ${suffix}`;
   var selectedRecordKeys = /* @__PURE__ */ new Set();
   var DUE_SOON_DAYS = 90;
   var RECORDS_PER_PAGE = 25;
-  var DEFAULT_ACTION_TEMPLATES = [
-    "Reminder sent",
-    "Renewal chased",
-    "Certificate received",
-    "Evidence uploaded",
-    "Renewal verified"
-  ];
   var REMINDER_LABELS = REMINDER_UI_LABELS;
   var REMINDER_URGENCY = { expired: 0, 7: 1, 14: 2, 30: 3 };
   var HISTORY_ACTION_LABELS = {
@@ -24707,7 +24777,7 @@ This cannot be undone.`
     );
     const completedItems = items.filter((item) => isActionCompleted(item));
     const showDefaultButton = isRecordActionRequired(row);
-    const defaultButton = showDefaultButton && canMutateData() ? `<button type="button" class="action-defaults-btn" data-person-id="${personId}" data-record-id="${recordId}">Add default actions</button>` : "";
+    const defaultButton = showDefaultButton && (canMutateData() || canMutateActions()) ? `<button type="button" class="action-defaults-btn" data-person-id="${personId}" data-record-id="${recordId}">Add default actions</button>` : "";
     const filterOptions = [
       { value: "all", label: "All" },
       { value: ACTION_STATUSES.OPEN, label: "Open" },
@@ -25149,7 +25219,12 @@ This cannot be undone.`
     return true;
   }
   function openBulkAddActionModal() {
-    if (rejectIfReadOnly()) {
+    if (isCloudMode()) {
+      if (!canMutateActions()) {
+        notifyMutateActionsBlocked();
+        return;
+      }
+    } else if (rejectIfReadOnly()) {
       return;
     }
     const count = selectedRecordKeys.size;
@@ -25176,40 +25251,13 @@ This cannot be undone.`
     }
   }
   function handleBulkSaveAction() {
-    if (rejectIfReadOnly()) {
-      return;
-    }
     const title = bulkActionTitleInput.value.trim();
     const notes = bulkActionNotesInput.value.trim();
     if (!title) {
       showMessage(bulkActionModalMessage, "Action title is required.", "error");
       return;
     }
-    const rows = getSelectedComplianceRows();
-    if (rows.length === 0) {
-      closeBulkActionModal();
-      clearRecordSelection();
-      renderTable({ refreshDashboards: false });
-      return;
-    }
-    let addedCount = 0;
-    rows.forEach((row) => {
-      if (addActionToRecord(row.personId, row.recordId, title, notes)) {
-        addedCount += 1;
-      }
-    });
-    if (addedCount === 0) {
-      showMessage(bulkActionModalMessage, "No records could be updated.", "error");
-      return;
-    }
-    savePeople();
-    closeBulkActionModal();
-    showMessage(
-      appMessage,
-      `Added action "${title}" to ${addedCount} record${addedCount === 1 ? "" : "s"}.`,
-      "success"
-    );
-    renderTable();
+    void persistBulkCreateAction(title, notes);
   }
   function handleSaveAction() {
     if (!actionModalContext) {
@@ -25252,13 +25300,10 @@ This cannot be undone.`
     }
     void persistCreateAction(personId, recordId, title, notes, dueDate, owner, recordLabel);
   }
-  function addDefaultActions(personId, recordId) {
-    if (rejectIfReadOnly()) {
-      return;
-    }
+  function addDefaultActionsLocal(personId, recordId) {
     const result = findPersonAndRecord(personId, recordId);
     if (!result) {
-      return;
+      return { status: "not_found" };
     }
     const { person, record } = result;
     if (!Array.isArray(record.actions)) {
@@ -25291,18 +25336,147 @@ This cannot be undone.`
       existingTitles.add(templateTitle.toLowerCase());
       addedCount += 1;
     });
-    if (addedCount === 0) {
+    return {
+      status: addedCount === 0 ? "all_exist" : "added",
+      addedCount,
+      person,
+      record
+    };
+  }
+  async function persistAddDefaultActions(personId, recordId) {
+    if (!canMutateActions()) {
+      notifyMutateActionsBlocked();
+      return;
+    }
+    const result = findPersonAndRecord(personId, recordId);
+    if (!result) {
+      return;
+    }
+    const { person, record } = result;
+    const recordLabel = `${person.name} \u2014 ${record.complianceType}`;
+    if (!isCloudMode()) {
+      const outcome = addDefaultActionsLocal(personId, recordId);
+      if (outcome.status === "not_found") {
+        return;
+      }
+      if (outcome.status === "all_exist") {
+        showMessage(appMessage, `All default actions already exist for ${recordLabel}.`, "error");
+        return;
+      }
+      savePeople();
       showMessage(
         appMessage,
-        `All default actions already exist for ${person.name} \u2014 ${record.complianceType}.`,
+        `Added ${outcome.addedCount} default action${outcome.addedCount === 1 ? "" : "s"} to ${recordLabel}.`,
+        "success"
+      );
+      renderTable();
+      return;
+    }
+    if (typeof repository.addDefaultActions !== "function") {
+      showMessage(appMessage, "Cloud default actions are not available.", "error");
+      return;
+    }
+    const persistResult = await repository.addDefaultActions(String(recordId));
+    if (!persistResult.ok) {
+      showMessage(
+        appMessage,
+        persistResult.error || "Could not add default actions to the cloud.",
         "error"
       );
       return;
     }
-    savePeople();
+    if (persistResult.status === "not_found") {
+      showMessage(appMessage, "Record not found.", "error");
+      return;
+    }
+    if (persistResult.status !== "completed") {
+      showMessage(appMessage, "Could not add default actions.", "error");
+      return;
+    }
+    if (persistResult.addedCount === 0) {
+      showMessage(appMessage, `All default actions already exist for ${recordLabel}.`, "error");
+      return;
+    }
+    const refreshed = await reloadCloudDataAfterWrite();
+    if (!refreshed) {
+      return;
+    }
     showMessage(
       appMessage,
-      `Added ${addedCount} default action${addedCount === 1 ? "" : "s"} to ${person.name} \u2014 ${record.complianceType}.`,
+      `Added ${persistResult.addedCount} default action${persistResult.addedCount === 1 ? "" : "s"} to ${recordLabel}.`,
+      "success"
+    );
+  }
+  function addDefaultActions(personId, recordId) {
+    if (isCloudMode()) {
+      void persistAddDefaultActions(personId, recordId);
+      return;
+    }
+    if (rejectIfReadOnly()) {
+      return;
+    }
+    void persistAddDefaultActions(personId, recordId);
+  }
+  async function persistBulkCreateAction(title, notes) {
+    if (!canMutateActions()) {
+      notifyMutateActionsBlocked();
+      return;
+    }
+    const rows = getSelectedComplianceRows();
+    if (rows.length === 0) {
+      closeBulkActionModal();
+      clearRecordSelection();
+      renderTable({ refreshDashboards: false });
+      return;
+    }
+    if (!isCloudMode()) {
+      let addedCount2 = 0;
+      rows.forEach((row) => {
+        if (addActionToRecord(row.personId, row.recordId, title, notes)) {
+          addedCount2 += 1;
+        }
+      });
+      if (addedCount2 === 0) {
+        showMessage(bulkActionModalMessage, "No records could be updated.", "error");
+        return;
+      }
+      savePeople();
+      closeBulkActionModal();
+      showMessage(
+        appMessage,
+        `Added action "${title}" to ${addedCount2} record${addedCount2 === 1 ? "" : "s"}.`,
+        "success"
+      );
+      renderTable();
+      return;
+    }
+    if (typeof repository.createAction !== "function") {
+      showMessage(appMessage, "Cloud action create is not available.", "error");
+      return;
+    }
+    let addedCount = 0;
+    for (const row of rows) {
+      const persistResult = await repository.createAction({
+        recordId: String(row.recordId),
+        title,
+        notes
+      });
+      if (persistResult.ok && persistResult.status === "created") {
+        addedCount += 1;
+      }
+    }
+    if (addedCount === 0) {
+      showMessage(bulkActionModalMessage, "No records could be updated.", "error");
+      return;
+    }
+    const refreshed = await reloadCloudDataAfterWrite();
+    if (!refreshed) {
+      return;
+    }
+    closeBulkActionModal();
+    showMessage(
+      appMessage,
+      `Added action "${title}" to ${addedCount} record${addedCount === 1 ? "" : "s"}.`,
       "success"
     );
     renderTable();
@@ -28942,7 +29116,13 @@ Your current data will be overwritten. Continue?`
         "action-title",
         "action-notes",
         "action-due-date",
-        "action-owner"
+        "action-owner",
+        "bulk-add-action-btn",
+        "bulk-action-save-btn",
+        "bulk-action-cancel-btn",
+        "bulk-action-modal-close-btn",
+        "bulk-action-title",
+        "bulk-action-notes"
       ];
       actionModalControlIds.forEach((id) => {
         const element = document.getElementById(id);

@@ -85,5 +85,13 @@ export function canEditComplianceRecord() {
 
 /** @returns {boolean} */
 export function canMutateReminderSettings() {
-  return canMutateData() && canAdmin();
+  if (!isCloudMode()) {
+    return canMutateData() && canAdmin();
+  }
+
+  if (!CLOUD_WRITES_ENABLED) {
+    return false;
+  }
+
+  return canAdmin();
 }

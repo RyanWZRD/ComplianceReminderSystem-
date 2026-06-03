@@ -3306,8 +3306,33 @@ async function loadReminderSettings() {
   syncReminderSettingsUI();
 }
 
-function saveReminderSettings() {
+async function saveReminderSettings() {
   if (!canMutateReminderSettings()) {
+    return;
+  }
+
+  if (isCloudMode()) {
+    if (typeof settingsRepository.updateReminderSettings !== "function") {
+      showMessage(
+        appMessage,
+        "Cloud reminder settings updates are not available.",
+        "error"
+      );
+      return;
+    }
+
+    const persistResult = await settingsRepository.updateReminderSettings(reminderSettings);
+
+    if (!persistResult.ok) {
+      showMessage(
+        appMessage,
+        persistResult.error || "Could not save reminder settings to the cloud.",
+        "error"
+      );
+      await loadReminderSettings();
+      return;
+    }
+
     return;
   }
 
@@ -3337,8 +3362,19 @@ function isHideSentRemindersEnabled() {
 }
 
 // Read checkboxes and refresh reminders
-function handleReminderSettingsChange() {
-  if (rejectIfReadOnly()) {
+async function handleReminderSettingsChange() {
+  if (!canMutateReminderSettings()) {
+    if (isCloudMode() && CLOUD_WRITES_ENABLED) {
+      showMessage(
+        appMessage,
+        "Only admins can change reminder settings in cloud mode.",
+        "error"
+      );
+    } else {
+      notifyReadOnlyBlocked();
+    }
+
+    syncReminderSettingsUI();
     return;
   }
 
@@ -3351,7 +3387,7 @@ function handleReminderSettingsChange() {
       : false,
   };
 
-  saveReminderSettings();
+  await saveReminderSettings();
   renderReminders();
 }
 
@@ -6898,6 +6934,24 @@ function applyReadOnlyMode() {
       });
     }
   }
+
+  if (canMutateReminderSettings()) {
+    const reminderSettingsControlIds = [
+      "reminder-days-30",
+      "reminder-days-14",
+      "reminder-days-7",
+      "hide-sent-reminders",
+    ];
+
+    reminderSettingsControlIds.forEach((id) => {
+      const element = document.getElementById(id);
+
+      if (element instanceof HTMLInputElement) {
+        element.disabled = false;
+        element.classList.remove("read-only-disabled");
+      }
+    });
+  }
 }
 
 async function finishAppBoot() {
@@ -6919,7 +6973,8 @@ async function finishAppBoot() {
         canSetActionStatus() ||
         canRenewCompliance() ||
         canAddComplianceRecord() ||
-        canEditComplianceRecord())
+        canEditComplianceRecord() ||
+        canMutateReminderSettings())
     ) {
       dataBackendBadge.textContent = "Cloud mode (limited writes)";
     } else {

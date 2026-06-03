@@ -5,6 +5,10 @@ import {
 } from "../auth/session.js";
 import { DEFAULT_REMINDER_SETTINGS } from "./constants.js";
 import { getSupabaseClient, isSupabaseConfigured } from "./supabase-client.js";
+import {
+  mapReminderSettingsFromRow,
+  mapReminderSettingsToRpc,
+} from "./reminder-settings.js";
 
 const READ_ONLY_MESSAGE =
   "Cloud settings store is read-only in this release. Writes are not enabled yet.";
@@ -36,6 +40,49 @@ export class CloudSettingsStore {
 
   getSettings() {
     return this.settings;
+  }
+
+  /**
+   * @param {typeof DEFAULT_REMINDER_SETTINGS} nextSettings
+   * @returns {Promise<
+   *   | { ok: true; status: "updated" }
+   *   | { ok: false; error: string }
+   * >}
+   */
+  async updateReminderSettings(nextSettings) {
+    if (!isSupabaseConfigured()) {
+      return { ok: false, error: "Supabase is not configured." };
+    }
+
+    await waitForAuthReady();
+
+    if (!isAuthenticated()) {
+      return { ok: false, error: "Not signed in." };
+    }
+
+    const supabase = getSupabaseClient();
+    const rpcArgs = mapReminderSettingsToRpc(nextSettings);
+    const { data, error } = await supabase.rpc("update_reminder_settings", rpcArgs);
+
+    if (error) {
+      return { ok: false, error: error.message };
+    }
+
+    if (!data || typeof data !== "object" || data.status !== "updated") {
+      return {
+        ok: false,
+        error: `Unexpected response from update_reminder_settings: ${JSON.stringify(data)}`,
+      };
+    }
+
+    this.settings = {
+      days30: nextSettings.days30 !== false,
+      days14: nextSettings.days14 !== false,
+      days7: nextSettings.days7 !== false,
+      hideSentReminders: nextSettings.hideSentReminders === true,
+    };
+
+    return { ok: true, status: "updated" };
   }
 
   /**
@@ -80,12 +127,7 @@ export class CloudSettingsStore {
         return { ok: true, isDefault: true };
       }
 
-      this.settings = {
-        days30: data.days_30 !== false,
-        days14: data.days_14 !== false,
-        days7: data.days_7 !== false,
-        hideSentReminders: data.hide_sent_reminders === true,
-      };
+      this.settings = mapReminderSettingsFromRow(data);
 
       return { ok: true, isDefault: false };
     } catch (error) {

@@ -46,7 +46,7 @@ Browser cloud dev: `?backend=cloud` in the URL. Browser limited writes: `?cloudW
 
 Node verify scripts: `process.env.DATA_BACKEND=cloud` and per-script `CLOUD_WRITES_ENABLED=true` for RPC tests.
 
-Cloud **load** is implemented. **Mark Reminder Sent**, **renew compliance**, **action complete/reopen**, **add compliance record**, and **edit compliance record** use RPC when `CLOUD_WRITES_ENABLED` is true. All other cloud mutations remain blocked (`canMutateData()` false in cloud). See `js/app/permissions.js`.
+Cloud **load** is implemented. **Mark Reminder Sent**, **renew compliance**, **action complete/reopen**, **add compliance record**, **edit compliance record**, and **reminder settings (admin)** use RPC when `CLOUD_WRITES_ENABLED` is true. All other cloud mutations remain blocked (`canMutateData()` false in cloud). See `js/app/permissions.js`.
 
 ## Verify scripts
 
@@ -66,6 +66,7 @@ Cloud **load** is implemented. **Mark Reminder Sent**, **renew compliance**, **a
 | `npm run verify-cloud-renew-compliance` | Editor renew RPC; viewer denied |
 | `npm run verify-cloud-create-compliance-record` | Editor create RPC; viewer denied |
 | `npm run verify-cloud-edit-compliance-record` | Editor edit RPC; viewer denied |
+| `npm run verify-cloud-update-reminder-settings` | Admin settings RPC; editor/viewer denied |
 | `npm run verify-staging-config` | `.env` + `supabase-env.js` present |
 
 See `docs/cloud-phase2-completion.md`, `docs/cloud-setup.md`, and `docs/staging-deployment.md`.

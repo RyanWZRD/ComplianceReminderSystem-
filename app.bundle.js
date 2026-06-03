@@ -21364,7 +21364,13 @@ ${suffix}`;
     return canEdit();
   }
   function canMutateReminderSettings() {
-    return canMutateData() && canAdmin();
+    if (!isCloudMode()) {
+      return canMutateData() && canAdmin();
+    }
+    if (!CLOUD_WRITES_ENABLED) {
+      return false;
+    }
+    return canAdmin();
   }
 
   // js/auth/login-panel.js
@@ -22675,6 +22681,24 @@ ${suffix}`;
     };
   }
 
+  // js/data/reminder-settings.js
+  function mapReminderSettingsToRpc(settings) {
+    return {
+      p_days_30: settings.days30 !== false,
+      p_days_14: settings.days14 !== false,
+      p_days_7: settings.days7 !== false,
+      p_hide_sent_reminders: settings.hideSentReminders === true
+    };
+  }
+  function mapReminderSettingsFromRow(row) {
+    return {
+      days30: row.days_30 !== false,
+      days14: row.days_14 !== false,
+      days7: row.days_7 !== false,
+      hideSentReminders: row.hide_sent_reminders === true
+    };
+  }
+
   // js/data/cloud-settings-store.js
   var READ_ONLY_MESSAGE2 = "Cloud settings store is read-only in this release. Writes are not enabled yet.";
   var CloudSettingsStore = class {
@@ -22691,6 +22715,41 @@ ${suffix}`;
     }
     getSettings() {
       return this.settings;
+    }
+    /**
+     * @param {typeof DEFAULT_REMINDER_SETTINGS} nextSettings
+     * @returns {Promise<
+     *   | { ok: true; status: "updated" }
+     *   | { ok: false; error: string }
+     * >}
+     */
+    async updateReminderSettings(nextSettings) {
+      if (!isSupabaseConfigured()) {
+        return { ok: false, error: "Supabase is not configured." };
+      }
+      await waitForAuthReady();
+      if (!isAuthenticated()) {
+        return { ok: false, error: "Not signed in." };
+      }
+      const supabase = getSupabaseClient();
+      const rpcArgs = mapReminderSettingsToRpc(nextSettings);
+      const { data, error } = await supabase.rpc("update_reminder_settings", rpcArgs);
+      if (error) {
+        return { ok: false, error: error.message };
+      }
+      if (!data || typeof data !== "object" || data.status !== "updated") {
+        return {
+          ok: false,
+          error: `Unexpected response from update_reminder_settings: ${JSON.stringify(data)}`
+        };
+      }
+      this.settings = {
+        days30: nextSettings.days30 !== false,
+        days14: nextSettings.days14 !== false,
+        days7: nextSettings.days7 !== false,
+        hideSentReminders: nextSettings.hideSentReminders === true
+      };
+      return { ok: true, status: "updated" };
     }
     /**
      * @returns {Promise<SettingsLoadResult>}
@@ -22722,12 +22781,7 @@ ${suffix}`;
           this.settings = { ...DEFAULT_REMINDER_SETTINGS };
           return { ok: true, isDefault: true };
         }
-        this.settings = {
-          days30: data.days_30 !== false,
-          days14: data.days_14 !== false,
-          days7: data.days_7 !== false,
-          hideSentReminders: data.hide_sent_reminders === true
-        };
+        this.settings = mapReminderSettingsFromRow(data);
         return { ok: true, isDefault: false };
       } catch (error) {
         const loadError = error instanceof Error ? error : new Error(String(error));
@@ -25326,8 +25380,29 @@ This cannot be undone.`
     reminderSettings = settingsRepository.getSettings();
     syncReminderSettingsUI();
   }
-  function saveReminderSettings() {
+  async function saveReminderSettings() {
     if (!canMutateReminderSettings()) {
+      return;
+    }
+    if (isCloudMode()) {
+      if (typeof settingsRepository.updateReminderSettings !== "function") {
+        showMessage(
+          appMessage,
+          "Cloud reminder settings updates are not available.",
+          "error"
+        );
+        return;
+      }
+      const persistResult = await settingsRepository.updateReminderSettings(reminderSettings);
+      if (!persistResult.ok) {
+        showMessage(
+          appMessage,
+          persistResult.error || "Could not save reminder settings to the cloud.",
+          "error"
+        );
+        await loadReminderSettings();
+        return;
+      }
       return;
     }
     settingsRepository.setSettings(reminderSettings);
@@ -25348,8 +25423,18 @@ This cannot be undone.`
     }
     return reminderSettings.hideSentReminders === true;
   }
-  function handleReminderSettingsChange() {
-    if (rejectIfReadOnly()) {
+  async function handleReminderSettingsChange() {
+    if (!canMutateReminderSettings()) {
+      if (isCloudMode() && CLOUD_WRITES_ENABLED) {
+        showMessage(
+          appMessage,
+          "Only admins can change reminder settings in cloud mode.",
+          "error"
+        );
+      } else {
+        notifyReadOnlyBlocked();
+      }
+      syncReminderSettingsUI();
       return;
     }
     reminderSettings = {
@@ -25358,7 +25443,7 @@ This cannot be undone.`
       days7: reminderDays7.checked,
       hideSentReminders: hideSentRemindersCheckbox ? hideSentRemindersCheckbox.checked : false
     };
-    saveReminderSettings();
+    await saveReminderSettings();
     renderReminders();
   }
   function getActiveReminderDays() {
@@ -28119,6 +28204,21 @@ Your current data will be overwritten. Continue?`
         });
       }
     }
+    if (canMutateReminderSettings()) {
+      const reminderSettingsControlIds = [
+        "reminder-days-30",
+        "reminder-days-14",
+        "reminder-days-7",
+        "hide-sent-reminders"
+      ];
+      reminderSettingsControlIds.forEach((id) => {
+        const element = document.getElementById(id);
+        if (element instanceof HTMLInputElement) {
+          element.disabled = false;
+          element.classList.remove("read-only-disabled");
+        }
+      });
+    }
   }
   async function finishAppBoot() {
     const bootOk = await bootData();
@@ -28130,7 +28230,7 @@ Your current data will be overwritten. Continue?`
     if (dataBackendBadge) {
       if (DATA_BACKEND === "local") {
         dataBackendBadge.textContent = "Local storage mode";
-      } else if (CLOUD_WRITES_ENABLED && (canMarkReminderSent() || canSetActionStatus() || canRenewCompliance() || canAddComplianceRecord() || canEditComplianceRecord())) {
+      } else if (CLOUD_WRITES_ENABLED && (canMarkReminderSent() || canSetActionStatus() || canRenewCompliance() || canAddComplianceRecord() || canEditComplianceRecord() || canMutateReminderSettings())) {
         dataBackendBadge.textContent = "Cloud mode (limited writes)";
       } else {
         dataBackendBadge.textContent = "Cloud mode (read-only)";

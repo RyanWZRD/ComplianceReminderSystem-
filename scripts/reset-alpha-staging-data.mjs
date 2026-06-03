@@ -364,6 +364,23 @@ async function restoreSeedActions(supabase) {
 /**
  * @param {import('@supabase/supabase-js').SupabaseClient} supabase
  */
+async function restoreSeedReminderSettings(supabase) {
+  const { error } = await supabase
+    .from("reminder_settings")
+    .update({
+      days_30: true,
+      days_14: true,
+      days_7: true,
+      hide_sent_reminders: false,
+    })
+    .eq("organisation_id", ALPHA_ORG_ID);
+
+  assertNoError("restore reminder_settings", { error });
+}
+
+/**
+ * @param {import('@supabase/supabase-js').SupabaseClient} supabase
+ */
 async function assertCanonicalState(supabase) {
   const { data: step10People, error: step10Error } = await supabase
     .from("people")
@@ -447,6 +464,7 @@ await restoreSeedPeople(supabase);
 await restoreSeedRecords(supabase);
 const deletedHistory = await pruneNonSeedHistory(supabase);
 await restoreSeedActions(supabase);
+await restoreSeedReminderSettings(supabase);
 await assertCanonicalState(supabase);
 
 console.log("reset-alpha-staging-data: OK");

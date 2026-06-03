@@ -18,6 +18,7 @@ import {
   canMarkReminderSent,
   canMutateActions,
   canMutateData,
+  canMutateEvidence,
   canMutateReminderSettings,
   canRenewCompliance,
   canSetActionStatus,
@@ -453,6 +454,19 @@ function notifyMutateActionsBlocked() {
   notifyReadOnlyBlocked();
 }
 
+function notifyMutateEvidenceBlocked() {
+  if (isCloudMode() && CLOUD_WRITES_ENABLED) {
+    showMessage(
+      appMessage,
+      "Your role cannot add evidence in cloud mode.",
+      "error"
+    );
+    return;
+  }
+
+  notifyReadOnlyBlocked();
+}
+
 function notifyRenewComplianceBlocked() {
   if (isCloudMode() && CLOUD_WRITES_ENABLED) {
     showMessage(
@@ -877,7 +891,12 @@ function readFileAsDataUrl(file) {
 }
 
 function openAddEvidenceModal(personId, recordId) {
-  if (rejectIfReadOnly()) {
+  if (isCloudMode()) {
+    if (!canMutateEvidence()) {
+      notifyMutateEvidenceBlocked();
+      return;
+    }
+  } else if (rejectIfReadOnly()) {
     return;
   }
   const result = findPersonAndRecord(personId, recordId);
@@ -921,9 +940,15 @@ function closeEvidenceModal() {
 }
 
 async function handleSaveEvidence() {
-  if (rejectIfReadOnly()) {
+  if (isCloudMode()) {
+    if (!canMutateEvidence()) {
+      notifyMutateEvidenceBlocked();
+      return;
+    }
+  } else if (rejectIfReadOnly()) {
     return;
   }
+
   if (!evidenceModalContext) {
     return;
   }
@@ -935,6 +960,15 @@ async function handleSaveEvidence() {
 
   if (!name) {
     showMessage(evidenceModalMessage, "Document name is required.", "error");
+    return;
+  }
+
+  if (isCloudMode() && file) {
+    showMessage(
+      evidenceModalMessage,
+      "File attachments are not available in cloud mode yet. Save metadata only or use local mode.",
+      "error"
+    );
     return;
   }
 
@@ -961,39 +995,126 @@ async function handleSaveEvidence() {
   }
 
   const { personId, recordId, recordLabel } = evidenceModalContext;
-  const result = findPersonAndRecord(personId, recordId);
 
-  if (!result) {
-    closeEvidenceModal();
+  await persistCreateEvidence(personId, recordId, {
+    name,
+    documentType,
+    notes,
+    addedDate: dateToISOString(getTodayAtMidnight()),
+    fileName,
+    fileData,
+    recordLabel,
+  });
+}
+
+/**
+ * @param {string | number} personId
+ * @param {string | number} recordId
+ * @param {{
+ *   name: string;
+ *   documentType: string;
+ *   notes: string;
+ *   addedDate: string;
+ *   fileName: string | null;
+ *   fileData: string | null;
+ *   recordLabel: string;
+ * }} payload
+ */
+async function persistCreateEvidence(personId, recordId, payload) {
+  const { name, documentType, notes, addedDate, fileName, fileData, recordLabel } = payload;
+
+  if (!canMutateEvidence()) {
+    notifyMutateEvidenceBlocked();
     return;
   }
 
-  const evidenceItem = {
-    id: repository.nextEvidenceId++,
-    name,
-    documentType,
-    addedDate: dateToISOString(getTodayAtMidnight()),
-    notes,
-    fileName,
-    fileData,
-  };
+  if (!isCloudMode()) {
+    const result = findPersonAndRecord(personId, recordId);
 
-  if (!Array.isArray(result.record.evidence)) {
-    result.record.evidence = [];
+    if (!result) {
+      closeEvidenceModal();
+      return;
+    }
+
+    const evidenceItem = {
+      id: repository.nextEvidenceId++,
+      name,
+      documentType,
+      addedDate,
+      notes,
+      fileName,
+      fileData,
+    };
+
+    if (!Array.isArray(result.record.evidence)) {
+      result.record.evidence = [];
+    }
+
+    result.record.evidence.push(evidenceItem);
+
+    appendHistoryEntry(
+      result.record,
+      HISTORY_ACTIONS.EVIDENCE_ADDED,
+      `Evidence added: ${documentType}.`
+    );
+
+    savePeople();
+    closeEvidenceModal();
+    showMessage(appMessage, `Evidence added to ${recordLabel}.`, "success");
+    renderTable();
+    return;
   }
 
-  result.record.evidence.push(evidenceItem);
+  if (typeof repository.createEvidence !== "function") {
+    showMessage(appMessage, "Cloud evidence create is not available.", "error");
+    return;
+  }
 
-  appendHistoryEntry(
-    result.record,
-    HISTORY_ACTIONS.EVIDENCE_ADDED,
-    `Evidence added: ${documentType}.`
-  );
+  const persistResult = await repository.createEvidence({
+    recordId: String(recordId),
+    name,
+    documentType,
+    notes,
+    addedDate,
+    fileName,
+  });
 
-  savePeople();
+  if (!persistResult.ok) {
+    showMessage(
+      appMessage,
+      persistResult.error || "Could not save evidence to the cloud.",
+      "error"
+    );
+    return;
+  }
+
+  if (persistResult.status === "not_found") {
+    showMessage(appMessage, "Record not found.", "error");
+    return;
+  }
+
+  if (persistResult.status === "validation_error") {
+    const fieldMessage =
+      persistResult.field === "document_type"
+        ? "Document type is required."
+        : "Document name is required.";
+    showMessage(evidenceModalMessage, fieldMessage, "error");
+    return;
+  }
+
+  if (persistResult.status !== "created") {
+    showMessage(appMessage, "Could not add evidence.", "error");
+    return;
+  }
+
+  const refreshed = await reloadCloudDataAfterWrite();
+
+  if (!refreshed) {
+    return;
+  }
+
   closeEvidenceModal();
   showMessage(appMessage, `Evidence added to ${recordLabel}.`, "success");
-  renderTable();
 }
 
 function deleteEvidenceItem(personId, recordId, evidenceId) {
@@ -2239,20 +2360,31 @@ function renderRecordWorkspace() {
     }
   }
 
-  if (!canMutateData() && !canMutateActions()) {
+  if (!canMutateData() && !canMutateActions() && !canMutateEvidence()) {
     workspaceContent.querySelectorAll(".evidence-add-btn, .actions-add-btn").forEach((button) => {
       if (button instanceof HTMLButtonElement) {
         button.disabled = true;
         button.classList.add("read-only-disabled");
       }
     });
-  } else if (canMutateActions() && !canMutateData()) {
-    workspaceContent.querySelectorAll(".actions-add-btn").forEach((button) => {
-      if (button instanceof HTMLButtonElement) {
-        button.disabled = false;
-        button.classList.remove("read-only-disabled");
-      }
-    });
+  } else {
+    if (canMutateActions() && !canMutateData()) {
+      workspaceContent.querySelectorAll(".actions-add-btn").forEach((button) => {
+        if (button instanceof HTMLButtonElement) {
+          button.disabled = false;
+          button.classList.remove("read-only-disabled");
+        }
+      });
+    }
+
+    if (canMutateEvidence() && !canMutateData()) {
+      workspaceContent.querySelectorAll(".evidence-add-btn").forEach((button) => {
+        if (button instanceof HTMLButtonElement) {
+          button.disabled = false;
+          button.classList.remove("read-only-disabled");
+        }
+      });
+    }
   }
 }
 

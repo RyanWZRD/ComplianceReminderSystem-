@@ -12,6 +12,7 @@ import { mapCreateComplianceRecordToRpc } from "./create-compliance-record.js";
 import { mapEditComplianceRecordToRpc } from "./edit-compliance-record.js";
 import { mapUpdateComplianceRecordNotesToRpc } from "./update-compliance-record-notes.js";
 import { mapCreateActionToRpc } from "./create-action.js";
+import { mapCreateEvidenceToRpc } from "./create-evidence.js";
 import {
   mapAddDefaultActionsToRpc,
   parseAddDefaultActionsResponse,
@@ -411,6 +412,94 @@ export class CloudComplianceStore extends LocalComplianceStore {
     return {
       ok: false,
       error: `Unexpected create_action status: ${String(status)}`,
+    };
+  }
+
+  /**
+   * @param {{
+   *   recordId: string;
+   *   name: string;
+   *   documentType: string;
+   *   notes?: string;
+   *   addedDate?: string;
+   *   fileName?: string | null;
+   * }} input
+   * @returns {Promise<
+   *   | {
+   *       ok: true;
+   *       status: "created";
+   *       evidenceId: string;
+   *       recordId: string;
+   *       name: string;
+   *       documentType: string;
+   *     }
+   *   | {
+   *       ok: true;
+   *       status: "not_found" | "validation_error";
+   *       field?: string;
+   *       reason?: string;
+   *     }
+   *   | { ok: false; error: string }
+   * >}
+   */
+  async createEvidence(input) {
+    if (!isSupabaseConfigured()) {
+      return { ok: false, error: "Supabase is not configured." };
+    }
+
+    await waitForAuthReady();
+
+    if (!isAuthenticated()) {
+      return { ok: false, error: "Not signed in." };
+    }
+
+    const supabase = getSupabaseClient();
+    const rpcArgs = mapCreateEvidenceToRpc(input);
+    const { data, error } = await supabase.rpc("create_evidence", rpcArgs);
+
+    if (error) {
+      return { ok: false, error: error.message };
+    }
+
+    if (!data || typeof data !== "object") {
+      return { ok: false, error: "Unexpected response from create_evidence." };
+    }
+
+    const status = data.status;
+
+    if (status === "validation_error") {
+      return {
+        ok: true,
+        status: "validation_error",
+        field: typeof data.field === "string" ? data.field : undefined,
+        reason: typeof data.reason === "string" ? data.reason : undefined,
+      };
+    }
+
+    if (status === "not_found") {
+      return { ok: true, status: "not_found" };
+    }
+
+    if (status === "created") {
+      const evidence =
+        data.evidence && typeof data.evidence === "object" ? data.evidence : {};
+
+      return {
+        ok: true,
+        status: "created",
+        evidenceId: String(data.evidence_id ?? ""),
+        recordId: String(data.record_id ?? input.recordId),
+        name: typeof evidence.name === "string" ? evidence.name : input.name,
+        documentType:
+          typeof evidence.document_type === "string"
+            ? evidence.document_type
+            : input.documentType,
+      };
+    }
+
+    return {
+      ok: false,
+      error: `Unexpected create_evidence status: ${String(status)}`,
     };
   }
 

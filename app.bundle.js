@@ -21345,6 +21345,15 @@ ${suffix}`;
     }
     return canEdit();
   }
+  function canMutateEvidence() {
+    if (!isCloudMode()) {
+      return canMutateData();
+    }
+    if (!CLOUD_WRITES_ENABLED) {
+      return false;
+    }
+    return canEdit();
+  }
   function canRenewCompliance() {
     if (!isCloudMode()) {
       return canMutateData();
@@ -21889,6 +21898,23 @@ ${suffix}`;
     };
     if (input.dueDate) {
       rpcArgs.p_due_date = input.dueDate;
+    }
+    return rpcArgs;
+  }
+
+  // js/data/create-evidence.js
+  function mapCreateEvidenceToRpc(input) {
+    const rpcArgs = {
+      p_record_id: input.recordId,
+      p_name: input.name,
+      p_document_type: input.documentType,
+      p_notes: input.notes ?? ""
+    };
+    if (input.addedDate) {
+      rpcArgs.p_added_date = input.addedDate;
+    }
+    if (input.fileName) {
+      rpcArgs.p_file_name = input.fileName;
     }
     return rpcArgs;
   }
@@ -22636,6 +22662,78 @@ ${suffix}`;
       return {
         ok: false,
         error: `Unexpected create_action status: ${String(status)}`
+      };
+    }
+    /**
+     * @param {{
+     *   recordId: string;
+     *   name: string;
+     *   documentType: string;
+     *   notes?: string;
+     *   addedDate?: string;
+     *   fileName?: string | null;
+     * }} input
+     * @returns {Promise<
+     *   | {
+     *       ok: true;
+     *       status: "created";
+     *       evidenceId: string;
+     *       recordId: string;
+     *       name: string;
+     *       documentType: string;
+     *     }
+     *   | {
+     *       ok: true;
+     *       status: "not_found" | "validation_error";
+     *       field?: string;
+     *       reason?: string;
+     *     }
+     *   | { ok: false; error: string }
+     * >}
+     */
+    async createEvidence(input) {
+      if (!isSupabaseConfigured()) {
+        return { ok: false, error: "Supabase is not configured." };
+      }
+      await waitForAuthReady();
+      if (!isAuthenticated()) {
+        return { ok: false, error: "Not signed in." };
+      }
+      const supabase = getSupabaseClient();
+      const rpcArgs = mapCreateEvidenceToRpc(input);
+      const { data, error } = await supabase.rpc("create_evidence", rpcArgs);
+      if (error) {
+        return { ok: false, error: error.message };
+      }
+      if (!data || typeof data !== "object") {
+        return { ok: false, error: "Unexpected response from create_evidence." };
+      }
+      const status = data.status;
+      if (status === "validation_error") {
+        return {
+          ok: true,
+          status: "validation_error",
+          field: typeof data.field === "string" ? data.field : void 0,
+          reason: typeof data.reason === "string" ? data.reason : void 0
+        };
+      }
+      if (status === "not_found") {
+        return { ok: true, status: "not_found" };
+      }
+      if (status === "created") {
+        const evidence = data.evidence && typeof data.evidence === "object" ? data.evidence : {};
+        return {
+          ok: true,
+          status: "created",
+          evidenceId: String(data.evidence_id ?? ""),
+          recordId: String(data.record_id ?? input.recordId),
+          name: typeof evidence.name === "string" ? evidence.name : input.name,
+          documentType: typeof evidence.document_type === "string" ? evidence.document_type : input.documentType
+        };
+      }
+      return {
+        ok: false,
+        error: `Unexpected create_evidence status: ${String(status)}`
       };
     }
     /**
@@ -23629,6 +23727,17 @@ ${suffix}`;
     }
     notifyReadOnlyBlocked();
   }
+  function notifyMutateEvidenceBlocked() {
+    if (isCloudMode() && CLOUD_WRITES_ENABLED) {
+      showMessage(
+        appMessage,
+        "Your role cannot add evidence in cloud mode.",
+        "error"
+      );
+      return;
+    }
+    notifyReadOnlyBlocked();
+  }
   function notifyRenewComplianceBlocked() {
     if (isCloudMode() && CLOUD_WRITES_ENABLED) {
       showMessage(
@@ -23920,7 +24029,12 @@ ${suffix}`;
     });
   }
   function openAddEvidenceModal(personId, recordId) {
-    if (rejectIfReadOnly()) {
+    if (isCloudMode()) {
+      if (!canMutateEvidence()) {
+        notifyMutateEvidenceBlocked();
+        return;
+      }
+    } else if (rejectIfReadOnly()) {
       return;
     }
     const result = findPersonAndRecord(personId, recordId);
@@ -23956,7 +24070,12 @@ ${suffix}`;
     }
   }
   async function handleSaveEvidence() {
-    if (rejectIfReadOnly()) {
+    if (isCloudMode()) {
+      if (!canMutateEvidence()) {
+        notifyMutateEvidenceBlocked();
+        return;
+      }
+    } else if (rejectIfReadOnly()) {
       return;
     }
     if (!evidenceModalContext) {
@@ -23968,6 +24087,14 @@ ${suffix}`;
     const file = evidenceFileInput.files[0] || null;
     if (!name) {
       showMessage(evidenceModalMessage, "Document name is required.", "error");
+      return;
+    }
+    if (isCloudMode() && file) {
+      showMessage(
+        evidenceModalMessage,
+        "File attachments are not available in cloud mode yet. Save metadata only or use local mode.",
+        "error"
+      );
       return;
     }
     let fileName = null;
@@ -23990,33 +24117,91 @@ ${suffix}`;
       }
     }
     const { personId, recordId, recordLabel } = evidenceModalContext;
-    const result = findPersonAndRecord(personId, recordId);
-    if (!result) {
-      closeEvidenceModal();
-      return;
-    }
-    const evidenceItem = {
-      id: repository.nextEvidenceId++,
+    await persistCreateEvidence(personId, recordId, {
       name,
       documentType,
-      addedDate: dateToISOString(getTodayAtMidnight()),
       notes,
+      addedDate: dateToISOString(getTodayAtMidnight()),
       fileName,
-      fileData
-    };
-    if (!Array.isArray(result.record.evidence)) {
-      result.record.evidence = [];
+      fileData,
+      recordLabel
+    });
+  }
+  async function persistCreateEvidence(personId, recordId, payload) {
+    const { name, documentType, notes, addedDate, fileName, fileData, recordLabel } = payload;
+    if (!canMutateEvidence()) {
+      notifyMutateEvidenceBlocked();
+      return;
     }
-    result.record.evidence.push(evidenceItem);
-    appendHistoryEntry(
-      result.record,
-      HISTORY_ACTIONS.EVIDENCE_ADDED,
-      `Evidence added: ${documentType}.`
-    );
-    savePeople();
+    if (!isCloudMode()) {
+      const result = findPersonAndRecord(personId, recordId);
+      if (!result) {
+        closeEvidenceModal();
+        return;
+      }
+      const evidenceItem = {
+        id: repository.nextEvidenceId++,
+        name,
+        documentType,
+        addedDate,
+        notes,
+        fileName,
+        fileData
+      };
+      if (!Array.isArray(result.record.evidence)) {
+        result.record.evidence = [];
+      }
+      result.record.evidence.push(evidenceItem);
+      appendHistoryEntry(
+        result.record,
+        HISTORY_ACTIONS.EVIDENCE_ADDED,
+        `Evidence added: ${documentType}.`
+      );
+      savePeople();
+      closeEvidenceModal();
+      showMessage(appMessage, `Evidence added to ${recordLabel}.`, "success");
+      renderTable();
+      return;
+    }
+    if (typeof repository.createEvidence !== "function") {
+      showMessage(appMessage, "Cloud evidence create is not available.", "error");
+      return;
+    }
+    const persistResult = await repository.createEvidence({
+      recordId: String(recordId),
+      name,
+      documentType,
+      notes,
+      addedDate,
+      fileName
+    });
+    if (!persistResult.ok) {
+      showMessage(
+        appMessage,
+        persistResult.error || "Could not save evidence to the cloud.",
+        "error"
+      );
+      return;
+    }
+    if (persistResult.status === "not_found") {
+      showMessage(appMessage, "Record not found.", "error");
+      return;
+    }
+    if (persistResult.status === "validation_error") {
+      const fieldMessage = persistResult.field === "document_type" ? "Document type is required." : "Document name is required.";
+      showMessage(evidenceModalMessage, fieldMessage, "error");
+      return;
+    }
+    if (persistResult.status !== "created") {
+      showMessage(appMessage, "Could not add evidence.", "error");
+      return;
+    }
+    const refreshed = await reloadCloudDataAfterWrite();
+    if (!refreshed) {
+      return;
+    }
     closeEvidenceModal();
     showMessage(appMessage, `Evidence added to ${recordLabel}.`, "success");
-    renderTable();
   }
   function deleteEvidenceItem(personId, recordId, evidenceId) {
     if (rejectIfReadOnly()) {
@@ -24975,20 +25160,30 @@ This cannot be undone.`
         saveNotesBtn.classList.add("read-only-disabled");
       }
     }
-    if (!canMutateData() && !canMutateActions()) {
+    if (!canMutateData() && !canMutateActions() && !canMutateEvidence()) {
       workspaceContent.querySelectorAll(".evidence-add-btn, .actions-add-btn").forEach((button) => {
         if (button instanceof HTMLButtonElement) {
           button.disabled = true;
           button.classList.add("read-only-disabled");
         }
       });
-    } else if (canMutateActions() && !canMutateData()) {
-      workspaceContent.querySelectorAll(".actions-add-btn").forEach((button) => {
-        if (button instanceof HTMLButtonElement) {
-          button.disabled = false;
-          button.classList.remove("read-only-disabled");
-        }
-      });
+    } else {
+      if (canMutateActions() && !canMutateData()) {
+        workspaceContent.querySelectorAll(".actions-add-btn").forEach((button) => {
+          if (button instanceof HTMLButtonElement) {
+            button.disabled = false;
+            button.classList.remove("read-only-disabled");
+          }
+        });
+      }
+      if (canMutateEvidence() && !canMutateData()) {
+        workspaceContent.querySelectorAll(".evidence-add-btn").forEach((button) => {
+          if (button instanceof HTMLButtonElement) {
+            button.disabled = false;
+            button.classList.remove("read-only-disabled");
+          }
+        });
+      }
     }
   }
   function handleWorkspaceRecordAction(event) {

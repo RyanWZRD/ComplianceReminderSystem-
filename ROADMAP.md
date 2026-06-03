@@ -392,8 +392,9 @@ QA Status: PASS with warnings
 | P3-5A Action create/delete | **COMPLETE** ✅ |
 | P3-5B Action update & in-progress | **COMPLETE** ✅ |
 | P3-5C Default & bulk actions | **COMPLETE** ✅ |
+| P3-6A Evidence create | **COMPLETE** ✅ |
 | Delete/archive | **PLANNED** |
-| Evidence metadata | **PLANNED** |
+| Evidence metadata (edit/delete) | **PLANNED** |
 
 #### P3-1 Verification hardening · Complete
 
@@ -461,6 +462,18 @@ QA Status: PASS with warnings
 
 **Status:** COMPLETE ✅ (P3-5A + P3-5B + P3-5C)
 
+#### P3-6A Evidence create · Complete
+
+**Status:** COMPLETE ✅
+
+- RPC `create_evidence` (migration `20260203000013`) — metadata-only insert into `evidence_items` + `evidence_added` history
+- Editor/admin (`canMutateEvidence()` when `CLOUD_WRITES_ENABLED`; separate from `canMutateActions()`)
+- Add Evidence modal + workspace Add Evidence wired; file attachments blocked in cloud (metadata only)
+- `canMutateData()` stays false in cloud; RPC-first via `CloudComplianceStore.createEvidence()`
+- Reset: `pruneNonSeedEvidence()` in `reset-alpha-staging-data.mjs`
+- Verify: `npm run verify-cloud-create-evidence` (in `verify:phase2`)
+- Not in scope: evidence edit/delete, Storage uploads
+
 #### Delete/archive · Planned
 
 **Status:** PLANNED
@@ -468,20 +481,20 @@ QA Status: PASS with warnings
 - Cloud delete compliance record and archive/snapshot flows
 - Import migration path for deleted-record history
 
-#### Evidence metadata · Planned
+#### Evidence metadata (edit/delete) · Planned
 
-**Status:** PLANNED
+**Status:** PLANNED (create in P3-6A)
 
-- Evidence metadata writes in cloud (storage buckets / uploads follow-on)
+- Evidence edit/delete RPCs; Storage buckets / uploads follow-on
 
-**Phase 3 (remaining):** delete/archive, evidence metadata; CSV/backup import; backup migration tooling; optional notes protection negative test / local parity.
+**Phase 3 (remaining):** delete/archive, evidence edit/delete; CSV/backup import; backup migration tooling; optional notes protection negative test / local parity.
 
 ### v3.0.0 — Cloud Platform Foundation (remaining) · Planned
 
 - Production cloud writes policy and GDPR checklist
 - Evidence storage buckets and uploads
 - CSV/backup import migration path
-- Full local parity in cloud (evidence, import — reminder settings and workspace notes in P3-2 / P3-4; action writes in P3-5)
+- Full local parity in cloud (evidence edit/delete, import — reminder settings and workspace notes in P3-2 / P3-4; action writes in P3-5; evidence create in P3-6A)
 
 See [v3.0.0 — Cloud Platform Foundation](#v300--cloud-platform-foundation) above for full goals and architecture.
 

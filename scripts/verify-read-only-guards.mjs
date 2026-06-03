@@ -10,6 +10,7 @@ const {
   canRenewCompliance,
   canSetActionStatus,
   canMutateActions,
+  canMutateEvidence,
   canUpdateComplianceRecordNotes,
   isCloudMode,
 } = await import("../js/app/permissions.js");
@@ -41,6 +42,11 @@ if (canSetActionStatus()) {
 
 if (canMutateActions()) {
   console.error("canMutateActions() must be false when CLOUD_WRITES_ENABLED is not set.");
+  process.exit(1);
+}
+
+if (canMutateEvidence()) {
+  console.error("canMutateEvidence() must be false when CLOUD_WRITES_ENABLED is not set.");
   process.exit(1);
 }
 

@@ -45,6 +45,11 @@ const SEED_ACTION_IDS = [
   "66666666-6666-6666-6666-666666666603",
 ];
 
+const SEED_EVIDENCE_IDS = [
+  "55555555-5555-5555-5555-555555555501",
+  "55555555-5555-5555-5555-555555555502",
+];
+
 const CANONICAL_COUNTS = {
   people: 5,
   records: 6,
@@ -339,6 +344,30 @@ async function pruneNonSeedHistory(supabase) {
 /**
  * @param {import('@supabase/supabase-js').SupabaseClient} supabase
  */
+async function pruneNonSeedEvidence(supabase) {
+  const { data, error } = await supabase
+    .from("evidence_items")
+    .select("id")
+    .eq("organisation_id", ALPHA_ORG_ID);
+
+  assertNoError("fetch evidence_items", { error });
+
+  const seedSet = new Set(SEED_EVIDENCE_IDS);
+  const extraIds = (data ?? []).map((row) => row.id).filter((id) => !seedSet.has(id));
+
+  if (extraIds.length === 0) {
+    return 0;
+  }
+
+  const { error: deleteError } = await supabase.from("evidence_items").delete().in("id", extraIds);
+
+  assertNoError("delete non-seed evidence_items", { error: deleteError });
+  return extraIds.length;
+}
+
+/**
+ * @param {import('@supabase/supabase-js').SupabaseClient} supabase
+ */
 async function pruneNonSeedActions(supabase) {
   const { data, error } = await supabase
     .from("actions")
@@ -487,6 +516,7 @@ const deletedPeople = await deleteNonSeedPeople(supabase);
 await restoreSeedPeople(supabase);
 await restoreSeedRecords(supabase);
 const deletedHistory = await pruneNonSeedHistory(supabase);
+const deletedEvidence = await pruneNonSeedEvidence(supabase);
 const deletedActions = await pruneNonSeedActions(supabase);
 await restoreSeedActions(supabase);
 await restoreSeedReminderSettings(supabase);
@@ -497,6 +527,7 @@ console.log(`  Organisation: ${ALPHA_ORG_ID}`);
 console.log(`  Removed non-seed records: ${deletedRecords}`);
 console.log(`  Removed non-seed people: ${deletedPeople}`);
 console.log(`  Removed non-seed history: ${deletedHistory}`);
+console.log(`  Removed non-seed evidence: ${deletedEvidence}`);
 console.log(`  Removed non-seed actions: ${deletedActions}`);
 console.log(`  People: ${CANONICAL_COUNTS.people}`);
 console.log(`  Records: ${CANONICAL_COUNTS.records}`);

@@ -324,6 +324,19 @@ supabase db push
 npm run verify-cloud-default-bulk-actions
 ```
 
+## Phase 3 Step 6A — Create evidence (metadata only)
+
+- Migration: `20260203000013_create_evidence_rpc.sql`
+- `canMutateData()` stays false; `canMutateEvidence()` enables Add Evidence modal + workspace button (editor/admin)
+- Inserts into `evidence_items` with `evidence_added` history; optional `file_name` only — no Storage upload
+- Cloud UI rejects file attachments on save (local mode unchanged)
+- Not in scope: evidence edit/delete
+
+```bash
+supabase db push
+npm run verify-cloud-create-evidence
+```
+
 ## Rollback
 
 | Scenario | Action |

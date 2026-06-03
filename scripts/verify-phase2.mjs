@@ -1,6 +1,6 @@
 /**
  * Phase 2 full verification — runs all automated checks in order.
- * Requires .env + staging Supabase with migrations through 20260203000006.
+ * Requires .env + staging Supabase with migrations through 20260203000007.
  * Does not enable CLOUD_WRITES_ENABLED globally; RPC scripts set env internally.
  */
 
@@ -30,6 +30,10 @@ const STEPS = [
   { label: "verify-cloud-renew-compliance", script: "verify-cloud-renew-compliance" },
   { label: "verify-cloud-create-compliance-record", script: "verify-cloud-create-compliance-record" },
   { label: "verify-cloud-edit-compliance-record", script: "verify-cloud-edit-compliance-record" },
+  {
+    label: "verify-cloud-update-compliance-record-notes",
+    script: "verify-cloud-update-compliance-record-notes",
+  },
   { label: "verify-cloud-update-reminder-settings", script: "verify-cloud-update-reminder-settings" },
   { label: "reset-alpha-staging-post", node: resetScriptPath },
   { label: "build", script: "build" },

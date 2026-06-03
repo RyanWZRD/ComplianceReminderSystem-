@@ -9,6 +9,7 @@ const {
   canMutateReminderSettings,
   canRenewCompliance,
   canSetActionStatus,
+  canUpdateComplianceRecordNotes,
   isCloudMode,
 } = await import("../js/app/permissions.js");
 
@@ -49,6 +50,13 @@ if (canAddComplianceRecord()) {
 
 if (canEditComplianceRecord()) {
   console.error("canEditComplianceRecord() must be false when CLOUD_WRITES_ENABLED is not set.");
+  process.exit(1);
+}
+
+if (canUpdateComplianceRecordNotes()) {
+  console.error(
+    "canUpdateComplianceRecordNotes() must be false when CLOUD_WRITES_ENABLED is not set."
+  );
   process.exit(1);
 }
 

@@ -10,6 +10,7 @@ import { mapReminderTypeToRpcCode } from "./reminder-sent.js";
 import { mapRenewalModeToRpc } from "./renew-compliance.js";
 import { mapCreateComplianceRecordToRpc } from "./create-compliance-record.js";
 import { mapEditComplianceRecordToRpc } from "./edit-compliance-record.js";
+import { mapUpdateComplianceRecordNotesToRpc } from "./update-compliance-record-notes.js";
 import { LocalComplianceStore } from "./local-store.js";
 
 const READ_ONLY_MESSAGE =
@@ -452,6 +453,74 @@ export class CloudComplianceStore extends LocalComplianceStore {
     return {
       ok: false,
       error: `Unexpected update_compliance_record status: ${String(status)}`,
+    };
+  }
+
+  /**
+   * @param {string} recordId
+   * @param {string} notes
+   * @returns {Promise<
+   *   | {
+   *       ok: true;
+   *       status: "updated" | "no_changes" | "not_found" | "rejected";
+   *       reason?: string;
+   *       notes?: string;
+   *     }
+   *   | { ok: false; error: string }
+   * >}
+   */
+  async updateComplianceRecordNotes(recordId, notes) {
+    if (!isSupabaseConfigured()) {
+      return { ok: false, error: "Supabase is not configured." };
+    }
+
+    await waitForAuthReady();
+
+    if (!isAuthenticated()) {
+      return { ok: false, error: "Not signed in." };
+    }
+
+    const supabase = getSupabaseClient();
+    const rpcArgs = mapUpdateComplianceRecordNotesToRpc({ recordId, notes });
+    const { data, error } = await supabase.rpc("update_compliance_record_notes", rpcArgs);
+
+    if (error) {
+      return { ok: false, error: error.message };
+    }
+
+    if (!data || typeof data !== "object") {
+      return { ok: false, error: "Unexpected response from update_compliance_record_notes." };
+    }
+
+    const status = data.status;
+
+    if (status === "not_found") {
+      return { ok: true, status: "not_found" };
+    }
+
+    if (status === "no_changes") {
+      return { ok: true, status: "no_changes" };
+    }
+
+    if (status === "rejected") {
+      return {
+        ok: true,
+        status: "rejected",
+        reason: typeof data.reason === "string" ? data.reason : "protected_audit_lines_removed",
+      };
+    }
+
+    if (status === "updated") {
+      return {
+        ok: true,
+        status: "updated",
+        notes: typeof data.notes === "string" ? data.notes : notes,
+      };
+    }
+
+    return {
+      ok: false,
+      error: `Unexpected update_compliance_record_notes status: ${String(status)}`,
     };
   }
 

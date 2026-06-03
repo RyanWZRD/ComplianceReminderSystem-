@@ -389,14 +389,34 @@ QA Status: PASS with warnings
 - Remove Alex Volunteer merge artefacts after successful runs.
 - Allow `verify:phase2` to run repeatedly without manual reset.
 
-**Phase 3 (planned):** notes, evidence, delete/archive, CSV/backup import, reminder settings writes, full action CRUD in cloud, backup migration tooling.
+### Phase 3 — P3-2 Reminder settings · Complete
+
+**Status:** COMPLETE
+
+- RPC `update_reminder_settings` (migration `20260203000006`) — org-level `days_30`, `days_14`, `days_7`, `hide_sent_reminders`
+- Admin only (`canMutateReminderSettings()` when `CLOUD_WRITES_ENABLED`; editors/viewers denied)
+- `canMutateData()` stays false in cloud; RPC-first via `CloudSettingsStore.updateReminderSettings()`
+- Existing reminder settings UI works when cloud writes enabled (`?cloudWrites=1` on allowed hosts)
+- Verify: `npm run verify-cloud-update-reminder-settings` (included in `npm run verify:phase2`)
+- Staging reset restores seed reminder settings (`reset-alpha-staging-data.mjs`)
+
+### Phase 3 — P3-4 Compliance notes (workspace) · Complete
+
+**Status:** COMPLETE (minimal v1)
+
+- RPC `update_compliance_record_notes` (migration `20260203000007`) — server-side protected-line enforcement
+- Editor/admin (`canUpdateComplianceRecordNotes()` when `CLOUD_WRITES_ENABLED`)
+- Workspace Save Notes only; edit-form notes disabled in cloud
+- Verify: `npm run verify-cloud-update-compliance-record-notes` (in `verify:phase2`)
+
+**Phase 3 (remaining):** evidence metadata, delete/archive, CSV/backup import, full action CRUD in cloud, backup migration tooling; notes protection negative test / local parity (optional follow-up).
 
 ### v3.0.0 — Cloud Platform Foundation (remaining) · Planned
 
 - Production cloud writes policy and GDPR checklist
 - Evidence storage buckets and uploads
 - Delete/archive and import migration path
-- Reminder settings and full local parity in cloud
+- Full local parity in cloud (notes, evidence, actions, import — reminder settings done in P3-2)
 
 See [v3.0.0 — Cloud Platform Foundation](#v300--cloud-platform-foundation) above for full goals and architecture.
 

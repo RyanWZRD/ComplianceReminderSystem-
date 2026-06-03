@@ -20,6 +20,7 @@ import {
   canMutateReminderSettings,
   canRenewCompliance,
   canSetActionStatus,
+  canUpdateComplianceRecordNotes,
   isCloudMode,
 } from "./js/app/permissions.js";
 import {
@@ -475,6 +476,19 @@ function notifyEditComplianceRecordBlocked() {
     showMessage(
       appMessage,
       "Your role cannot edit compliance records in cloud mode.",
+      "error"
+    );
+    return;
+  }
+
+  notifyReadOnlyBlocked();
+}
+
+function notifyComplianceRecordNotesBlocked() {
+  if (isCloudMode() && CLOUD_WRITES_ENABLED) {
+    showMessage(
+      appMessage,
+      "Your role cannot save compliance notes in cloud mode.",
       "error"
     );
     return;
@@ -2187,7 +2201,7 @@ function renderRecordWorkspace() {
     </section>
   `;
 
-  if (!canMutateData()) {
+  if (!canUpdateComplianceRecordNotes()) {
     const notesInput = workspaceContent.querySelector("#workspace-notes-input");
     const saveNotesBtn = workspaceContent.querySelector("#workspace-save-notes-btn");
 
@@ -2200,7 +2214,9 @@ function renderRecordWorkspace() {
       saveNotesBtn.disabled = true;
       saveNotesBtn.classList.add("read-only-disabled");
     }
+  }
 
+  if (!canMutateData()) {
     workspaceContent.querySelectorAll(".evidence-add-btn, .action-add-btn").forEach((button) => {
       if (button instanceof HTMLButtonElement) {
         button.disabled = true;
@@ -2242,16 +2258,31 @@ function handleWorkspaceRecordAction(event) {
   }
 }
 
-function handleWorkspaceNotesSave() {
-  if (rejectIfReadOnly()) {
-    return;
-  }
+async function handleWorkspaceNotesSave() {
   if (!workspaceContext || !workspaceContent) {
     return;
   }
 
   const textarea = workspaceContent.querySelector("#workspace-notes-input");
   if (!textarea) {
+    return;
+  }
+
+  if (isCloudMode()) {
+    if (!canUpdateComplianceRecordNotes()) {
+      notifyComplianceRecordNotesBlocked();
+      return;
+    }
+
+    await persistUpdateComplianceRecordNotes(
+      workspaceContext.personId,
+      workspaceContext.recordId,
+      textarea.value
+    );
+    return;
+  }
+
+  if (rejectIfReadOnly()) {
     return;
   }
 
@@ -2304,7 +2335,7 @@ function setupRecordWorkspaceListeners() {
 
   workspaceContent?.addEventListener("click", (event) => {
     if (event.target.closest("#workspace-save-notes-btn")) {
-      handleWorkspaceNotesSave();
+      void handleWorkspaceNotesSave();
     }
   });
 }
@@ -4846,6 +4877,61 @@ function updateRecordNotes(personId, recordId, notes) {
   savePeople();
 }
 
+async function persistUpdateComplianceRecordNotes(personId, recordId, notes) {
+  if (!canUpdateComplianceRecordNotes()) {
+    notifyComplianceRecordNotesBlocked();
+    return;
+  }
+
+  if (typeof repository.updateComplianceRecordNotes !== "function") {
+    showMessage(appMessage, "Cloud notes save is not available.", "error");
+    return;
+  }
+
+  const persistResult = await repository.updateComplianceRecordNotes(String(recordId), notes);
+
+  if (!persistResult.ok) {
+    showMessage(
+      appMessage,
+      persistResult.error || "Could not save notes to the cloud.",
+      "error"
+    );
+    return;
+  }
+
+  if (persistResult.status === "not_found") {
+    showMessage(appMessage, "Record not found.", "error");
+    return;
+  }
+
+  if (persistResult.status === "no_changes") {
+    showMessage(appMessage, "No changes made.", "error");
+    return;
+  }
+
+  if (persistResult.status === "rejected") {
+    showMessage(
+      appMessage,
+      "Notes could not be saved. Reminder or renewal audit lines cannot be removed.",
+      "error"
+    );
+    return;
+  }
+
+  if (persistResult.status !== "updated") {
+    showMessage(appMessage, "Could not save notes.", "error");
+    return;
+  }
+
+  const refreshed = await reloadCloudDataAfterWrite();
+
+  if (!refreshed) {
+    return;
+  }
+
+  showMessage(appMessage, "Notes saved.", "success");
+}
+
 // Remove one compliance record (and the person if it was their last record)
 function deleteComplianceRecord(personId, recordId) {
   if (rejectIfReadOnly()) {
@@ -6952,6 +7038,21 @@ function applyReadOnlyMode() {
       }
     });
   }
+
+  if (canUpdateComplianceRecordNotes() && workspaceContext && workspaceContent) {
+    const notesInput = workspaceContent.querySelector("#workspace-notes-input");
+    const saveNotesBtn = workspaceContent.querySelector("#workspace-save-notes-btn");
+
+    if (notesInput instanceof HTMLTextAreaElement) {
+      notesInput.disabled = false;
+      notesInput.classList.remove("read-only-disabled");
+    }
+
+    if (saveNotesBtn instanceof HTMLButtonElement) {
+      saveNotesBtn.disabled = false;
+      saveNotesBtn.classList.remove("read-only-disabled");
+    }
+  }
 }
 
 async function finishAppBoot() {
@@ -6974,6 +7075,7 @@ async function finishAppBoot() {
         canRenewCompliance() ||
         canAddComplianceRecord() ||
         canEditComplianceRecord() ||
+        canUpdateComplianceRecordNotes() ||
         canMutateReminderSettings())
     ) {
       dataBackendBadge.textContent = "Cloud mode (limited writes)";

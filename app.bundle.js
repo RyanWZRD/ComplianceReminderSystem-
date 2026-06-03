@@ -21363,6 +21363,15 @@ ${suffix}`;
     }
     return canEdit();
   }
+  function canUpdateComplianceRecordNotes() {
+    if (!isCloudMode()) {
+      return canMutateData();
+    }
+    if (!CLOUD_WRITES_ENABLED) {
+      return false;
+    }
+    return canEdit();
+  }
   function canMutateReminderSettings() {
     if (!isCloudMode()) {
       return canMutateData() && canAdmin();
@@ -21437,8 +21446,8 @@ ${suffix}`;
     if (!CLOUD_WRITES_ENABLED) {
       return "Cloud mode is read-only. You can view and export data; changes are not saved to the cloud yet.";
     }
-    if (canMarkReminderSent() || canSetActionStatus() || canRenewCompliance() || canAddComplianceRecord() || canEditComplianceRecord()) {
-      return "Cloud mode (limited writes). Mark Reminder Sent, renew compliance, action complete/reopen, add compliance records, and edit compliance records are saved to the cloud.";
+    if (canMarkReminderSent() || canSetActionStatus() || canRenewCompliance() || canAddComplianceRecord() || canEditComplianceRecord() || canUpdateComplianceRecordNotes() || canMutateReminderSettings()) {
+      return "Cloud mode (limited writes). Mark Reminder Sent, renew compliance, action complete/reopen, add compliance records, edit compliance records, workspace notes, and reminder settings (admin) are saved to the cloud.";
     }
     const role = getCurrentUserRole();
     if (role === "viewer") {
@@ -21850,6 +21859,14 @@ ${suffix}`;
       p_compliance_type: input.complianceType,
       p_expiry_date: input.expiryDate,
       p_renewal_cycle: input.renewalCycle
+    };
+  }
+
+  // js/data/update-compliance-record-notes.js
+  function mapUpdateComplianceRecordNotesToRpc(input) {
+    return {
+      p_record_id: input.recordId,
+      p_notes: input.notes ?? ""
     };
   }
 
@@ -22574,6 +22591,62 @@ ${suffix}`;
       };
     }
     /**
+     * @param {string} recordId
+     * @param {string} notes
+     * @returns {Promise<
+     *   | {
+     *       ok: true;
+     *       status: "updated" | "no_changes" | "not_found" | "rejected";
+     *       reason?: string;
+     *       notes?: string;
+     *     }
+     *   | { ok: false; error: string }
+     * >}
+     */
+    async updateComplianceRecordNotes(recordId, notes) {
+      if (!isSupabaseConfigured()) {
+        return { ok: false, error: "Supabase is not configured." };
+      }
+      await waitForAuthReady();
+      if (!isAuthenticated()) {
+        return { ok: false, error: "Not signed in." };
+      }
+      const supabase = getSupabaseClient();
+      const rpcArgs = mapUpdateComplianceRecordNotesToRpc({ recordId, notes });
+      const { data, error } = await supabase.rpc("update_compliance_record_notes", rpcArgs);
+      if (error) {
+        return { ok: false, error: error.message };
+      }
+      if (!data || typeof data !== "object") {
+        return { ok: false, error: "Unexpected response from update_compliance_record_notes." };
+      }
+      const status = data.status;
+      if (status === "not_found") {
+        return { ok: true, status: "not_found" };
+      }
+      if (status === "no_changes") {
+        return { ok: true, status: "no_changes" };
+      }
+      if (status === "rejected") {
+        return {
+          ok: true,
+          status: "rejected",
+          reason: typeof data.reason === "string" ? data.reason : "protected_audit_lines_removed"
+        };
+      }
+      if (status === "updated") {
+        return {
+          ok: true,
+          status: "updated",
+          notes: typeof data.notes === "string" ? data.notes : notes
+        };
+      }
+      return {
+        ok: false,
+        error: `Unexpected update_compliance_record_notes status: ${String(status)}`
+      };
+    }
+    /**
      * @param {{ onLoadError?: (error: Error) => void }} [options]
      * @returns {Promise<LoadResult>}
      */
@@ -23222,6 +23295,17 @@ ${suffix}`;
       showMessage(
         appMessage,
         "Your role cannot edit compliance records in cloud mode.",
+        "error"
+      );
+      return;
+    }
+    notifyReadOnlyBlocked();
+  }
+  function notifyComplianceRecordNotesBlocked() {
+    if (isCloudMode() && CLOUD_WRITES_ENABLED) {
+      showMessage(
+        appMessage,
+        "Your role cannot save compliance notes in cloud mode.",
         "error"
       );
       return;
@@ -24508,7 +24592,7 @@ This cannot be undone.`
       </div>
     </section>
   `;
-    if (!canMutateData()) {
+    if (!canUpdateComplianceRecordNotes()) {
       const notesInput = workspaceContent.querySelector("#workspace-notes-input");
       const saveNotesBtn = workspaceContent.querySelector("#workspace-save-notes-btn");
       if (notesInput instanceof HTMLTextAreaElement) {
@@ -24519,6 +24603,8 @@ This cannot be undone.`
         saveNotesBtn.disabled = true;
         saveNotesBtn.classList.add("read-only-disabled");
       }
+    }
+    if (!canMutateData()) {
       workspaceContent.querySelectorAll(".evidence-add-btn, .action-add-btn").forEach((button) => {
         if (button instanceof HTMLButtonElement) {
           button.disabled = true;
@@ -24556,15 +24642,27 @@ This cannot be undone.`
       deleteActionItem(personId, recordId, parseEntityId(button.dataset.actionId));
     }
   }
-  function handleWorkspaceNotesSave() {
-    if (rejectIfReadOnly()) {
-      return;
-    }
+  async function handleWorkspaceNotesSave() {
     if (!workspaceContext || !workspaceContent) {
       return;
     }
     const textarea = workspaceContent.querySelector("#workspace-notes-input");
     if (!textarea) {
+      return;
+    }
+    if (isCloudMode()) {
+      if (!canUpdateComplianceRecordNotes()) {
+        notifyComplianceRecordNotesBlocked();
+        return;
+      }
+      await persistUpdateComplianceRecordNotes(
+        workspaceContext.personId,
+        workspaceContext.recordId,
+        textarea.value
+      );
+      return;
+    }
+    if (rejectIfReadOnly()) {
       return;
     }
     updateRecordNotes(workspaceContext.personId, workspaceContext.recordId, textarea.value);
@@ -24605,7 +24703,7 @@ This cannot be undone.`
     });
     workspaceContent?.addEventListener("click", (event) => {
       if (event.target.closest("#workspace-save-notes-btn")) {
-        handleWorkspaceNotesSave();
+        void handleWorkspaceNotesSave();
       }
     });
   }
@@ -26530,6 +26628,50 @@ ${auditLine}` : auditLine;
     appendHistoryEntry(result.record, HISTORY_ACTIONS.EDITED, "Notes updated.");
     savePeople();
   }
+  async function persistUpdateComplianceRecordNotes(personId, recordId, notes) {
+    if (!canUpdateComplianceRecordNotes()) {
+      notifyComplianceRecordNotesBlocked();
+      return;
+    }
+    if (typeof repository.updateComplianceRecordNotes !== "function") {
+      showMessage(appMessage, "Cloud notes save is not available.", "error");
+      return;
+    }
+    const persistResult = await repository.updateComplianceRecordNotes(String(recordId), notes);
+    if (!persistResult.ok) {
+      showMessage(
+        appMessage,
+        persistResult.error || "Could not save notes to the cloud.",
+        "error"
+      );
+      return;
+    }
+    if (persistResult.status === "not_found") {
+      showMessage(appMessage, "Record not found.", "error");
+      return;
+    }
+    if (persistResult.status === "no_changes") {
+      showMessage(appMessage, "No changes made.", "error");
+      return;
+    }
+    if (persistResult.status === "rejected") {
+      showMessage(
+        appMessage,
+        "Notes could not be saved. Reminder or renewal audit lines cannot be removed.",
+        "error"
+      );
+      return;
+    }
+    if (persistResult.status !== "updated") {
+      showMessage(appMessage, "Could not save notes.", "error");
+      return;
+    }
+    const refreshed = await reloadCloudDataAfterWrite();
+    if (!refreshed) {
+      return;
+    }
+    showMessage(appMessage, "Notes saved.", "success");
+  }
   function deleteComplianceRecord(personId, recordId) {
     if (rejectIfReadOnly()) {
       return;
@@ -28219,6 +28361,18 @@ Your current data will be overwritten. Continue?`
         }
       });
     }
+    if (canUpdateComplianceRecordNotes() && workspaceContext && workspaceContent) {
+      const notesInput = workspaceContent.querySelector("#workspace-notes-input");
+      const saveNotesBtn = workspaceContent.querySelector("#workspace-save-notes-btn");
+      if (notesInput instanceof HTMLTextAreaElement) {
+        notesInput.disabled = false;
+        notesInput.classList.remove("read-only-disabled");
+      }
+      if (saveNotesBtn instanceof HTMLButtonElement) {
+        saveNotesBtn.disabled = false;
+        saveNotesBtn.classList.remove("read-only-disabled");
+      }
+    }
   }
   async function finishAppBoot() {
     const bootOk = await bootData();
@@ -28230,7 +28384,7 @@ Your current data will be overwritten. Continue?`
     if (dataBackendBadge) {
       if (DATA_BACKEND === "local") {
         dataBackendBadge.textContent = "Local storage mode";
-      } else if (CLOUD_WRITES_ENABLED && (canMarkReminderSent() || canSetActionStatus() || canRenewCompliance() || canAddComplianceRecord() || canEditComplianceRecord() || canMutateReminderSettings())) {
+      } else if (CLOUD_WRITES_ENABLED && (canMarkReminderSent() || canSetActionStatus() || canRenewCompliance() || canAddComplianceRecord() || canEditComplianceRecord() || canUpdateComplianceRecordNotes() || canMutateReminderSettings())) {
         dataBackendBadge.textContent = "Cloud mode (limited writes)";
       } else {
         dataBackendBadge.textContent = "Cloud mode (read-only)";

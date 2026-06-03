@@ -667,11 +667,14 @@
         <label for="evidence-notes">Document Notes</label>
         <textarea id="evidence-notes" name="evidence-notes" rows="3" placeholder="Optional notes about this evidence..."></textarea>
       </div>
-      <div class="form-row">
+      <div class="form-row" id="evidence-file-row">
         <label for="evidence-file">Optional File</label>
         <input type="file" id="evidence-file" name="evidence-file" accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.doc,.docx">
-        <p class="settings-hint">Stored locally in your browser only. Max 512 KB per file.</p>
+        <p id="evidence-file-hint" class="settings-hint">Stored locally in your browser only. Max 512 KB per file.</p>
       </div>
+      <p id="evidence-cloud-file-notice" class="settings-hint hidden" role="status">
+        File upload and replacement are not available in cloud mode yet. You can edit metadata only.
+      </p>
 
       <p id="evidence-modal-message" class="form-message hidden"></p>
 

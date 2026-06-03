@@ -485,6 +485,18 @@ QA Status: PASS with warnings
 - Verify: `npm run verify-cloud-delete-evidence` (in `verify:phase2`)
 - Not in scope: evidence edit, Storage uploads, record archive/delete
 
+#### P3-6C Evidence update · Complete
+
+**Status:** COMPLETE ✅
+
+- RPC `update_evidence` (migration `20260203000015`) — metadata-only update + `evidence_updated` history
+- Edit button on evidence items when `canMutateEvidence()`; reuses evidence modal (file input hidden in cloud)
+- `persistUpdateEvidence()` + `reloadCloudDataAfterWrite()`; local edit unchanged pattern (in-memory + history)
+- `canMutateData()` stays false in cloud; RPC-first via `CloudComplianceStore.updateEvidence()`
+- Verify: `npm run verify-cloud-update-evidence` (in `verify:phase2`)
+- **P3-6 evidence metadata CRUD complete** (create / update / delete)
+- Not in scope: Storage uploads, file replacement in cloud, record archive/delete
+
 #### Delete/archive · Planned
 
 **Status:** PLANNED
@@ -492,20 +504,20 @@ QA Status: PASS with warnings
 - Cloud delete compliance record and archive/snapshot flows
 - Import migration path for deleted-record history
 
-#### Evidence metadata (edit) · Planned
+#### Evidence metadata (CRUD) · Complete
 
-**Status:** PLANNED (create/delete in P3-6A / P3-6B)
+**Status:** COMPLETE ✅ (P3-6A / P3-6B / P3-6C)
 
-- Evidence edit RPC; Storage buckets / uploads follow-on
+- Metadata create, update, delete via RPC; Storage buckets / uploads follow-on
 
-**Phase 3 (remaining):** delete/archive, evidence edit; CSV/backup import; backup migration tooling; optional notes protection negative test / local parity.
+**Phase 3 (remaining):** delete/archive; CSV/backup import; backup migration tooling; optional notes protection negative test / local parity.
 
 ### v3.0.0 — Cloud Platform Foundation (remaining) · Planned
 
 - Production cloud writes policy and GDPR checklist
 - Evidence storage buckets and uploads
 - CSV/backup import migration path
-- Full local parity in cloud (evidence edit, import — reminder settings and workspace notes in P3-2 / P3-4; action writes in P3-5; evidence create/delete in P3-6A / P3-6B)
+- Full local parity in cloud (import — reminder settings and workspace notes in P3-2 / P3-4; action writes in P3-5; evidence metadata CRUD in P3-6)
 
 See [v3.0.0 — Cloud Platform Foundation](#v300--cloud-platform-foundation) above for full goals and architecture.
 

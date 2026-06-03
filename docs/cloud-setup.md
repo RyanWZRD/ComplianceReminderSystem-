@@ -349,6 +349,20 @@ supabase db push
 npm run verify-cloud-delete-evidence
 ```
 
+## Phase 3 Step 6C — Update evidence (metadata only)
+
+- Migration: `20260203000015_update_evidence_rpc.sql`
+- `canMutateData()` stays false; `canMutateEvidence()` enables Edit on evidence items (editor/admin)
+- `update_evidence` — metadata-only update with `evidence_updated` history; `no_changes`, `validation_error`, `not_found`
+- Evidence modal reused for edit; file input hidden in cloud (metadata only; no upload/replacement)
+- **P3-6 evidence metadata CRUD complete** (create / update / delete)
+- Not in scope: Storage uploads, file replacement in cloud, record archive/delete
+
+```bash
+supabase db push
+npm run verify-cloud-update-evidence
+```
+
 ## Rollback
 
 | Scenario | Action |

@@ -21674,6 +21674,7 @@ ${suffix}`;
     RENEWED: "renewed",
     DELETED: "deleted",
     EVIDENCE_ADDED: "evidence_added",
+    EVIDENCE_UPDATED: "evidence_updated",
     EVIDENCE_DELETED: "evidence_deleted",
     ACTION_ADDED: "action_added",
     ACTION_UPDATED: "action_updated",
@@ -21922,6 +21923,26 @@ ${suffix}`;
   // js/data/delete-evidence.js
   function mapDeleteEvidenceToRpc(evidenceId) {
     return { p_evidence_id: evidenceId };
+  }
+
+  // js/data/update-evidence.js
+  function mapUpdateEvidenceToRpc(input) {
+    const rpcArgs = {
+      p_evidence_id: input.evidenceId,
+      p_name: input.name,
+      p_document_type: input.documentType,
+      p_notes: input.notes ?? ""
+    };
+    if (input.addedDate) {
+      rpcArgs.p_added_date = input.addedDate;
+    }
+    if (input.fileName !== void 0 && input.fileName !== null) {
+      const trimmed = String(input.fileName).trim();
+      if (trimmed) {
+        rpcArgs.p_file_name = trimmed;
+      }
+    }
+    return rpcArgs;
   }
 
   // js/data/default-action-templates.js
@@ -22755,6 +22776,95 @@ ${suffix}`;
      *   | { ok: false; error: string }
      * >}
      */
+    /**
+     * @param {{
+     *   evidenceId: string;
+     *   name: string;
+     *   documentType: string;
+     *   notes?: string;
+     *   addedDate?: string;
+     *   fileName?: string | null;
+     * }} input
+     * @returns {Promise<
+     *   | {
+     *       ok: true;
+     *       status: "updated";
+     *       evidenceId: string;
+     *       recordId: string;
+     *       name: string;
+     *       documentType: string;
+     *     }
+     *   | {
+     *       ok: true;
+     *       status: "no_changes" | "not_found" | "validation_error";
+     *       field?: string;
+     *       reason?: string;
+     *     }
+     *   | { ok: false; error: string }
+     * >}
+     */
+    async updateEvidence(input) {
+      if (!isSupabaseConfigured()) {
+        return { ok: false, error: "Supabase is not configured." };
+      }
+      await waitForAuthReady();
+      if (!isAuthenticated()) {
+        return { ok: false, error: "Not signed in." };
+      }
+      const supabase = getSupabaseClient();
+      const rpcArgs = mapUpdateEvidenceToRpc(input);
+      const { data, error } = await supabase.rpc("update_evidence", rpcArgs);
+      if (error) {
+        return { ok: false, error: error.message };
+      }
+      if (!data || typeof data !== "object") {
+        return { ok: false, error: "Unexpected response from update_evidence." };
+      }
+      const status = data.status;
+      if (status === "validation_error") {
+        return {
+          ok: true,
+          status: "validation_error",
+          field: typeof data.field === "string" ? data.field : void 0,
+          reason: typeof data.reason === "string" ? data.reason : void 0
+        };
+      }
+      if (status === "not_found") {
+        return { ok: true, status: "not_found" };
+      }
+      if (status === "no_changes") {
+        return { ok: true, status: "no_changes" };
+      }
+      if (status === "updated") {
+        const evidence = data.evidence && typeof data.evidence === "object" ? data.evidence : {};
+        return {
+          ok: true,
+          status: "updated",
+          evidenceId: String(data.evidence_id ?? input.evidenceId),
+          recordId: String(data.record_id ?? ""),
+          name: typeof evidence.name === "string" ? evidence.name : input.name,
+          documentType: typeof evidence.document_type === "string" ? evidence.document_type : input.documentType
+        };
+      }
+      return {
+        ok: false,
+        error: `Unexpected update_evidence status: ${String(status)}`
+      };
+    }
+    /**
+     * @param {string} evidenceId
+     * @returns {Promise<
+     *   | {
+     *       ok: true;
+     *       status: "deleted";
+     *       evidenceId: string;
+     *       recordId: string;
+     *       documentType: string;
+     *     }
+     *   | { ok: true; status: "not_found" }
+     *   | { ok: false; error: string }
+     * >}
+     */
     async deleteEvidence(evidenceId) {
       if (!isSupabaseConfigured()) {
         return { ok: false, error: "Supabase is not configured." };
@@ -23473,6 +23583,7 @@ ${suffix}`;
     renewed: "Renewed",
     deleted: "Deleted",
     evidence_added: "Evidence added",
+    evidence_updated: "Evidence updated",
     evidence_deleted: "Evidence deleted",
     action_added: "Action added",
     action_completed: "Action completed",
@@ -23555,6 +23666,10 @@ ${suffix}`;
   var evidenceSaveBtn = document.getElementById("evidence-save-btn");
   var evidenceCancelBtn = document.getElementById("evidence-cancel-btn");
   var evidenceModalCloseBtn = document.getElementById("evidence-modal-close-btn");
+  var evidenceModalTitle = document.getElementById("evidence-modal-title");
+  var evidenceFileRow = document.getElementById("evidence-file-row");
+  var evidenceFileHint = document.getElementById("evidence-file-hint");
+  var evidenceCloudFileNotice = document.getElementById("evidence-cloud-file-notice");
   var actionModal = document.getElementById("action-modal");
   var actionModalRecordLabel = document.getElementById("action-modal-record-label");
   var actionTitleInput = document.getElementById("action-title");
@@ -24069,7 +24184,7 @@ ${suffix}`;
           ${notesLine}
           <div class="evidence-item-actions">
             ${downloadButton}
-            ${canMutateEvidence() ? `<button type="button" class="delete-evidence-btn" data-person-id="${personId}" data-record-id="${recordId}" data-evidence-id="${item.id}">Delete</button>` : ""}
+            ${canMutateEvidence() ? `<button type="button" class="edit-evidence-btn" data-person-id="${personId}" data-record-id="${recordId}" data-evidence-id="${item.id}">Edit</button><button type="button" class="delete-evidence-btn" data-person-id="${personId}" data-record-id="${recordId}" data-evidence-id="${item.id}">Delete</button>` : ""}
           </div>
         </li>
       `;
@@ -24083,6 +24198,34 @@ ${suffix}`;
       reader.onerror = () => reject(new Error("Could not read file"));
       reader.readAsDataURL(file);
     });
+  }
+  function setEvidenceModalFileVisibility(isEdit) {
+    const hideFileInCloud = isCloudMode();
+    if (evidenceFileRow) {
+      if (hideFileInCloud) {
+        evidenceFileRow.classList.add("hidden");
+      } else {
+        evidenceFileRow.classList.remove("hidden");
+      }
+    }
+    if (evidenceCloudFileNotice) {
+      if (hideFileInCloud) {
+        evidenceCloudFileNotice.classList.remove("hidden");
+      } else {
+        evidenceCloudFileNotice.classList.add("hidden");
+      }
+    }
+    if (evidenceFileHint) {
+      if (hideFileInCloud) {
+        evidenceFileHint.classList.add("hidden");
+      } else if (!isEdit) {
+        evidenceFileHint.classList.remove("hidden");
+        evidenceFileHint.textContent = "Stored locally in your browser only. Max 512 KB per file.";
+      } else {
+        evidenceFileHint.classList.remove("hidden");
+        evidenceFileHint.textContent = "Choose a new file to replace the attachment, or leave empty to keep the current file.";
+      }
+    }
   }
   function openAddEvidenceModal(personId, recordId) {
     if (isCloudMode()) {
@@ -24101,13 +24244,59 @@ ${suffix}`;
     evidenceModalContext = {
       personId,
       recordId,
-      recordLabel: `${person.name} \u2014 ${record.complianceType}`
+      recordLabel: `${person.name} \u2014 ${record.complianceType}`,
+      evidenceId: null
     };
+    if (evidenceModalTitle) {
+      evidenceModalTitle.textContent = "Add Evidence";
+    }
     evidenceModalRecordLabel.textContent = evidenceModalContext.recordLabel;
     evidenceNameInput.value = "";
     evidenceTypeInput.value = EVIDENCE_TYPES[0];
     evidenceNotesInput.value = "";
     evidenceFileInput.value = "";
+    setEvidenceModalFileVisibility(false);
+    hideMessage(evidenceModalMessage);
+    evidenceModal.classList.remove("hidden");
+    evidenceModal.setAttribute("aria-hidden", "false");
+    evidenceNameInput.focus();
+  }
+  function openEditEvidenceModal(personId, recordId, evidenceId) {
+    if (isCloudMode()) {
+      if (!canMutateEvidence()) {
+        notifyMutateEvidenceBlocked();
+        return;
+      }
+    } else if (rejectIfReadOnly()) {
+      return;
+    }
+    const result = findPersonAndRecord(personId, recordId);
+    if (!result) {
+      return;
+    }
+    const evidenceItem = (result.record.evidence || []).find((item) => item.id === evidenceId);
+    if (!evidenceItem) {
+      return;
+    }
+    const { person, record } = result;
+    evidenceModalContext = {
+      personId,
+      recordId,
+      recordLabel: `${person.name} \u2014 ${record.complianceType}`,
+      evidenceId
+    };
+    if (evidenceModalTitle) {
+      evidenceModalTitle.textContent = "Edit Evidence";
+    }
+    evidenceModalRecordLabel.textContent = evidenceModalContext.recordLabel;
+    evidenceNameInput.value = evidenceItem.name;
+    evidenceTypeInput.value = evidenceItem.documentType;
+    evidenceNotesInput.value = evidenceItem.notes || "";
+    evidenceFileInput.value = "";
+    setEvidenceModalFileVisibility(true);
+    if (evidenceFileHint && !isCloudMode() && evidenceItem.fileName) {
+      evidenceFileHint.textContent = `Current file: ${evidenceItem.fileName}. Choose a new file to replace it, or leave empty to keep it.`;
+    }
     hideMessage(evidenceModalMessage);
     evidenceModal.classList.remove("hidden");
     evidenceModal.setAttribute("aria-hidden", "false");
@@ -24172,7 +24361,21 @@ ${suffix}`;
         return;
       }
     }
-    const { personId, recordId, recordLabel } = evidenceModalContext;
+    const { personId, recordId, recordLabel, evidenceId } = evidenceModalContext;
+    if (evidenceId != null) {
+      const result = findPersonAndRecord(personId, recordId);
+      const existingItem = result ? (result.record.evidence || []).find((item) => item.id === evidenceId) : null;
+      await persistUpdateEvidence(personId, recordId, evidenceId, {
+        name,
+        documentType,
+        notes,
+        addedDate: existingItem?.addedDate || dateToISOString(getTodayAtMidnight()),
+        fileName: file ? fileName : existingItem?.fileName ?? null,
+        fileData: file ? fileData : existingItem?.fileData ?? null,
+        recordLabel
+      });
+      return;
+    }
     await persistCreateEvidence(personId, recordId, {
       name,
       documentType,
@@ -24258,6 +24461,89 @@ ${suffix}`;
     }
     closeEvidenceModal();
     showMessage(appMessage, `Evidence added to ${recordLabel}.`, "success");
+  }
+  async function persistUpdateEvidence(personId, recordId, evidenceId, payload) {
+    const { name, documentType, notes, addedDate, fileName, fileData, recordLabel } = payload;
+    if (!canMutateEvidence()) {
+      notifyMutateEvidenceBlocked();
+      return;
+    }
+    const result = findPersonAndRecord(personId, recordId);
+    if (!result) {
+      closeEvidenceModal();
+      return;
+    }
+    const evidenceItem = (result.record.evidence || []).find((item) => item.id === evidenceId);
+    if (!evidenceItem) {
+      closeEvidenceModal();
+      return;
+    }
+    if (!isCloudMode()) {
+      const unchanged = evidenceItem.name === name && evidenceItem.documentType === documentType && evidenceItem.notes === notes && evidenceItem.addedDate === addedDate && evidenceItem.fileName === fileName && evidenceItem.fileData === fileData;
+      if (unchanged) {
+        closeEvidenceModal();
+        return;
+      }
+      evidenceItem.name = name;
+      evidenceItem.documentType = documentType;
+      evidenceItem.notes = notes;
+      evidenceItem.addedDate = addedDate;
+      evidenceItem.fileName = fileName;
+      evidenceItem.fileData = fileData;
+      appendHistoryEntry(
+        result.record,
+        HISTORY_ACTIONS.EVIDENCE_UPDATED,
+        `Evidence updated: ${documentType}.`
+      );
+      savePeople();
+      closeEvidenceModal();
+      showMessage(appMessage, `Evidence updated for ${recordLabel}.`, "success");
+      renderTable();
+      return;
+    }
+    if (typeof repository.updateEvidence !== "function") {
+      showMessage(appMessage, "Cloud evidence update is not available.", "error");
+      return;
+    }
+    const persistResult = await repository.updateEvidence({
+      evidenceId: String(evidenceId),
+      name,
+      documentType,
+      notes,
+      addedDate,
+      fileName
+    });
+    if (!persistResult.ok) {
+      showMessage(
+        appMessage,
+        persistResult.error || "Could not update evidence in the cloud.",
+        "error"
+      );
+      return;
+    }
+    if (persistResult.status === "not_found") {
+      showMessage(appMessage, "Evidence not found.", "error");
+      return;
+    }
+    if (persistResult.status === "validation_error") {
+      const fieldMessage = persistResult.field === "document_type" ? "Document type is required." : "Document name is required.";
+      showMessage(evidenceModalMessage, fieldMessage, "error");
+      return;
+    }
+    if (persistResult.status === "no_changes") {
+      closeEvidenceModal();
+      return;
+    }
+    if (persistResult.status !== "updated") {
+      showMessage(appMessage, "Could not update evidence.", "error");
+      return;
+    }
+    const refreshed = await reloadCloudDataAfterWrite();
+    if (!refreshed) {
+      return;
+    }
+    closeEvidenceModal();
+    showMessage(appMessage, `Evidence updated for ${recordLabel}.`, "success");
   }
   async function persistDeleteEvidence(personId, recordId, evidenceId) {
     if (!canMutateEvidence()) {
@@ -25278,7 +25564,7 @@ This cannot be undone.`
         });
       }
       if (canMutateEvidence() && !canMutateData()) {
-        workspaceContent.querySelectorAll(".evidence-add-btn").forEach((button) => {
+        workspaceContent.querySelectorAll(".evidence-add-btn, .edit-evidence-btn, .delete-evidence-btn").forEach((button) => {
           if (button instanceof HTMLButtonElement) {
             button.disabled = false;
             button.classList.remove("read-only-disabled");
@@ -25296,6 +25582,8 @@ This cannot be undone.`
     const recordId = parseEntityId(button.dataset.recordId) || workspaceContext.recordId;
     if (button.classList.contains("evidence-add-btn")) {
       openAddEvidenceModal(personId, recordId);
+    } else if (button.classList.contains("edit-evidence-btn")) {
+      openEditEvidenceModal(personId, recordId, parseEntityId(button.dataset.evidenceId));
     } else if (button.classList.contains("delete-evidence-btn")) {
       void deleteEvidenceItem(personId, recordId, parseEntityId(button.dataset.evidenceId));
     } else if (button.classList.contains("evidence-download-btn")) {

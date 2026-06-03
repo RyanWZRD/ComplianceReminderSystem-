@@ -105,6 +105,7 @@ const HISTORY_ACTION_LABELS = {
   renewed: "Renewed",
   deleted: "Deleted",
   evidence_added: "Evidence added",
+  evidence_updated: "Evidence updated",
   evidence_deleted: "Evidence deleted",
   action_added: "Action added",
   action_completed: "Action completed",
@@ -191,6 +192,10 @@ const evidenceModalMessage = document.getElementById("evidence-modal-message");
 const evidenceSaveBtn = document.getElementById("evidence-save-btn");
 const evidenceCancelBtn = document.getElementById("evidence-cancel-btn");
 const evidenceModalCloseBtn = document.getElementById("evidence-modal-close-btn");
+const evidenceModalTitle = document.getElementById("evidence-modal-title");
+const evidenceFileRow = document.getElementById("evidence-file-row");
+const evidenceFileHint = document.getElementById("evidence-file-hint");
+const evidenceCloudFileNotice = document.getElementById("evidence-cloud-file-notice");
 
 const actionModal = document.getElementById("action-modal");
 const actionModalRecordLabel = document.getElementById("action-modal-record-label");
@@ -868,7 +873,7 @@ function buildEvidencePanelHtml(personId, recordId) {
             ${downloadButton}
             ${
               canMutateEvidence()
-                ? `<button type="button" class="delete-evidence-btn" data-person-id="${personId}" data-record-id="${recordId}" data-evidence-id="${item.id}">Delete</button>`
+                ? `<button type="button" class="edit-evidence-btn" data-person-id="${personId}" data-record-id="${recordId}" data-evidence-id="${item.id}">Edit</button><button type="button" class="delete-evidence-btn" data-person-id="${personId}" data-record-id="${recordId}" data-evidence-id="${item.id}">Delete</button>`
                 : ""
             }
           </div>
@@ -888,6 +893,40 @@ function readFileAsDataUrl(file) {
     reader.onerror = () => reject(new Error("Could not read file"));
     reader.readAsDataURL(file);
   });
+}
+
+function setEvidenceModalFileVisibility(isEdit) {
+  const hideFileInCloud = isCloudMode();
+
+  if (evidenceFileRow) {
+    if (hideFileInCloud) {
+      evidenceFileRow.classList.add("hidden");
+    } else {
+      evidenceFileRow.classList.remove("hidden");
+    }
+  }
+
+  if (evidenceCloudFileNotice) {
+    if (hideFileInCloud) {
+      evidenceCloudFileNotice.classList.remove("hidden");
+    } else {
+      evidenceCloudFileNotice.classList.add("hidden");
+    }
+  }
+
+  if (evidenceFileHint) {
+    if (hideFileInCloud) {
+      evidenceFileHint.classList.add("hidden");
+    } else if (!isEdit) {
+      evidenceFileHint.classList.remove("hidden");
+      evidenceFileHint.textContent =
+        "Stored locally in your browser only. Max 512 KB per file.";
+    } else {
+      evidenceFileHint.classList.remove("hidden");
+      evidenceFileHint.textContent =
+        "Choose a new file to replace the attachment, or leave empty to keep the current file.";
+    }
+  }
 }
 
 function openAddEvidenceModal(personId, recordId) {
@@ -910,13 +949,72 @@ function openAddEvidenceModal(personId, recordId) {
     personId,
     recordId,
     recordLabel: `${person.name} — ${record.complianceType}`,
+    evidenceId: null,
   };
+
+  if (evidenceModalTitle) {
+    evidenceModalTitle.textContent = "Add Evidence";
+  }
 
   evidenceModalRecordLabel.textContent = evidenceModalContext.recordLabel;
   evidenceNameInput.value = "";
   evidenceTypeInput.value = EVIDENCE_TYPES[0];
   evidenceNotesInput.value = "";
   evidenceFileInput.value = "";
+  setEvidenceModalFileVisibility(false);
+  hideMessage(evidenceModalMessage);
+
+  evidenceModal.classList.remove("hidden");
+  evidenceModal.setAttribute("aria-hidden", "false");
+  evidenceNameInput.focus();
+}
+
+function openEditEvidenceModal(personId, recordId, evidenceId) {
+  if (isCloudMode()) {
+    if (!canMutateEvidence()) {
+      notifyMutateEvidenceBlocked();
+      return;
+    }
+  } else if (rejectIfReadOnly()) {
+    return;
+  }
+
+  const result = findPersonAndRecord(personId, recordId);
+
+  if (!result) {
+    return;
+  }
+
+  const evidenceItem = (result.record.evidence || []).find((item) => item.id === evidenceId);
+
+  if (!evidenceItem) {
+    return;
+  }
+
+  const { person, record } = result;
+
+  evidenceModalContext = {
+    personId,
+    recordId,
+    recordLabel: `${person.name} — ${record.complianceType}`,
+    evidenceId,
+  };
+
+  if (evidenceModalTitle) {
+    evidenceModalTitle.textContent = "Edit Evidence";
+  }
+
+  evidenceModalRecordLabel.textContent = evidenceModalContext.recordLabel;
+  evidenceNameInput.value = evidenceItem.name;
+  evidenceTypeInput.value = evidenceItem.documentType;
+  evidenceNotesInput.value = evidenceItem.notes || "";
+  evidenceFileInput.value = "";
+  setEvidenceModalFileVisibility(true);
+
+  if (evidenceFileHint && !isCloudMode() && evidenceItem.fileName) {
+    evidenceFileHint.textContent = `Current file: ${evidenceItem.fileName}. Choose a new file to replace it, or leave empty to keep it.`;
+  }
+
   hideMessage(evidenceModalMessage);
 
   evidenceModal.classList.remove("hidden");
@@ -994,7 +1092,25 @@ async function handleSaveEvidence() {
     }
   }
 
-  const { personId, recordId, recordLabel } = evidenceModalContext;
+  const { personId, recordId, recordLabel, evidenceId } = evidenceModalContext;
+
+  if (evidenceId != null) {
+    const result = findPersonAndRecord(personId, recordId);
+    const existingItem = result
+      ? (result.record.evidence || []).find((item) => item.id === evidenceId)
+      : null;
+
+    await persistUpdateEvidence(personId, recordId, evidenceId, {
+      name,
+      documentType,
+      notes,
+      addedDate: existingItem?.addedDate || dateToISOString(getTodayAtMidnight()),
+      fileName: file ? fileName : existingItem?.fileName ?? null,
+      fileData: file ? fileData : existingItem?.fileData ?? null,
+      recordLabel,
+    });
+    return;
+  }
 
   await persistCreateEvidence(personId, recordId, {
     name,
@@ -1115,6 +1231,133 @@ async function persistCreateEvidence(personId, recordId, payload) {
 
   closeEvidenceModal();
   showMessage(appMessage, `Evidence added to ${recordLabel}.`, "success");
+}
+
+/**
+ * @param {string | number} personId
+ * @param {string | number} recordId
+ * @param {string | number} evidenceId
+ * @param {{
+ *   name: string;
+ *   documentType: string;
+ *   notes: string;
+ *   addedDate: string;
+ *   fileName: string | null;
+ *   fileData: string | null;
+ *   recordLabel: string;
+ * }} payload
+ */
+async function persistUpdateEvidence(personId, recordId, evidenceId, payload) {
+  const { name, documentType, notes, addedDate, fileName, fileData, recordLabel } = payload;
+
+  if (!canMutateEvidence()) {
+    notifyMutateEvidenceBlocked();
+    return;
+  }
+
+  const result = findPersonAndRecord(personId, recordId);
+
+  if (!result) {
+    closeEvidenceModal();
+    return;
+  }
+
+  const evidenceItem = (result.record.evidence || []).find((item) => item.id === evidenceId);
+
+  if (!evidenceItem) {
+    closeEvidenceModal();
+    return;
+  }
+
+  if (!isCloudMode()) {
+    const unchanged =
+      evidenceItem.name === name &&
+      evidenceItem.documentType === documentType &&
+      evidenceItem.notes === notes &&
+      evidenceItem.addedDate === addedDate &&
+      evidenceItem.fileName === fileName &&
+      evidenceItem.fileData === fileData;
+
+    if (unchanged) {
+      closeEvidenceModal();
+      return;
+    }
+
+    evidenceItem.name = name;
+    evidenceItem.documentType = documentType;
+    evidenceItem.notes = notes;
+    evidenceItem.addedDate = addedDate;
+    evidenceItem.fileName = fileName;
+    evidenceItem.fileData = fileData;
+
+    appendHistoryEntry(
+      result.record,
+      HISTORY_ACTIONS.EVIDENCE_UPDATED,
+      `Evidence updated: ${documentType}.`
+    );
+
+    savePeople();
+    closeEvidenceModal();
+    showMessage(appMessage, `Evidence updated for ${recordLabel}.`, "success");
+    renderTable();
+    return;
+  }
+
+  if (typeof repository.updateEvidence !== "function") {
+    showMessage(appMessage, "Cloud evidence update is not available.", "error");
+    return;
+  }
+
+  const persistResult = await repository.updateEvidence({
+    evidenceId: String(evidenceId),
+    name,
+    documentType,
+    notes,
+    addedDate,
+    fileName,
+  });
+
+  if (!persistResult.ok) {
+    showMessage(
+      appMessage,
+      persistResult.error || "Could not update evidence in the cloud.",
+      "error"
+    );
+    return;
+  }
+
+  if (persistResult.status === "not_found") {
+    showMessage(appMessage, "Evidence not found.", "error");
+    return;
+  }
+
+  if (persistResult.status === "validation_error") {
+    const fieldMessage =
+      persistResult.field === "document_type"
+        ? "Document type is required."
+        : "Document name is required.";
+    showMessage(evidenceModalMessage, fieldMessage, "error");
+    return;
+  }
+
+  if (persistResult.status === "no_changes") {
+    closeEvidenceModal();
+    return;
+  }
+
+  if (persistResult.status !== "updated") {
+    showMessage(appMessage, "Could not update evidence.", "error");
+    return;
+  }
+
+  const refreshed = await reloadCloudDataAfterWrite();
+
+  if (!refreshed) {
+    return;
+  }
+
+  closeEvidenceModal();
+  showMessage(appMessage, `Evidence updated for ${recordLabel}.`, "success");
 }
 
 async function persistDeleteEvidence(personId, recordId, evidenceId) {
@@ -2435,7 +2678,9 @@ function renderRecordWorkspace() {
     }
 
     if (canMutateEvidence() && !canMutateData()) {
-      workspaceContent.querySelectorAll(".evidence-add-btn").forEach((button) => {
+      workspaceContent
+        .querySelectorAll(".evidence-add-btn, .edit-evidence-btn, .delete-evidence-btn")
+        .forEach((button) => {
         if (button instanceof HTMLButtonElement) {
           button.disabled = false;
           button.classList.remove("read-only-disabled");
@@ -2456,6 +2701,8 @@ function handleWorkspaceRecordAction(event) {
 
   if (button.classList.contains("evidence-add-btn")) {
     openAddEvidenceModal(personId, recordId);
+  } else if (button.classList.contains("edit-evidence-btn")) {
+    openEditEvidenceModal(personId, recordId, parseEntityId(button.dataset.evidenceId));
   } else if (button.classList.contains("delete-evidence-btn")) {
     void deleteEvidenceItem(personId, recordId, parseEntityId(button.dataset.evidenceId));
   } else if (button.classList.contains("evidence-download-btn")) {

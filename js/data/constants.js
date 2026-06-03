@@ -56,6 +56,7 @@ export const HISTORY_ACTIONS = {
   RENEWED: "renewed",
   DELETED: "deleted",
   EVIDENCE_ADDED: "evidence_added",
+  EVIDENCE_UPDATED: "evidence_updated",
   EVIDENCE_DELETED: "evidence_deleted",
   ACTION_ADDED: "action_added",
   ACTION_UPDATED: "action_updated",

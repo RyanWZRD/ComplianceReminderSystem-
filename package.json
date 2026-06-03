@@ -23,6 +23,7 @@
     "verify-cloud-default-bulk-actions": "node scripts/verify-cloud-default-bulk-actions.mjs",
     "verify-cloud-create-evidence": "node scripts/verify-cloud-create-evidence.mjs",
     "verify-cloud-delete-evidence": "node scripts/verify-cloud-delete-evidence.mjs",
+    "verify-cloud-update-evidence": "node scripts/verify-cloud-update-evidence.mjs",
     "verify-cloud-update-reminder-settings": "node scripts/verify-cloud-update-reminder-settings.mjs",
     "verify-staging-config": "node scripts/verify-staging-config.mjs",
     "verify:phase2": "node scripts/verify-phase2.mjs"

@@ -21390,6 +21390,15 @@ ${suffix}`;
     }
     return canEdit();
   }
+  function canArchiveComplianceRecord() {
+    if (!isCloudMode()) {
+      return canMutateData();
+    }
+    if (!CLOUD_WRITES_ENABLED) {
+      return false;
+    }
+    return canEdit();
+  }
   function canMutateReminderSettings() {
     if (!isCloudMode()) {
       return canMutateData() && canAdmin();
@@ -21464,8 +21473,8 @@ ${suffix}`;
     if (!CLOUD_WRITES_ENABLED) {
       return "Cloud mode is read-only. You can view and export data; changes are not saved to the cloud yet.";
     }
-    if (canMarkReminderSent() || canSetActionStatus() || canMutateActions() || canRenewCompliance() || canAddComplianceRecord() || canEditComplianceRecord() || canUpdateComplianceRecordNotes() || canMutateReminderSettings()) {
-      return "Cloud mode (limited writes). Mark Reminder Sent, renew compliance, action complete/reopen, add/delete actions, add compliance records, edit compliance records, workspace notes, and reminder settings (admin) are saved to the cloud.";
+    if (canMarkReminderSent() || canSetActionStatus() || canMutateActions() || canRenewCompliance() || canAddComplianceRecord() || canEditComplianceRecord() || canArchiveComplianceRecord() || canUpdateComplianceRecordNotes() || canMutateReminderSettings()) {
+      return "Cloud mode (limited writes). Mark Reminder Sent, renew compliance, action complete/reopen, add/delete actions, add compliance records, edit compliance records, delete compliance records, workspace notes, and reminder settings (admin) are saved to the cloud.";
     }
     const role = getCurrentUserRole();
     if (role === "viewer") {
@@ -21819,6 +21828,17 @@ ${suffix}`;
   }
 
   // js/data/create-compliance-record.js
+  function formatCreatedExpiryDisplay(dateString) {
+    const date = parseDateAtMidnight(dateString);
+    if (Number.isNaN(date.getTime())) {
+      return "Invalid date";
+    }
+    return date.toLocaleDateString("en-GB", {
+      day: "numeric",
+      month: "short",
+      year: "numeric"
+    });
+  }
   function mapCreateComplianceRecordToRpc(input) {
     const rpcArgs = {
       p_name: input.name,
@@ -21943,6 +21963,14 @@ ${suffix}`;
       }
     }
     return rpcArgs;
+  }
+
+  // js/data/archive-compliance-record.js
+  function buildRecordDeletedHistoryDescription(complianceType, expiryDate) {
+    return `Record deleted (${complianceType}, expires ${formatCreatedExpiryDisplay(expiryDate)}).`;
+  }
+  function mapArchiveComplianceRecordToRpc(recordId) {
+    return { p_record_id: recordId };
   }
 
   // js/data/default-action-templates.js
@@ -22900,6 +22928,55 @@ ${suffix}`;
       return {
         ok: false,
         error: `Unexpected delete_evidence status: ${String(status)}`
+      };
+    }
+    /**
+     * @param {string} recordId
+     * @returns {Promise<
+     *   | {
+     *       ok: true;
+     *       status: "archived";
+     *       recordId: string;
+     *       deletedSnapshotId: string;
+     *     }
+     *   | { ok: true; status: "not_found" }
+     *   | { ok: false; error: string }
+     * >}
+     */
+    async archiveComplianceRecord(recordId) {
+      if (!isSupabaseConfigured()) {
+        return { ok: false, error: "Supabase is not configured." };
+      }
+      await waitForAuthReady();
+      if (!isAuthenticated()) {
+        return { ok: false, error: "Not signed in." };
+      }
+      const supabase = getSupabaseClient();
+      const { data, error } = await supabase.rpc(
+        "archive_compliance_record",
+        mapArchiveComplianceRecordToRpc(recordId)
+      );
+      if (error) {
+        return { ok: false, error: error.message };
+      }
+      if (!data || typeof data !== "object") {
+        return { ok: false, error: "Unexpected response from archive_compliance_record." };
+      }
+      const status = data.status;
+      if (status === "not_found") {
+        return { ok: true, status: "not_found" };
+      }
+      if (status === "archived") {
+        return {
+          ok: true,
+          status: "archived",
+          recordId: String(data.record_id ?? recordId),
+          deletedSnapshotId: String(data.deleted_snapshot_id ?? "")
+        };
+      }
+      return {
+        ok: false,
+        error: `Unexpected archive_compliance_record status: ${String(status)}`
       };
     }
     /**
@@ -23947,6 +24024,17 @@ ${suffix}`;
       showMessage(
         appMessage,
         "Your role cannot save compliance notes in cloud mode.",
+        "error"
+      );
+      return;
+    }
+    notifyReadOnlyBlocked();
+  }
+  function notifyArchiveComplianceRecordBlocked() {
+    if (isCloudMode() && CLOUD_WRITES_ENABLED) {
+      showMessage(
+        appMessage,
+        "Your role cannot delete compliance records in cloud mode.",
         "error"
       );
       return;
@@ -25654,7 +25742,7 @@ This cannot be undone.`
       if (!workspaceContext) {
         return;
       }
-      deleteComplianceRecord(workspaceContext.personId, workspaceContext.recordId);
+      void persistArchiveComplianceRecord(workspaceContext.personId, workspaceContext.recordId);
     });
     workspaceContent?.addEventListener("click", handleWorkspaceRecordAction);
     workspaceContent?.addEventListener("change", (event) => {
@@ -28003,12 +28091,11 @@ ${auditLine}` : auditLine;
     }
     showMessage(appMessage, "Notes saved.", "success");
   }
-  function deleteComplianceRecord(personId, recordId) {
-    if (rejectIfReadOnly()) {
+  async function persistArchiveComplianceRecord(personId, recordId) {
+    const result = findPersonAndRecord(personId, recordId);
+    if (!result) {
       return;
     }
-    const result = findPersonAndRecord(personId, recordId);
-    if (!result) return;
     const { person, record } = result;
     const confirmed = confirm(
       `Delete this compliance record?
@@ -28018,38 +28105,88 @@ Expires: ${formatDate(record.expiryDate)}
 
 This cannot be undone.`
     );
-    if (!confirmed) return;
-    appendHistoryEntry(
-      record,
-      HISTORY_ACTIONS.DELETED,
-      `Record deleted (${record.complianceType}, expires ${formatDate(record.expiryDate)}).`
-    );
-    repository.deletedRecordHistory.unshift({
-      deletedAt: (/* @__PURE__ */ new Date()).toISOString(),
-      personName: person.name,
-      personRole: person.role,
-      record: {
-        id: record.id,
-        complianceType: record.complianceType,
-        expiryDate: record.expiryDate,
-        renewalCycle: record.renewalCycle || RENEWAL_CYCLE_MANUAL,
-        notes: record.notes || "",
-        history: [...record.history || []],
-        evidence: [...record.evidence || []],
-        actions: [...record.actions || []]
+    if (!confirmed) {
+      return;
+    }
+    if (!isCloudMode()) {
+      appendHistoryEntry(
+        record,
+        HISTORY_ACTIONS.DELETED,
+        buildRecordDeletedHistoryDescription(record.complianceType, record.expiryDate)
+      );
+      repository.deletedRecordHistory.unshift({
+        deletedAt: (/* @__PURE__ */ new Date()).toISOString(),
+        personName: person.name,
+        personRole: person.role,
+        record: {
+          id: record.id,
+          complianceType: record.complianceType,
+          expiryDate: record.expiryDate,
+          renewalCycle: record.renewalCycle || RENEWAL_CYCLE_MANUAL,
+          notes: record.notes || "",
+          history: [...record.history || []],
+          evidence: [...record.evidence || []],
+          actions: [...record.actions || []]
+        }
+      });
+      expandedHistoryRows.delete(historyRowKey(personId, recordId));
+      selectedRecordKeys.delete(actionRowKey(personId, recordId));
+      if (String(editIdInput.value) === String(personId) && String(editRecordIdInput.value) === String(recordId)) {
+        hideEditForm();
       }
-    });
-    expandedHistoryRows.delete(historyRowKey(personId, recordId));
-    selectedRecordKeys.delete(actionRowKey(personId, recordId));
+      person.complianceRecords = person.complianceRecords.filter(
+        (item) => item.id !== recordId
+      );
+      if (person.complianceRecords.length === 0) {
+        repository.people = repository.people.filter((item) => item.id !== personId);
+      }
+      if (workspaceContext && workspaceContext.personId === personId && workspaceContext.recordId === recordId) {
+        workspaceContext = null;
+        if (recordWorkspace) {
+          recordWorkspace.classList.add("hidden");
+          recordWorkspace.setAttribute("aria-hidden", "true");
+        }
+        document.body.classList.remove("workspace-open");
+      }
+      savePeople();
+      showMessage(
+        appMessage,
+        `Deleted: ${person.name} \u2014 ${record.complianceType}.`,
+        "success"
+      );
+      renderTable();
+      return;
+    }
+    if (!canArchiveComplianceRecord()) {
+      notifyArchiveComplianceRecordBlocked();
+      return;
+    }
+    if (typeof repository.archiveComplianceRecord !== "function") {
+      showMessage(appMessage, "Cloud record delete is not available.", "error");
+      return;
+    }
+    const persistResult = await repository.archiveComplianceRecord(String(recordId));
+    if (!persistResult.ok) {
+      showMessage(
+        appMessage,
+        persistResult.error || "Could not delete record from the cloud.",
+        "error"
+      );
+      return;
+    }
+    if (persistResult.status === "not_found") {
+      showMessage(appMessage, "Record not found.", "error");
+      return;
+    }
+    if (persistResult.status !== "archived") {
+      showMessage(appMessage, "Could not delete record.", "error");
+      return;
+    }
     if (String(editIdInput.value) === String(personId) && String(editRecordIdInput.value) === String(recordId)) {
       hideEditForm();
     }
-    person.complianceRecords = person.complianceRecords.filter(
-      (record2) => record2.id !== recordId
-    );
-    if (person.complianceRecords.length === 0) {
-      repository.people = repository.people.filter((item) => item.id !== personId);
-    }
+    expandedHistoryRows.delete(historyRowKey(personId, recordId));
+    selectedRecordKeys.delete(actionRowKey(personId, recordId));
     if (workspaceContext && workspaceContext.personId === personId && workspaceContext.recordId === recordId) {
       workspaceContext = null;
       if (recordWorkspace) {
@@ -28058,13 +28195,15 @@ This cannot be undone.`
       }
       document.body.classList.remove("workspace-open");
     }
-    savePeople();
+    const refreshed = await reloadCloudDataAfterWrite();
+    if (!refreshed) {
+      return;
+    }
     showMessage(
       appMessage,
       `Deleted: ${person.name} \u2014 ${record.complianceType}.`,
       "success"
     );
-    renderTable();
   }
   function formatExpiryDateForAuditNote(dateString) {
     const date = parseDateAtMidnight(dateString);
@@ -29677,6 +29816,16 @@ Your current data will be overwritten. Continue?`
         });
       }
     }
+    if (canArchiveComplianceRecord()) {
+      const archiveControlIds = ["workspace-delete-btn"];
+      archiveControlIds.forEach((id) => {
+        const element = document.getElementById(id);
+        if (element instanceof HTMLButtonElement) {
+          element.disabled = false;
+          element.classList.remove("read-only-disabled");
+        }
+      });
+    }
     if (canMutateReminderSettings()) {
       const reminderSettingsControlIds = [
         "reminder-days-30",
@@ -29742,7 +29891,7 @@ Your current data will be overwritten. Continue?`
     if (dataBackendBadge) {
       if (DATA_BACKEND === "local") {
         dataBackendBadge.textContent = "Local storage mode";
-      } else if (CLOUD_WRITES_ENABLED && (canMarkReminderSent() || canSetActionStatus() || canMutateActions() || canRenewCompliance() || canAddComplianceRecord() || canEditComplianceRecord() || canUpdateComplianceRecordNotes() || canMutateReminderSettings())) {
+      } else if (CLOUD_WRITES_ENABLED && (canMarkReminderSent() || canSetActionStatus() || canMutateActions() || canRenewCompliance() || canAddComplianceRecord() || canEditComplianceRecord() || canArchiveComplianceRecord() || canUpdateComplianceRecordNotes() || canMutateReminderSettings())) {
         dataBackendBadge.textContent = "Cloud mode (limited writes)";
       } else {
         dataBackendBadge.textContent = "Cloud mode (read-only)";

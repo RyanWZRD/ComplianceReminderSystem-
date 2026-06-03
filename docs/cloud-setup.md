@@ -363,6 +363,19 @@ supabase db push
 npm run verify-cloud-update-evidence
 ```
 
+## Phase 3 Step 7A — Archive / delete compliance record
+
+- Migration: `20260203000016_archive_compliance_record_rpc.sql`
+- `canMutateData()` stays false; `canArchiveComplianceRecord()` enables workspace **Delete Record** (editor/admin)
+- `archive_compliance_record` — deleted snapshot with full record/history/evidence/actions JSON, then removes active row (and person when last record)
+- History `deleted` entry is preserved in snapshot only (active `history_entries` cascade on record delete)
+- Not in scope: restore/unarchive, bulk archive/delete, hard delete without snapshot
+
+```bash
+supabase db push
+npm run verify-cloud-archive-compliance-record
+```
+
 ## Rollback
 
 | Scenario | Action |
@@ -375,7 +388,7 @@ npm run verify-cloud-update-evidence
 
 - Notes editing in cloud
 - Evidence Storage buckets and uploads
-- Delete / archive RPCs
+- Delete / archive RPCs (record archive in P3-7A)
 - Backup JSON and CSV import into cloud
 - Reminder settings writes in cloud
 - `CloudComplianceStore.save()` / broad sync

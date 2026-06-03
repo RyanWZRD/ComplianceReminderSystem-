@@ -12,6 +12,7 @@ const {
   canMutateActions,
   canMutateEvidence,
   canUpdateComplianceRecordNotes,
+  canArchiveComplianceRecord,
   isCloudMode,
 } = await import("../js/app/permissions.js");
 
@@ -68,6 +69,13 @@ if (canEditComplianceRecord()) {
 if (canUpdateComplianceRecordNotes()) {
   console.error(
     "canUpdateComplianceRecordNotes() must be false when CLOUD_WRITES_ENABLED is not set."
+  );
+  process.exit(1);
+}
+
+if (canArchiveComplianceRecord()) {
+  console.error(
+    "canArchiveComplianceRecord() must be false when CLOUD_WRITES_ENABLED is not set."
   );
   process.exit(1);
 }

@@ -23,6 +23,7 @@ import {
   canRenewCompliance,
   canSetActionStatus,
   canUpdateComplianceRecordNotes,
+  canArchiveComplianceRecord,
   isCloudMode,
 } from "./js/app/permissions.js";
 import {
@@ -40,6 +41,7 @@ import {
   validateCustomRenewalDate,
 } from "./js/data/renew-compliance.js";
 import { validateEditComplianceRecordInput } from "./js/data/edit-compliance-record.js";
+import { buildRecordDeletedHistoryDescription } from "./js/data/archive-compliance-record.js";
 import {
   ACTION_STATUSES,
   ACTION_STATUS_LABELS,
@@ -516,6 +518,19 @@ function notifyComplianceRecordNotesBlocked() {
     showMessage(
       appMessage,
       "Your role cannot save compliance notes in cloud mode.",
+      "error"
+    );
+    return;
+  }
+
+  notifyReadOnlyBlocked();
+}
+
+function notifyArchiveComplianceRecordBlocked() {
+  if (isCloudMode() && CLOUD_WRITES_ENABLED) {
+    showMessage(
+      appMessage,
+      "Your role cannot delete compliance records in cloud mode.",
       "error"
     );
     return;
@@ -2787,7 +2802,7 @@ function setupRecordWorkspaceListeners() {
       return;
     }
 
-    deleteComplianceRecord(workspaceContext.personId, workspaceContext.recordId);
+    void persistArchiveComplianceRecord(workspaceContext.personId, workspaceContext.recordId);
   });
 
   workspaceContent?.addEventListener("click", handleWorkspaceRecordAction);
@@ -5938,43 +5953,116 @@ async function persistUpdateComplianceRecordNotes(personId, recordId, notes) {
 }
 
 // Remove one compliance record (and the person if it was their last record)
-function deleteComplianceRecord(personId, recordId) {
-  if (rejectIfReadOnly()) {
+async function persistArchiveComplianceRecord(personId, recordId) {
+  const result = findPersonAndRecord(personId, recordId);
+
+  if (!result) {
     return;
   }
-  const result = findPersonAndRecord(personId, recordId);
-  if (!result) return;
 
   const { person, record } = result;
   const confirmed = confirm(
     `Delete this compliance record?\n\n${person.name} — ${record.complianceType}\nExpires: ${formatDate(record.expiryDate)}\n\nThis cannot be undone.`
   );
-  if (!confirmed) return;
 
-  appendHistoryEntry(
-    record,
-    HISTORY_ACTIONS.DELETED,
-    `Record deleted (${record.complianceType}, expires ${formatDate(record.expiryDate)}).`
-  );
+  if (!confirmed) {
+    return;
+  }
 
-  repository.deletedRecordHistory.unshift({
-    deletedAt: new Date().toISOString(),
-    personName: person.name,
-    personRole: person.role,
-    record: {
-      id: record.id,
-      complianceType: record.complianceType,
-      expiryDate: record.expiryDate,
-      renewalCycle: record.renewalCycle || RENEWAL_CYCLE_MANUAL,
-      notes: record.notes || "",
-      history: [...(record.history || [])],
-      evidence: [...(record.evidence || [])],
-      actions: [...(record.actions || [])],
-    },
-  });
+  if (!isCloudMode()) {
+    appendHistoryEntry(
+      record,
+      HISTORY_ACTIONS.DELETED,
+      buildRecordDeletedHistoryDescription(record.complianceType, record.expiryDate)
+    );
 
-  expandedHistoryRows.delete(historyRowKey(personId, recordId));
-  selectedRecordKeys.delete(actionRowKey(personId, recordId));
+    repository.deletedRecordHistory.unshift({
+      deletedAt: new Date().toISOString(),
+      personName: person.name,
+      personRole: person.role,
+      record: {
+        id: record.id,
+        complianceType: record.complianceType,
+        expiryDate: record.expiryDate,
+        renewalCycle: record.renewalCycle || RENEWAL_CYCLE_MANUAL,
+        notes: record.notes || "",
+        history: [...(record.history || [])],
+        evidence: [...(record.evidence || [])],
+        actions: [...(record.actions || [])],
+      },
+    });
+
+    expandedHistoryRows.delete(historyRowKey(personId, recordId));
+    selectedRecordKeys.delete(actionRowKey(personId, recordId));
+
+    if (
+      String(editIdInput.value) === String(personId) &&
+      String(editRecordIdInput.value) === String(recordId)
+    ) {
+      hideEditForm();
+    }
+
+    person.complianceRecords = person.complianceRecords.filter(
+      (item) => item.id !== recordId
+    );
+
+    if (person.complianceRecords.length === 0) {
+      repository.people = repository.people.filter((item) => item.id !== personId);
+    }
+
+    if (
+      workspaceContext &&
+      workspaceContext.personId === personId &&
+      workspaceContext.recordId === recordId
+    ) {
+      workspaceContext = null;
+      if (recordWorkspace) {
+        recordWorkspace.classList.add("hidden");
+        recordWorkspace.setAttribute("aria-hidden", "true");
+      }
+      document.body.classList.remove("workspace-open");
+    }
+
+    savePeople();
+    showMessage(
+      appMessage,
+      `Deleted: ${person.name} — ${record.complianceType}.`,
+      "success"
+    );
+    renderTable();
+    return;
+  }
+
+  if (!canArchiveComplianceRecord()) {
+    notifyArchiveComplianceRecordBlocked();
+    return;
+  }
+
+  if (typeof repository.archiveComplianceRecord !== "function") {
+    showMessage(appMessage, "Cloud record delete is not available.", "error");
+    return;
+  }
+
+  const persistResult = await repository.archiveComplianceRecord(String(recordId));
+
+  if (!persistResult.ok) {
+    showMessage(
+      appMessage,
+      persistResult.error || "Could not delete record from the cloud.",
+      "error"
+    );
+    return;
+  }
+
+  if (persistResult.status === "not_found") {
+    showMessage(appMessage, "Record not found.", "error");
+    return;
+  }
+
+  if (persistResult.status !== "archived") {
+    showMessage(appMessage, "Could not delete record.", "error");
+    return;
+  }
 
   if (
     String(editIdInput.value) === String(personId) &&
@@ -5983,13 +6071,8 @@ function deleteComplianceRecord(personId, recordId) {
     hideEditForm();
   }
 
-  person.complianceRecords = person.complianceRecords.filter(
-    (record) => record.id !== recordId
-  );
-
-  if (person.complianceRecords.length === 0) {
-    repository.people = repository.people.filter((item) => item.id !== personId);
-  }
+  expandedHistoryRows.delete(historyRowKey(personId, recordId));
+  selectedRecordKeys.delete(actionRowKey(personId, recordId));
 
   if (
     workspaceContext &&
@@ -6004,13 +6087,30 @@ function deleteComplianceRecord(personId, recordId) {
     document.body.classList.remove("workspace-open");
   }
 
-  savePeople();
+  const refreshed = await reloadCloudDataAfterWrite();
+
+  if (!refreshed) {
+    return;
+  }
+
   showMessage(
     appMessage,
     `Deleted: ${person.name} — ${record.complianceType}.`,
     "success"
   );
-  renderTable();
+}
+
+function deleteComplianceRecord(personId, recordId) {
+  if (isCloudMode()) {
+    if (!canArchiveComplianceRecord()) {
+      notifyArchiveComplianceRecordBlocked();
+      return;
+    }
+  } else if (rejectIfReadOnly()) {
+    return;
+  }
+
+  void persistArchiveComplianceRecord(personId, recordId);
 }
 
 // Format a stored expiry date for audit notes (DD/MM/YYYY)
@@ -8026,6 +8126,19 @@ function applyReadOnlyMode() {
     }
   }
 
+  if (canArchiveComplianceRecord()) {
+    const archiveControlIds = ["workspace-delete-btn"];
+
+    archiveControlIds.forEach((id) => {
+      const element = document.getElementById(id);
+
+      if (element instanceof HTMLButtonElement) {
+        element.disabled = false;
+        element.classList.remove("read-only-disabled");
+      }
+    });
+  }
+
   if (canMutateReminderSettings()) {
     const reminderSettingsControlIds = [
       "reminder-days-30",
@@ -8111,6 +8224,7 @@ async function finishAppBoot() {
         canRenewCompliance() ||
         canAddComplianceRecord() ||
         canEditComplianceRecord() ||
+        canArchiveComplianceRecord() ||
         canUpdateComplianceRecordNotes() ||
         canMutateReminderSettings())
     ) {

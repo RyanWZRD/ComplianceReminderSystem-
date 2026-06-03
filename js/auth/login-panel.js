@@ -11,6 +11,7 @@ import {
   canSetActionStatus,
   canMutateActions,
   canUpdateComplianceRecordNotes,
+  canArchiveComplianceRecord,
   canMutateReminderSettings,
 } from "../app/permissions.js";
 import { getCurrentUserRole, signInWithPassword, signOut } from "./session.js";
@@ -112,10 +113,11 @@ export function getCloudModeBannerText() {
     canRenewCompliance() ||
     canAddComplianceRecord() ||
     canEditComplianceRecord() ||
+    canArchiveComplianceRecord() ||
     canUpdateComplianceRecordNotes() ||
     canMutateReminderSettings()
   ) {
-    return "Cloud mode (limited writes). Mark Reminder Sent, renew compliance, action complete/reopen, add/delete actions, add compliance records, edit compliance records, workspace notes, and reminder settings (admin) are saved to the cloud.";
+    return "Cloud mode (limited writes). Mark Reminder Sent, renew compliance, action complete/reopen, add/delete actions, add compliance records, edit compliance records, delete compliance records, workspace notes, and reminder settings (admin) are saved to the cloud.";
   }
 
   const role = getCurrentUserRole();

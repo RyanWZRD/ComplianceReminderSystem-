@@ -15,6 +15,7 @@ import { mapCreateActionToRpc } from "./create-action.js";
 import { mapCreateEvidenceToRpc } from "./create-evidence.js";
 import { mapDeleteEvidenceToRpc } from "./delete-evidence.js";
 import { mapUpdateEvidenceToRpc } from "./update-evidence.js";
+import { mapArchiveComplianceRecordToRpc } from "./archive-compliance-record.js";
 import {
   mapAddDefaultActionsToRpc,
   parseAddDefaultActionsResponse,
@@ -670,6 +671,65 @@ export class CloudComplianceStore extends LocalComplianceStore {
     return {
       ok: false,
       error: `Unexpected delete_evidence status: ${String(status)}`,
+    };
+  }
+
+  /**
+   * @param {string} recordId
+   * @returns {Promise<
+   *   | {
+   *       ok: true;
+   *       status: "archived";
+   *       recordId: string;
+   *       deletedSnapshotId: string;
+   *     }
+   *   | { ok: true; status: "not_found" }
+   *   | { ok: false; error: string }
+   * >}
+   */
+  async archiveComplianceRecord(recordId) {
+    if (!isSupabaseConfigured()) {
+      return { ok: false, error: "Supabase is not configured." };
+    }
+
+    await waitForAuthReady();
+
+    if (!isAuthenticated()) {
+      return { ok: false, error: "Not signed in." };
+    }
+
+    const supabase = getSupabaseClient();
+    const { data, error } = await supabase.rpc(
+      "archive_compliance_record",
+      mapArchiveComplianceRecordToRpc(recordId)
+    );
+
+    if (error) {
+      return { ok: false, error: error.message };
+    }
+
+    if (!data || typeof data !== "object") {
+      return { ok: false, error: "Unexpected response from archive_compliance_record." };
+    }
+
+    const status = data.status;
+
+    if (status === "not_found") {
+      return { ok: true, status: "not_found" };
+    }
+
+    if (status === "archived") {
+      return {
+        ok: true,
+        status: "archived",
+        recordId: String(data.record_id ?? recordId),
+        deletedSnapshotId: String(data.deleted_snapshot_id ?? ""),
+      };
+    }
+
+    return {
+      ok: false,
+      error: `Unexpected archive_compliance_record status: ${String(status)}`,
     };
   }
 

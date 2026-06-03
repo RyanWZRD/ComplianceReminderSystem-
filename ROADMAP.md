@@ -394,8 +394,8 @@ QA Status: PASS with warnings
 | P3-5C Default & bulk actions | **COMPLETE** ✅ |
 | P3-6A Evidence create | **COMPLETE** ✅ |
 | P3-6B Evidence delete | **COMPLETE** ✅ |
-| Delete/archive | **PLANNED** |
-| Evidence metadata (edit/delete) | **PLANNED** |
+| P3-6C Evidence update | **COMPLETE** ✅ |
+| P3-7A Record archive/delete | **COMPLETE** ✅ |
 
 #### P3-1 Verification hardening · Complete
 
@@ -497,12 +497,17 @@ QA Status: PASS with warnings
 - **P3-6 evidence metadata CRUD complete** (create / update / delete)
 - Not in scope: Storage uploads, file replacement in cloud, record archive/delete
 
-#### Delete/archive · Planned
+#### P3-7A Record archive/delete · Complete
 
-**Status:** PLANNED
+**Status:** COMPLETE ✅
 
-- Cloud delete compliance record and archive/snapshot flows
-- Import migration path for deleted-record history
+- RPC `archive_compliance_record` (migration `20260203000016`) — deleted snapshot with record/history/evidence/actions JSON, then remove active row (and person when last record)
+- Workspace **Delete Record** when `canArchiveComplianceRecord()`; `persistArchiveComplianceRecord()` + `reloadCloudDataAfterWrite()`
+- Local delete unchanged (in-memory snapshot + remove active record); cloud RPC-first (no browser table writes)
+- `canMutateData()` stays false in cloud
+- Reset: `pruneNonSeedDeletedSnapshots()` in `reset-alpha-staging-data.mjs`
+- Verify: `npm run verify-cloud-archive-compliance-record` (in `verify:phase2`)
+- Not in scope: restore/unarchive, bulk archive/delete
 
 #### Evidence metadata (CRUD) · Complete
 
@@ -510,7 +515,7 @@ QA Status: PASS with warnings
 
 - Metadata create, update, delete via RPC; Storage buckets / uploads follow-on
 
-**Phase 3 (remaining):** delete/archive; CSV/backup import; backup migration tooling; optional notes protection negative test / local parity.
+**Phase 3 (remaining):** CSV/backup import; backup migration tooling; optional notes protection negative test / local parity.
 
 ### v3.0.0 — Cloud Platform Foundation (remaining) · Planned
 

@@ -50,6 +50,8 @@ const SEED_EVIDENCE_IDS = [
   "55555555-5555-5555-5555-555555555502",
 ];
 
+const SEED_DELETED_SNAPSHOT_IDS = ["77777777-7777-7777-7777-777777777701"];
+
 const CANONICAL_COUNTS = {
   people: 5,
   records: 6,
@@ -266,7 +268,7 @@ async function deleteNonSeedPeople(supabase) {
 
   const seedSet = new Set(SEED_PERSON_IDS);
   const extraIds = (data ?? [])
-    .filter((row) => !seedSet.has(row.id) || /^Step10 Verify/i.test(row.name))
+    .filter((row) => !seedSet.has(row.id) || /^Step10 Verify/i.test(row.name) || /^P37A Verify/i.test(row.name))
     .map((row) => row.id);
 
   const uniqueExtraIds = [...new Set(extraIds)];
@@ -417,6 +419,33 @@ async function restoreSeedActions(supabase) {
 /**
  * @param {import('@supabase/supabase-js').SupabaseClient} supabase
  */
+async function pruneNonSeedDeletedSnapshots(supabase) {
+  const { data, error } = await supabase
+    .from("deleted_record_snapshots")
+    .select("id")
+    .eq("organisation_id", ALPHA_ORG_ID);
+
+  assertNoError("fetch deleted_record_snapshots", { error });
+
+  const seedSet = new Set(SEED_DELETED_SNAPSHOT_IDS);
+  const extraIds = (data ?? []).map((row) => row.id).filter((id) => !seedSet.has(id));
+
+  if (extraIds.length === 0) {
+    return 0;
+  }
+
+  const { error: deleteError } = await supabase
+    .from("deleted_record_snapshots")
+    .delete()
+    .in("id", extraIds);
+
+  assertNoError("delete non-seed deleted_record_snapshots", { error: deleteError });
+  return extraIds.length;
+}
+
+/**
+ * @param {import('@supabase/supabase-js').SupabaseClient} supabase
+ */
 async function restoreSeedReminderSettings(supabase) {
   const { error } = await supabase
     .from("reminder_settings")
@@ -445,6 +474,19 @@ async function assertCanonicalState(supabase) {
 
   if ((step10People ?? []).length > 0) {
     console.error("Step10 Verify people remain after reset.");
+    process.exit(1);
+  }
+
+  const { data: p37aPeople, error: p37aError } = await supabase
+    .from("people")
+    .select("id")
+    .eq("organisation_id", ALPHA_ORG_ID)
+    .ilike("name", "P37A Verify%");
+
+  assertNoError("check P37A Verify people", { error: p37aError });
+
+  if ((p37aPeople ?? []).length > 0) {
+    console.error("P37A Verify people remain after reset.");
     process.exit(1);
   }
 
@@ -518,6 +560,7 @@ await restoreSeedRecords(supabase);
 const deletedHistory = await pruneNonSeedHistory(supabase);
 const deletedEvidence = await pruneNonSeedEvidence(supabase);
 const deletedActions = await pruneNonSeedActions(supabase);
+const deletedSnapshots = await pruneNonSeedDeletedSnapshots(supabase);
 await restoreSeedActions(supabase);
 await restoreSeedReminderSettings(supabase);
 await assertCanonicalState(supabase);
@@ -529,6 +572,7 @@ console.log(`  Removed non-seed people: ${deletedPeople}`);
 console.log(`  Removed non-seed history: ${deletedHistory}`);
 console.log(`  Removed non-seed evidence: ${deletedEvidence}`);
 console.log(`  Removed non-seed actions: ${deletedActions}`);
+console.log(`  Removed non-seed deleted snapshots: ${deletedSnapshots}`);
 console.log(`  People: ${CANONICAL_COUNTS.people}`);
 console.log(`  Records: ${CANONICAL_COUNTS.records}`);
 console.log(`  History: ${CANONICAL_COUNTS.history}`);

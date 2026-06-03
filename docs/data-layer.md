@@ -25,6 +25,7 @@ js/data/
   create-evidence.js        create_evidence RPC mapping + validation
   update-evidence.js        update_evidence RPC mapping + validation
   delete-evidence.js        delete_evidence RPC mapping
+  archive-compliance-record.js  archive_compliance_record RPC mapping
   cloud-store.js            CloudComplianceStore (load; RPC writes; save is no-op)
   cloud-settings-store.js   CloudSettingsStore (load-only; setSettings throws)
 ```
@@ -53,7 +54,7 @@ Browser cloud dev: `?backend=cloud` in the URL. Browser limited writes: `?cloudW
 
 Node verify scripts: `process.env.DATA_BACKEND=cloud` and per-script `CLOUD_WRITES_ENABLED=true` for RPC tests.
 
-Cloud **load** is implemented. **Mark Reminder Sent**, **renew compliance**, **action complete/reopen**, **action create/delete/update/in-progress**, **default action templates**, **bulk add actions**, **evidence metadata CRUD (create/update/delete)**, **add compliance record**, **edit compliance record**, **workspace notes**, and **reminder settings (admin)** use RPC when `CLOUD_WRITES_ENABLED` is true. All other cloud mutations remain blocked (`canMutateData()` false in cloud). See `js/app/permissions.js`.
+Cloud **load** is implemented. **Mark Reminder Sent**, **renew compliance**, **action complete/reopen**, **action create/delete/update/in-progress**, **default action templates**, **bulk add actions**, **evidence metadata CRUD (create/update/delete)**, **add compliance record**, **edit compliance record**, **archive/delete compliance record**, **workspace notes**, and **reminder settings (admin)** use RPC when `CLOUD_WRITES_ENABLED` is true. All other cloud mutations remain blocked (`canMutateData()` false in cloud). See `js/app/permissions.js`.
 
 ## Verify scripts
 
@@ -81,6 +82,7 @@ Cloud **load** is implemented. **Mark Reminder Sent**, **renew compliance**, **a
 | `npm run verify-cloud-create-evidence` | Editor create evidence RPC + reload; viewer denied |
 | `npm run verify-cloud-delete-evidence` | Editor delete evidence RPC + reload; viewer denied; not_found |
 | `npm run verify-cloud-update-evidence` | Editor update evidence RPC + reload; viewer denied; no_changes; not_found |
+| `npm run verify-cloud-archive-compliance-record` | Editor archive record RPC + reload; deleted snapshot; viewer denied; not_found |
 | `npm run verify-staging-config` | `.env` + `supabase-env.js` present |
 
 See `docs/cloud-phase2-completion.md`, `docs/cloud-setup.md`, and `docs/staging-deployment.md`.

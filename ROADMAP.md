@@ -1,41 +1,37 @@
 # Compliance Reminder System Roadmap
 
-A local-first safeguarding compliance tracker. All data is stored in the browser (localStorage). No backend, login, or email sending.
+A local-first safeguarding compliance tracker. Runs in the browser with localStorage by default, or against a shared Supabase cloud backend (v3.0.0+).
 
 ---
 
 # Current Release
 
-## v2.9.0 Released
+## v3.0.0 Released
 
-### Visual Insights & Compliance Charts
+**Date:** June 2026
 
-- Expiry by Month chart
-- Compliance Status Breakdown
-- Evidence Coverage chart
-- Action Workload chart
-- Management Snapshot
-- Snapshot CSV export
-- Snapshot print support
+### Major achievements
 
-QA Status: PASS with warnings
+- Cloud platform complete
+- RPC-only write architecture
+- Role-based permissions
+- Compliance CRUD parity
+- Verification framework
+- First production release
+
+Status: Released  
+Tag: v3.0.0
 
 ---
 
 # Next Planned Release
 
-## v3.0.0-rc1 — Cloud writes (release candidate)
+## v3.1.0 — Cloud platform follow-on
 
-- Phase 3 cloud-write slices complete (P3-5 actions, P3-6 evidence metadata, P3-7A archive/delete)
-- RPC-only mutations when `?backend=cloud&cloudWrites=1`; defaults stay local + read-only cloud
-- Release gate: `npm run verify:phase2` — see `docs/v3-release-checklist.md` and `docs/cloud-phase3-completion.md`
-
-## v3.0.0 — Cloud Platform Foundation (GA)
-
-- Shared data, user accounts, login, and role permissions (Supabase)
-- Cloud persistence and multi-device access
-- Migration from existing backup JSON import
-- Evidence Storage, backup import, restore/unarchive (post-RC)
+- Evidence storage buckets and uploads
+- CSV/backup import migration path
+- Restore/unarchive and bulk archive/delete
+- Production cloud-writes policy and GDPR checklist
 
 See [Future Releases](#future-releases) below for full architecture and goals.
 
@@ -43,48 +39,34 @@ See [Future Releases](#future-releases) below for full architecture and goals.
 
 # Future Releases
 
-## v3.0.0 — Cloud Platform Foundation
+## v3.1.0 — Cloud platform follow-on · Planned
 
-### Goals
-
-- Shared data
-- User accounts
-- Login
-- Role permissions
-- Cloud persistence
-- Multi-device access
-
-### Target architecture
-
-**Frontend:**
-
-- Current HTML/CSS/JS application
-
-**Backend:**
-
-- Supabase
-
-**Roles:**
-
-- Admin
-- Editor
-- Viewer
-
-**Data:**
-
-- Compliance records
-- Evidence
-- Actions
-- History
-- Reports
-
-### Migration
-
-- Existing backup JSON import into cloud database
+- Evidence storage buckets and uploads
+- CSV/backup import migration path
+- Restore/unarchive and bulk archive/delete
+- Production cloud-writes policy and GDPR checklist
 
 ---
 
 # Recent Releases
+
+## v3.0.0 Released
+
+**Date:** June 2026
+
+### Major achievements
+
+- Cloud platform complete
+- RPC-only write architecture
+- Role-based permissions
+- Compliance CRUD parity
+- Verification framework
+- First production release
+
+Status: Released  
+Tag: v3.0.0
+
+---
 
 ## v2.9.0 Released
 
@@ -186,7 +168,7 @@ Tag: v2.7.0
 
 ## Version Roadmap
 
-Versions are listed **oldest to newest**. Everything through **v2.9.0** is shipped. **v3.0.0** is next.
+Versions are listed **oldest to newest**. Everything through **v3.0.0** is shipped. **v3.1.0** is next.
 
 ### v1.0 — Working prototype · Shipped
 
@@ -376,11 +358,25 @@ Benefits:
 
 QA Status: PASS with warnings
 
-### v2.8 — Supabase Auth · Planned
+### v2.8 — Supabase Auth · Shipped (included in v3.0.0)
 
 - Supabase Auth login/logout
 - Real user sessions replacing mock preview user
 - Read-only cloud sync (initial)
+
+### v3.0.0 — Cloud Platform Foundation · Shipped
+
+**Date:** June 2026
+
+- Cloud platform complete
+- RPC-only write architecture
+- Role-based permissions (Admin, Editor, Viewer)
+- Compliance CRUD parity (records, actions, evidence metadata, history, archive)
+- Verification framework (`npm run verify:phase2`)
+- First production release
+
+Status: Released  
+Tag: v3.0.0
 
 ### v3.0.0 Alpha — Phase 2 (operational cloud) · Shipped (Step 12 hardening)
 
@@ -413,8 +409,8 @@ QA Status: PASS with warnings
 - `npm run verify:phase2` — v3.0.0 release gate (migrations through `20260203000016`, pre/post reset)
 - `reset-alpha-staging-data.mjs` — canonical counts (5/6/2/2/3/1); Step10 + P37A cleanup
 - Docs: `docs/v3-release-checklist.md`, `docs/cloud-phase3-completion.md`, README/data-layer/cloud-setup
-- Application version: `v3.0.0-rc1`
-- Recommended tag: `v3.0.0-rc1` (after `verify:phase2` passes on staging)
+- Application version: `v3.0.0-rc1` (RC); GA **`v3.0.0`** released June 2026
+- Recommended tag: `v3.0.0`
 
 #### P3-1 Verification hardening · Complete
 
@@ -534,16 +530,14 @@ QA Status: PASS with warnings
 
 - Metadata create, update, delete via RPC; Storage buckets / uploads follow-on
 
-**Phase 3 (remaining for GA):** CSV/backup import; backup migration tooling; evidence Storage/uploads; restore/unarchive; bulk archive/delete; production cloud-writes policy and GDPR checklist.
+**Phase 3 (remaining for GA):** Shipped in v3.0.0 GA (June 2026). Follow-on items moved to [v3.1.0](#v310--cloud-platform-follow-on--planned).
 
-### v3.0.0 — Cloud Platform Foundation (remaining after RC) · Planned
+### v3.1.0 — Cloud platform follow-on · Planned
 
 - Production cloud writes policy and GDPR checklist
 - Evidence storage buckets and uploads
 - CSV/backup import migration path
 - Restore/unarchive and bulk archive/delete
-
-See [v3.0.0 — Cloud Platform Foundation](#v300--cloud-platform-foundation) above for full goals and architecture.
 
 ---
 

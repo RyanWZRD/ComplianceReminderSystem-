@@ -103,6 +103,7 @@ import {
   getComplianceInsightDrilldownFilename,
   getComplianceInsightsSummaryFilename,
 } from "./js/app/insights/insights-export.js";
+import { buildReminderTemplatePreviewFromRow } from "./js/app/reminders/reminder-templates.js";
 
 console.log(
   `Compliance Reminder System ${APP_VERSION} — app.js loaded (${DATA_BACKEND} data, ${AUTH_MODE} auth)`
@@ -471,6 +472,18 @@ const workspaceCloseFooterBtn = document.getElementById("workspace-close-footer-
 const workspaceDeleteBtn = document.getElementById("workspace-delete-btn");
 const workspaceEditBtn = document.getElementById("workspace-edit-btn");
 const workspaceRenewBtn = document.getElementById("workspace-renew-btn");
+const workspacePreviewReminderBtn = document.getElementById("workspace-preview-reminder-btn");
+const reminderPreviewModal = document.getElementById("reminder-preview-modal");
+const reminderPreviewModalCloseBtn = document.getElementById("reminder-preview-modal-close-btn");
+const reminderPreviewCloseBtn = document.getElementById("reminder-preview-close-btn");
+const reminderPreviewModalRecordLabel = document.getElementById("reminder-preview-modal-record-label");
+const reminderPreviewMissingRecipient = document.getElementById("reminder-preview-missing-recipient");
+const reminderPreviewRecipientEmail = document.getElementById("reminder-preview-recipient-email");
+const reminderPreviewManagerRow = document.getElementById("reminder-preview-manager-row");
+const reminderPreviewManagerEmail = document.getElementById("reminder-preview-manager-email");
+const reminderPreviewReminderType = document.getElementById("reminder-preview-reminder-type");
+const reminderPreviewSubject = document.getElementById("reminder-preview-subject");
+const reminderPreviewBody = document.getElementById("reminder-preview-body");
 
 let workspaceContext = null;
 
@@ -3503,6 +3516,107 @@ function getContactEmailStatus(person) {
   };
 }
 
+function buildComplianceRowForPreview(personId, recordId) {
+  const result = findPersonAndRecord(personId, recordId);
+  if (!result) {
+    return null;
+  }
+
+  const { person, record } = result;
+
+  return normalizeComplianceRow({
+    personId,
+    recordId,
+    name: person.name,
+    role: person.role,
+    email: person.email || "",
+    managerEmail: person.managerEmail || "",
+    complianceType: record.complianceType,
+    expiryDate: record.expiryDate,
+    renewalCycle: record.renewalCycle || RENEWAL_CYCLE_MANUAL,
+    notes: record.notes || "",
+    history: record.history || [],
+    evidence: record.evidence || [],
+    actions: record.actions || [],
+  });
+}
+
+function populateReminderTemplatePreviewModal(preview, recordLabel) {
+  if (!reminderPreviewModal) {
+    return;
+  }
+
+  if (reminderPreviewModalRecordLabel) {
+    reminderPreviewModalRecordLabel.textContent = recordLabel;
+  }
+
+  if (reminderPreviewMissingRecipient) {
+    reminderPreviewMissingRecipient.classList.toggle("hidden", Boolean(preview.recipientEmail));
+  }
+
+  if (reminderPreviewRecipientEmail) {
+    reminderPreviewRecipientEmail.textContent = preview.recipientEmail || "—";
+  }
+
+  if (reminderPreviewManagerRow && reminderPreviewManagerEmail) {
+    if (preview.managerEmail) {
+      reminderPreviewManagerRow.classList.remove("hidden");
+      reminderPreviewManagerEmail.textContent = preview.managerEmail;
+    } else {
+      reminderPreviewManagerRow.classList.add("hidden");
+      reminderPreviewManagerEmail.textContent = "";
+    }
+  }
+
+  if (reminderPreviewReminderType) {
+    reminderPreviewReminderType.textContent = preview.reminderType;
+  }
+
+  if (reminderPreviewSubject) {
+    reminderPreviewSubject.textContent = preview.subject;
+  }
+
+  if (reminderPreviewBody) {
+    reminderPreviewBody.textContent = preview.body;
+  }
+}
+
+function openReminderTemplatePreview(personId, recordId, reminderType) {
+  const result = findPersonAndRecord(personId, recordId);
+  if (!result || !reminderPreviewModal) {
+    return;
+  }
+
+  const row = buildComplianceRowForPreview(personId, recordId);
+  if (!row) {
+    return;
+  }
+
+  let preview;
+  try {
+    preview = buildReminderTemplatePreviewFromRow(row, reminderType);
+  } catch (error) {
+    console.error("Could not build reminder template preview.", error);
+    return;
+  }
+
+  const { person, record } = result;
+  populateReminderTemplatePreviewModal(preview, `${person.name} — ${record.complianceType}`);
+
+  reminderPreviewModal.classList.remove("hidden");
+  reminderPreviewModal.setAttribute("aria-hidden", "false");
+  reminderPreviewCloseBtn?.focus();
+}
+
+function closeReminderTemplatePreviewModal() {
+  if (!reminderPreviewModal) {
+    return;
+  }
+
+  reminderPreviewModal.classList.add("hidden");
+  reminderPreviewModal.setAttribute("aria-hidden", "true");
+}
+
 function renderRecordWorkspace() {
   if (!workspaceContext || !workspaceContent) {
     return;
@@ -3675,6 +3789,22 @@ function renderRecordWorkspace() {
       });
     }
   }
+
+  const activeReminder = getReminderForRecord({ expiryDate: record.expiryDate });
+
+  if (workspacePreviewReminderBtn) {
+    if (activeReminder) {
+      workspacePreviewReminderBtn.classList.remove("hidden");
+      workspacePreviewReminderBtn.dataset.personId = String(personId);
+      workspacePreviewReminderBtn.dataset.recordId = String(recordId);
+      workspacePreviewReminderBtn.dataset.reminderType = activeReminder.reminderType;
+    } else {
+      workspacePreviewReminderBtn.classList.add("hidden");
+      delete workspacePreviewReminderBtn.dataset.personId;
+      delete workspacePreviewReminderBtn.dataset.recordId;
+      delete workspacePreviewReminderBtn.dataset.reminderType;
+    }
+  }
 }
 
 function handleWorkspaceRecordAction(event) {
@@ -3767,6 +3897,18 @@ function setupRecordWorkspaceListeners() {
     }
 
     renewComplianceRecord(workspaceContext.personId, workspaceContext.recordId);
+  });
+
+  workspacePreviewReminderBtn?.addEventListener("click", () => {
+    if (!workspaceContext || workspacePreviewReminderBtn.classList.contains("hidden")) {
+      return;
+    }
+
+    openReminderTemplatePreview(
+      parseEntityId(workspacePreviewReminderBtn.dataset.personId) || workspaceContext.personId,
+      parseEntityId(workspacePreviewReminderBtn.dataset.recordId) || workspaceContext.recordId,
+      workspacePreviewReminderBtn.dataset.reminderType
+    );
   });
 
   workspaceDeleteBtn?.addEventListener("click", () => {
@@ -6497,14 +6639,23 @@ function renderReminders() {
       <td>${formatDate(reminder.expiryDate)}</td>
       <td><span class="reminder-badge reminder-${reminder.urgencyKey}">${reminder.reminderType}</span></td>
       <td>
-        <button
-          type="button"
-          class="mark-sent-btn"
-          data-person-id="${reminder.personId}"
-          data-record-id="${reminder.recordId}"
-          data-reminder-type="${reminder.reminderType}"
-          ${alreadySent || !canMarkReminderSent() ? "disabled" : ""}
-        >${alreadySent ? "Sent" : "Mark Sent"}</button>
+        <div class="reminder-row-actions">
+          <button
+            type="button"
+            class="reminder-preview-btn"
+            data-person-id="${reminder.personId}"
+            data-record-id="${reminder.recordId}"
+            data-reminder-type="${reminder.reminderType}"
+          >Preview Reminder Email</button>
+          <button
+            type="button"
+            class="mark-sent-btn"
+            data-person-id="${reminder.personId}"
+            data-record-id="${reminder.recordId}"
+            data-reminder-type="${reminder.reminderType}"
+            ${alreadySent || !canMarkReminderSent() ? "disabled" : ""}
+          >${alreadySent ? "Sent" : "Mark Sent"}</button>
+        </div>
       </td>
     `;
 
@@ -8848,11 +8999,43 @@ document.addEventListener("keydown", (event) => {
       closeActionModal();
     } else if (bulkActionModal && !bulkActionModal.classList.contains("hidden")) {
       closeBulkActionModal();
+    } else if (reminderPreviewModal && !reminderPreviewModal.classList.contains("hidden")) {
+      closeReminderTemplatePreviewModal();
     } else if (workspaceContext) {
       closeRecordWorkspace();
     }
   }
 });
+
+function setupReminderPreviewModalListeners() {
+  if (!reminderPreviewModal) {
+    return;
+  }
+
+  reminderPreviewModal.addEventListener("click", (event) => {
+    const target = event.target instanceof Element ? event.target : event.target.parentElement;
+
+    if (!target) {
+      return;
+    }
+
+    if (target === reminderPreviewModal) {
+      closeReminderTemplatePreviewModal();
+      return;
+    }
+
+    const actionButton = target.closest(
+      "#reminder-preview-close-btn, #reminder-preview-modal-close-btn"
+    );
+
+    if (!actionButton) {
+      return;
+    }
+
+    event.preventDefault();
+    closeReminderTemplatePreviewModal();
+  });
+}
 
 function setupEvidenceModalListeners() {
   if (!evidenceModal) {
@@ -9007,6 +9190,16 @@ if (hideSentRemindersCheckbox) {
 
 if (remindersTableBody) {
   remindersTableBody.addEventListener("click", (event) => {
+    const previewButton = event.target.closest(".reminder-preview-btn");
+    if (previewButton) {
+      openReminderTemplatePreview(
+        parseEntityId(previewButton.dataset.personId),
+        parseEntityId(previewButton.dataset.recordId),
+        previewButton.dataset.reminderType
+      );
+      return;
+    }
+
     const button = event.target.closest(".mark-sent-btn");
     if (!button || button.disabled) {
       return;
@@ -9437,6 +9630,7 @@ function runBootSetup() {
   initAuth();
   setupRenewModalListeners();
   setupEvidenceModalListeners();
+  setupReminderPreviewModalListeners();
   setupActionModalListeners();
   setupBulkActionModalListeners();
   setupBulkSelectionListeners();

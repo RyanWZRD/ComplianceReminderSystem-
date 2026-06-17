@@ -154,7 +154,7 @@
               <th>Compliance Type</th>
               <th>Expiry Date</th>
               <th>Reminder Type</th>
-              <th>Action</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody id="reminders-table-body">
@@ -984,6 +984,47 @@
     </div>
   </div>
 
+  <div id="reminder-preview-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="reminder-preview-modal-title">
+    <div class="modal-dialog reminder-preview-modal">
+      <div class="renew-modal-header">
+        <h2 id="reminder-preview-modal-title" class="renew-modal-title">Preview Reminder Email</h2>
+        <button type="button" id="reminder-preview-modal-close-btn" class="renew-modal-close" aria-label="Close reminder preview dialog">&times;</button>
+      </div>
+      <p id="reminder-preview-modal-record-label" class="renew-modal-record"></p>
+      <p id="reminder-preview-modal-disclaimer" class="reminder-preview-disclaimer" role="status">
+        Preview only — no email is sent. This shows what a reminder would say before delivery infrastructure exists.
+      </p>
+      <p id="reminder-preview-missing-recipient" class="reminder-preview-missing-recipient hidden" role="alert">
+        Recipient email is missing on this person record. A real reminder could not be delivered until an email is added.
+      </p>
+      <dl class="reminder-preview-meta">
+        <div class="reminder-preview-meta-item">
+          <dt>Recipient email</dt>
+          <dd id="reminder-preview-recipient-email"></dd>
+        </div>
+        <div class="reminder-preview-meta-item" id="reminder-preview-manager-row">
+          <dt>Manager email</dt>
+          <dd id="reminder-preview-manager-email"></dd>
+        </div>
+        <div class="reminder-preview-meta-item">
+          <dt>Reminder type</dt>
+          <dd id="reminder-preview-reminder-type"></dd>
+        </div>
+        <div class="reminder-preview-meta-item reminder-preview-subject-item">
+          <dt>Subject</dt>
+          <dd id="reminder-preview-subject"></dd>
+        </div>
+      </dl>
+      <div class="reminder-preview-body-block">
+        <h3 class="reminder-preview-body-title">Body</h3>
+        <pre id="reminder-preview-body" class="reminder-preview-body"></pre>
+      </div>
+      <div class="modal-actions">
+        <button type="button" id="reminder-preview-close-btn" class="cancel-btn">Close</button>
+      </div>
+    </div>
+  </div>
+
   <div id="record-workspace" class="record-workspace hidden" role="dialog" aria-modal="true" aria-labelledby="workspace-title">
     <div class="record-workspace-backdrop" id="record-workspace-backdrop" aria-hidden="true"></div>
     <div class="record-workspace-panel">
@@ -997,6 +1038,7 @@
       <div class="workspace-quick-actions">
         <button type="button" id="workspace-edit-btn" class="edit-btn">Edit</button>
         <button type="button" id="workspace-renew-btn" class="renew-btn">Renew Compliance</button>
+        <button type="button" id="workspace-preview-reminder-btn" class="reminder-preview-btn hidden">Preview Reminder Email</button>
       </div>
       <div id="workspace-content" class="workspace-content">
         <!-- Populated by JavaScript -->

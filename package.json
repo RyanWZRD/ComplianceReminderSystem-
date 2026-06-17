@@ -43,6 +43,7 @@
     "verify-insights-release": "node scripts/verify-insights-release.mjs",
     "verify-contact-management": "node scripts/verify-contact-management.mjs",
     "verify-reminder-template-preview": "node scripts/verify-reminder-template-preview.mjs",
+    "verify-reminder-template-preview-ui": "node scripts/verify-reminder-template-preview-ui.mjs",
     "verify:phase2": "node scripts/verify-phase2.mjs"
   },
   "dependencies": {

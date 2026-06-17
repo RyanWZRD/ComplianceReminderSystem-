@@ -3048,6 +3048,114 @@ tr:last-child td {
   opacity: 0.85;
 }
 
+.reminder-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.reminder-preview-btn {
+  background: #fff;
+  color: #1d4e89;
+  border: 1px solid #b8d4f0;
+  padding: 0.35rem 0.65rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.reminder-preview-btn:hover:not(:disabled) {
+  background: #e8f1fb;
+}
+
+.reminder-preview-modal {
+  max-width: 640px;
+  width: 100%;
+}
+
+.reminder-preview-disclaimer {
+  margin: 0 0 1rem;
+  padding: 0.65rem 0.85rem;
+  border-radius: 8px;
+  background: #eef6ff;
+  color: #1d4e89;
+  border: 1px solid #b8d4f0;
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+
+.reminder-preview-missing-recipient {
+  margin: 0 0 1rem;
+  padding: 0.65rem 0.85rem;
+  border-radius: 8px;
+  background: #fff7ed;
+  color: #9a3412;
+  border: 1px solid #fdba74;
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+
+.reminder-preview-meta {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0 0 1rem;
+}
+
+.reminder-preview-meta-item {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.reminder-preview-meta-item dt {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #5a6270;
+}
+
+.reminder-preview-meta-item dd {
+  margin: 0;
+  font-size: 0.92rem;
+  color: #16213e;
+  word-break: break-word;
+}
+
+.reminder-preview-subject-item dd {
+  font-weight: 600;
+}
+
+.reminder-preview-body-block {
+  margin-bottom: 1rem;
+}
+
+.reminder-preview-body-title {
+  margin: 0 0 0.5rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #5a6270;
+}
+
+.reminder-preview-body {
+  margin: 0;
+  padding: 0.85rem 1rem;
+  border-radius: 8px;
+  background: #f8fafc;
+  border: 1px solid #d8dce3;
+  font-family: inherit;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 280px;
+  overflow: auto;
+}
+
 .empty-message {
   text-align: center;
   color: #5a6270;

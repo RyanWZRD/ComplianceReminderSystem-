@@ -1,7 +1,7 @@
-# V5-1B — Reminder Template Preview (Phase 1)
+# V5-1B — Reminder Template Preview
 
 **Slice:** V5-1B Reminder Template Preview  
-**Phase:** 1 — Template preview foundation  
+**Phases:** 1 — Template foundation · 2 — Preview UI  
 **Date:** June 2026  
 **Prerequisite:** v5.0.0-alpha.1 (V5-1A Contact Management)
 
@@ -9,11 +9,11 @@
 
 ## Summary
 
-V5-1B Phase 1 adds **read-only reminder email template generation** so safeguarding teams can preview reminder copy and recipient context before any delivery infrastructure exists. Uses V5-1A person email fields when present. **No email sending, notification queue, automation, Edge Functions, migrations, or permission changes.**
+V5-1B adds **read-only reminder email template generation and on-screen preview** so safeguarding teams can see what a reminder would say — and who it would target — before any delivery infrastructure exists. Uses V5-1A person email fields when present. **No email sending, notification queue, automation, Edge Functions, migrations, or permission changes.**
 
 ---
 
-## Phase 1 deliverables
+## Phase 1 deliverables (foundation)
 
 | Item | Location |
 |------|----------|
@@ -21,7 +21,21 @@ V5-1B Phase 1 adds **read-only reminder email template generation** so safeguard
 | Deterministic verification | `npm run verify-reminder-template-preview` |
 | Documentation | this file |
 
-**Out of scope for Phase 1:** preview UI, SMTP/queue, `mark_reminder_sent` automation, bundle wiring.
+**Out of scope for Phase 1:** preview UI, SMTP/queue, `mark_reminder_sent` automation.
+
+---
+
+## Phase 2 deliverables (preview UI)
+
+| Item | Location |
+|------|----------|
+| Preview modal | `index.html` — `#reminder-preview-modal` |
+| Action Required preview action | `app.js` — `renderReminders()` |
+| Workspace preview action (when in reminder window) | `index.html` / `app.js` — `#workspace-preview-reminder-btn` |
+| Preview styles | `styles.css` |
+| Deterministic UI verification | `npm run verify-reminder-template-preview-ui` |
+
+**Out of scope for Phase 2:** email delivery, SMTP/Resend/Microsoft integration, notification queue, automation, migrations/RPC, permission changes.
 
 ---
 
@@ -78,30 +92,58 @@ Every preview object includes:
 
 ---
 
+## Preview UI (Phase 2)
+
+### Where to open preview
+
+1. **Action Required / Reminder Engine** — each active reminder row has a **Preview Reminder Email** button alongside **Mark Sent**.
+2. **Record workspace** — when the open record is in an active reminder window (30/14/7-day or expired), **Preview Reminder Email** appears in the workspace quick actions.
+
+### Modal contents
+
+| Field | Behaviour |
+|-------|-----------|
+| Recipient email | Shown from V5-1A contact fields; `—` when missing |
+| Manager email | Shown when present; row hidden when absent |
+| Reminder type / window | Active reminder label for that row |
+| Subject | Generated subject line |
+| Body | Plain-text preview body |
+| Disclaimer | Prominent note: preview only, no email sent |
+| Missing recipient warning | Alert when recipient email is absent; preview still opens |
+
+---
+
 ## Verification
 
 ```powershell
 npm run verify-reminder-template-preview
+npm run verify-reminder-template-preview-ui
 ```
 
-Checks:
+**Phase 1** checks:
 
 - All four template types produce the documented output shape
 - Deterministic subject/body fragments for fixture input
 - Email normalization and optional manager line behaviour
 - Module contains no send/queue/automation hooks
-- `app.js` / bundle not wired to preview module yet (Phase 1)
+
+**Phase 2** checks:
+
+- Preview modal markup and disclaimer in `index.html`
+- Action Required and workspace preview actions wired in `app.js`
+- Missing recipient warning without blocking preview
+- Bundle includes template preview helpers
+- No email delivery or automation hooks in UI wiring
 
 ---
 
-## Deliberately out of scope (Phase 1)
+## Deliberately out of scope (Phases 1–2)
 
 | Item | Notes |
 |------|-------|
 | Email delivery / SMTP | No `sendEmail` or provider integration |
 | Notification queue | No queue tables or enqueue RPC |
 | Automation / Edge Functions | No scheduled jobs |
-| Preview UI | Planned later V5-1B phase |
 | `mark_reminder_sent` automation | Manual marking unchanged |
 | Migrations / RPC / permissions | None |
 
@@ -109,8 +151,7 @@ Checks:
 
 ## Next phases (indicative)
 
-- **Phase 2+:** Preview UI in register or workspace; link to Contact Readiness gaps
-- **V5-0 / V5-1 automation:** Server-side window evaluation, queue, and delivery (see [`docs/v5-automated-compliance-operations.md`](v5-automated-compliance-operations.md))
+- **Phase 3+:** Link preview gaps to Contact Readiness drilldowns; delivery queue (see [`docs/v5-automated-compliance-operations.md`](v5-automated-compliance-operations.md))
 
 ---
 

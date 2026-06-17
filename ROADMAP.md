@@ -24,22 +24,34 @@ First v5 alpha checkpoint: optional person **email** and **manager email** acros
 
 Application version: **v5.0.0-alpha.1**
 
-**Next slice:** V5-1B Reminder Template Preview — Phase 1 foundation in progress
+**Next slice:** V5-1B Reminder Template Preview — Phase 2 preview UI complete
 
 Status: Alpha checkpoint complete (Phase 7)  
 Tag: not created unless explicitly requested
 
 ---
 
-## V5-1B Phase 1 — Reminder Template Preview Foundation · In progress
+## V5-1B Phase 1 — Reminder Template Preview Foundation · Complete
 
 **Date:** June 2026
 
-Read-only reminder email template generation (`js/app/reminders/reminder-templates.js`) for 30/14/7-day and expired windows. Uses V5-1A contact emails when present. No UI, sending, queue, or automation.
+Read-only reminder email template generation (`js/app/reminders/reminder-templates.js`) for 30/14/7-day and expired windows. Uses V5-1A contact emails when present. No sending, queue, or automation.
 
 **Documentation:** [`docs/v5-1b-reminder-template-preview.md`](docs/v5-1b-reminder-template-preview.md)
 
 **Verification:** `npm run verify-reminder-template-preview`
+
+---
+
+## V5-1B Phase 2 — Reminder Template Preview UI · Complete
+
+**Date:** June 2026
+
+On-screen **Preview Reminder Email** action in Action Required rows and record workspace (when in an active reminder window). Modal shows recipient/manager email, reminder type, subject, body, preview-only disclaimer, and missing-recipient warning. No email sending or automation.
+
+**Documentation:** [`docs/v5-1b-reminder-template-preview.md`](docs/v5-1b-reminder-template-preview.md)
+
+**Verification:** `npm run verify-reminder-template-preview-ui`
 
 ---
 
@@ -63,13 +75,13 @@ Tag: v3.0.0
 
 # Next Planned Release
 
-## V5-1B — Reminder Template Preview · Phase 1 in progress
+## V5-1B — Reminder Template Preview · Phase 2 complete
 
-Read-only preview of reminder copy and recipient context for records in 30/14/7-day and expired windows. Phase 1 ships the template module and verification only; UI and delivery follow in later phases.
+Read-only preview of reminder copy and recipient context for records in 30/14/7-day and expired windows. Phase 1 ships the template module; Phase 2 adds Action Required and workspace preview UI. Delivery follows in later phases.
 
 **Documentation:** [`docs/v5-1b-reminder-template-preview.md`](docs/v5-1b-reminder-template-preview.md)
 
-**Verification:** `npm run verify-reminder-template-preview`
+**Verification:** `npm run verify-reminder-template-preview` · `npm run verify-reminder-template-preview-ui`
 
 See [`docs/v5-automated-compliance-operations.md`](docs/v5-automated-compliance-operations.md) and [Future Releases](#future-releases) for broader v5 automation and v3.1.0 cloud follow-on.
 
@@ -696,7 +708,7 @@ V4 answers *what needs attention*. V5 **acts on it automatically** once the auto
 | Slice | Status | Summary |
 |-------|--------|---------|
 | V5-1A | **COMPLETE** | Contact Management — email fields, Contact Readiness insights, drilldown-to-edit; **v5.0.0-alpha.1** |
-| V5-1B | **PLANNED** | Reminder Template Preview — read-only reminder copy before delivery |
+| V5-1B | **IN PROGRESS** | Reminder Template Preview — Phase 2 preview UI complete |
 | V5-0 | **PLANNED** | Automation platform — schema, RPCs, daily scan skeleton, feature flags |
 | V5-1 | **PLANNED** | Automated reminders & digests — queue, email delivery, mark sent on delivery |
 | V5-2 | **PLANNED** | Automated action orchestration — policies map V4 recommendations → `add_default_actions` |

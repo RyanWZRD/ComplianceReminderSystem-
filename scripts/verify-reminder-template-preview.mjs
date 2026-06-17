@@ -223,9 +223,6 @@ assertNotContains(templatesJs, "notification_queue", "module must not reference 
 assertNotContains(templatesJs, "markReminderSent", "module must not mark reminders sent");
 assertNotContains(templatesJs, "fetch(", "module must not perform network calls");
 
-assertNotContains(appJs, "reminder-templates.js", "app.js must not wire preview UI yet");
-assertNotContains(appBundleJs, "reminder-templates", "bundle must not include preview module yet");
-
 if (failures.length > 0) {
   console.error("FAILURES:");
   failures.forEach((message) => console.error(`  - ${message}`));

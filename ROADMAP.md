@@ -70,6 +70,12 @@ Application version: **v4.0.0-rc1** in source until GA tag; release target **v4.
 
 Recommended tag: **v4.0.1** (GA pending sign-off and version string bump)
 
+## v5.0.0 — Automated Compliance Operations · Planned
+
+Scheduled compliance operations: reminder delivery, action orchestration, escalations, and operations audit. See [`docs/v5-automated-compliance-operations.md`](docs/v5-automated-compliance-operations.md) and [Version Roadmap — v5](#v500--automated-compliance-operations--planned).
+
+**Prerequisites:** v4.0.1 GA + v3.1.0 cloud follow-on.
+
 ## v3.1.0 — Cloud platform follow-on · Planned
 
 - Evidence storage buckets and uploads
@@ -622,6 +628,32 @@ Verification:
 **Constraints (V4 to date):** No new CRUD, migrations (except RC-001 `20260203000017`), cloud-write policy changes, or AI/LLM dependency.
 
 Tag: **v4.0.0-rc1** in source; GA target **v4.0.1** (pending sign-off and version bump).
+
+---
+
+## v5.0.0 — Automated Compliance Operations · Planned
+
+**Theme:** From insight to action — scheduled reminders, policy-driven action creation, escalations, and auditable operations on the existing cloud platform.
+
+V4 answers *what needs attention*. V5 **acts on it automatically**: daily compliance scans, email digests, auto-provisioned actions when records enter risk states, and escalation when reminder follow-up is missed.
+
+**Full roadmap:** [`docs/v5-automated-compliance-operations.md`](docs/v5-automated-compliance-operations.md)
+
+**Prerequisites:** v4.0.1 GA, v3.1.0 cloud follow-on (evidence Storage, restore/bulk ops, production cloud-writes policy)
+
+| Slice | Status | Summary |
+|-------|--------|---------|
+| V5-0 | **PLANNED** | Automation platform — schema, RPCs, daily scan skeleton, feature flags |
+| V5-1 | **PLANNED** | Automated reminders & digests — queue, email delivery, mark sent on delivery |
+| V5-2 | **PLANNED** | Automated action orchestration — policies map V4 recommendations → `add_default_actions` |
+| V5-3 | **PLANNED** | Escalation & operational closure — missing follow-up → admin notify + audit |
+| V5-4 | **PLANNED** | Policy engine GA — templates, dry-run, operations export, `verify:automation` |
+
+**Architecture:** Server-side automation via Supabase Edge Functions + pg_cron; all writes through RPC; history entries tagged `source: automation`. **Cloud-only** — local mode remains manual with clear UI messaging.
+
+**Non-goals:** AI/LLM, third-party DBS APIs, mobile apps, visual workflow builder.
+
+**Tag target:** `v5.0.0`
 
 ---
 

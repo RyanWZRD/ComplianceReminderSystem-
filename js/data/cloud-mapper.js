@@ -70,6 +70,52 @@ import { normalizePersonContactFields } from "./email.js";
  */
 
 /**
+ * @typedef {'running' | 'completed' | 'failed' | 'cancelled'} AutomationRunStatus
+ */
+
+/**
+ * @typedef {Object} AutomationRunSummary
+ * @property {number} [policiesApplied]
+ * @property {number} [policiesSkipped]
+ * @property {number} [remindersQueued]
+ * @property {number} [remindersSent]
+ * @property {number} [actionsCreated]
+ * @property {number} [escalationsFired]
+ */
+
+/**
+ * @typedef {Object} AutomationPolicyDocument
+ * @property {number} version
+ * @property {string} name
+ * @property {boolean} [enabled]
+ * @property {object[]} [triggers]
+ * @property {object} [schedule]
+ */
+
+/**
+ * @typedef {Object} AutomationPolicyRow
+ * @property {string} id
+ * @property {string} organisation_id
+ * @property {AutomationPolicyDocument | object} policy
+ * @property {boolean} enabled
+ * @property {number} version
+ * @property {string} created_at
+ * @property {string} updated_at
+ */
+
+/**
+ * @typedef {Object} AutomationRunRow
+ * @property {string} id
+ * @property {string} organisation_id
+ * @property {string} started_at
+ * @property {string | null} [completed_at]
+ * @property {AutomationRunStatus} status
+ * @property {AutomationRunSummary | object} summary
+ * @property {string | null} [error]
+ * @property {string} created_at
+ */
+
+/**
  * @param {string | null | undefined} dateValue
  * @returns {string}
  */

@@ -80,4 +80,39 @@ export const CLOUD_WRITES_ENABLED =
   readCloudWritesFromLocation() ??
   (typeof process !== "undefined" && process.env?.CLOUD_WRITES_ENABLED === "true");
 
+/**
+ * Browser-only: ?automation=1 on localhost or configured staging hostnames.
+ * Not honoured on production domains. Node uses process.env.AUTOMATION_ENABLED.
+ * Committed default is false — no automation executes until later V5 slices.
+ * @returns {boolean | null}
+ */
+function readAutomationFromLocation() {
+  if (typeof window === "undefined" || !window.location?.search) {
+    return null;
+  }
+
+  const hostname = window.location.hostname;
+
+  if (!isCloudWritesUrlOverrideHostAllowed(hostname)) {
+    return null;
+  }
+
+  const value = new URLSearchParams(window.location.search).get("automation");
+
+  if (value === "1" || value === "true") {
+    return true;
+  }
+
+  return null;
+}
+
+/**
+ * Enables server-side automation (scan, queue, delivery). Default false in git.
+ * Node verify/staging: AUTOMATION_ENABLED=true
+ * Browser: ?automation=1 on localhost or STAGING_APP_HOSTNAMES only — never production.
+ */
+export const AUTOMATION_ENABLED =
+  readAutomationFromLocation() ??
+  (typeof process !== "undefined" && process.env?.AUTOMATION_ENABLED === "true");
+
 export const APP_VERSION = "v5.0.0-alpha.2";

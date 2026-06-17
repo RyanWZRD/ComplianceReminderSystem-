@@ -21306,6 +21306,21 @@ ${suffix}`;
   }
   var DATA_BACKEND = readBackendFromLocation() ?? (typeof process !== "undefined" && process.env?.DATA_BACKEND === "cloud" ? "cloud" : "local");
   var CLOUD_WRITES_ENABLED = readCloudWritesFromLocation() ?? (typeof process !== "undefined" && process.env?.CLOUD_WRITES_ENABLED === "true");
+  function readAutomationFromLocation() {
+    if (typeof window === "undefined" || !window.location?.search) {
+      return null;
+    }
+    const hostname = window.location.hostname;
+    if (!isCloudWritesUrlOverrideHostAllowed(hostname)) {
+      return null;
+    }
+    const value = new URLSearchParams(window.location.search).get("automation");
+    if (value === "1" || value === "true") {
+      return true;
+    }
+    return null;
+  }
+  var AUTOMATION_ENABLED = readAutomationFromLocation() ?? (typeof process !== "undefined" && process.env?.AUTOMATION_ENABLED === "true");
   var APP_VERSION = "v5.0.0-alpha.2";
 
   // js/app/permissions.js

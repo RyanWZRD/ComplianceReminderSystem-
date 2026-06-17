@@ -47,6 +47,7 @@
     "verify-reminder-template-preview-actions": "node scripts/verify-reminder-template-preview-actions.mjs",
     "verify-reminder-preview-dashboard": "node scripts/verify-reminder-preview-dashboard.mjs",
     "verify-reminder-suite": "node scripts/verify-reminder-suite.mjs",
+    "verify-automation-foundation": "node scripts/verify-automation-foundation.mjs",
     "verify:phase2": "node scripts/verify-phase2.mjs"
   },
   "dependencies": {

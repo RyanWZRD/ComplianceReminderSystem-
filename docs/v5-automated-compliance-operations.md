@@ -116,11 +116,11 @@ Slices are ordered **V5-1A (contact foundation) → V5-0 → V5-1 automation →
 
 ---
 
-### V5-1B — Reminder Template Preview · **IN PROGRESS (Phase 2 complete)**
+### V5-1B — Reminder Template Preview · **IN PROGRESS (Phase 3 complete)**
 
 **Goal:** Preview reminder content and recipient context for records in reminder windows before automated delivery.
 
-**Status:** Phase 2 preview UI — Action Required and workspace preview modal. Full checklist: [`docs/v5-1b-reminder-template-preview.md`](v5-1b-reminder-template-preview.md).
+**Status:** Phase 3 copy/export — modal copy and text-file export for generated reminder content. Full checklist: [`docs/v5-1b-reminder-template-preview.md`](v5-1b-reminder-template-preview.md).
 
 | Phase | Deliverable | Status |
 |-------|-------------|--------|
@@ -130,9 +130,11 @@ Slices are ordered **V5-1A (contact foundation) → V5-0 → V5-1 automation →
 | 2 | Reminder preview UI (Action Required + workspace) | **COMPLETE** |
 | 2 | Missing-email surfacing in preview | **COMPLETE** |
 | 2 | `npm run verify-reminder-template-preview-ui` | **COMPLETE** |
-| 3+ | Release gate extension / delivery | Planned |
+| 3 | Copy subject/body/full email + export text file | **COMPLETE** |
+| 3 | `npm run verify-reminder-template-preview-actions` | **COMPLETE** |
+| 4+ | Release gate extension / delivery | Planned |
 
-**Constraints:** Read-only preview; no notification queue, SMTP, Edge Functions, migrations, or permission changes in Phases 1–2.
+**Constraints:** Read-only preview; no notification queue, SMTP, Edge Functions, migrations, or permission changes in Phases 1–3.
 
 ---
 
@@ -311,6 +313,7 @@ Extend the existing pattern from V3/V4:
 | `npm run verify-contact-management` | V5-1A alpha gate — contact CSV/workspace + insights release chain |
 | `npm run verify-reminder-template-preview` | V5-1B Phase 1 — template module, output shape, no delivery hooks |
 | `npm run verify-reminder-template-preview-ui` | V5-1B Phase 2 — preview modal, Action Required/workspace wiring, no delivery hooks |
+| `npm run verify-reminder-template-preview-actions` | V5-1B Phase 3 — copy/export actions, full email text, no delivery hooks |
 | `npm run verify-automation-schema` | V5-0 migrations + RPC |
 | `npm run verify-automation-reminders` | V5-1 queue + mark sent |
 | `npm run verify-automation-actions` | V5-2 policy apply |
@@ -406,7 +409,7 @@ Secrets (SMTP API keys) live in Supabase Edge Function secrets only — never in
 | Slice | Status | Summary |
 |-------|--------|---------|
 | V5-1A | **COMPLETE** | Contact Management — email fields, insights, drilldown-to-edit; **v5.0.0-alpha.1** |
-| V5-1B | **IN PROGRESS** | Reminder Template Preview — Phase 2 preview UI complete |
+| V5-1B | **IN PROGRESS** | Reminder Template Preview — Phase 3 copy/export complete |
 | V5-0 | **PLANNED** | Automation platform foundation |
 | V5-1 (automation) | **PLANNED** | Automated reminders & digests (post V5-0) |
 | V5-2 | **PLANNED** | Automated action orchestration |

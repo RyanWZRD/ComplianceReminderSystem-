@@ -1,7 +1,7 @@
 # V5-1B — Reminder Template Preview
 
 **Slice:** V5-1B Reminder Template Preview  
-**Phases:** 1 — Template foundation · 2 — Preview UI  
+**Phases:** 1 — Template foundation · 2 — Preview UI · 3 — Copy and export · 4 — Preview dashboard  
 **Date:** June 2026  
 **Prerequisite:** v5.0.0-alpha.1 (V5-1A Contact Management)
 
@@ -9,7 +9,7 @@
 
 ## Summary
 
-V5-1B adds **read-only reminder email template generation and on-screen preview** so safeguarding teams can see what a reminder would say — and who it would target — before any delivery infrastructure exists. Uses V5-1A person email fields when present. **No email sending, notification queue, automation, Edge Functions, migrations, or permission changes.**
+V5-1B adds **read-only reminder email template generation, on-screen preview, and copy/export utilities** so safeguarding teams can see and reuse reminder copy before any delivery infrastructure exists. Uses V5-1A person email fields when present. **No email sending, notification queue, automation, Edge Functions, migrations, or permission changes.**
 
 ---
 
@@ -36,6 +36,71 @@ V5-1B adds **read-only reminder email template generation and on-screen preview*
 | Deterministic UI verification | `npm run verify-reminder-template-preview-ui` |
 
 **Out of scope for Phase 2:** email delivery, SMTP/Resend/Microsoft integration, notification queue, automation, migrations/RPC, permission changes.
+
+---
+
+## Phase 3 deliverables (copy and export)
+
+| Item | Location |
+|------|----------|
+| Copy/export helpers | `js/app/reminders/reminder-templates.js` — `buildReminderTemplateFullEmailText`, `buildReminderPreviewExportFilename` |
+| Modal copy/export actions | `index.html` / `app.js` — preview modal action buttons |
+| Deterministic verification | `npm run verify-reminder-template-preview-actions` |
+
+**Out of scope for Phase 3:** email delivery, SMTP/Resend/Microsoft integration, notification queue, automation, migrations/RPC, permission changes.
+
+---
+
+## Phase 4 deliverables (preview dashboard)
+
+| Item | Location |
+|------|----------|
+| Preview dashboard module | `js/app/reminders/reminder-preview-dashboard.js` |
+| Dashboard section | `index.html` — `#reminder-preview-dashboard-section` |
+| Card counts and drilldown | `app.js` — `renderReminderPreviewDashboardCards()`, drilldown preview |
+| Export reminder pack | `app.js` — `exportReminderPreviewPack()` |
+| Dashboard styles | `styles.css` |
+| Deterministic verification | `npm run verify-reminder-preview-dashboard` |
+
+### Dashboard cards
+
+Counts include only records that **currently qualify for a reminder** (same most-urgent window logic as Action Required) **and have a person email on file**:
+
+| Card | Drilldown filter |
+|------|------------------|
+| 30 Day Reminders | Active 30-day window |
+| 14 Day Reminders | Active 14-day window |
+| 7 Day Reminders | Active 7-day window |
+| Expired Reminders | Expired |
+| Total Previewable Reminders | All of the above |
+
+Records without email are excluded from counts and drilldowns (see Contact Readiness for missing-email gaps).
+
+### Drilldown columns
+
+| Column | Source |
+|--------|--------|
+| Person | Person name |
+| Email | Normalized person email |
+| Compliance Type | Record compliance type |
+| Expiry Date | Register expiry (en-GB) |
+| Reminder Type | Most urgent active window |
+
+### Drilldown actions
+
+| Action | Behaviour |
+|--------|-----------|
+| **Preview Reminder** | Opens existing V5-1B preview modal for that row |
+| **Open Workspace** | Opens record workspace |
+| **Edit Contact** | Opens edit form with email field focused (V5-1A) |
+
+### Export Reminder Pack
+
+Downloads a single `.txt` file containing **all reminder previews** in the current drilldown, separated by `---`. Each section uses the same full-email text shape as Phase 3 (To, manager email when present, reminder type, subject, body). Filename: `reminder-preview-pack-{slug}-{YYYY-MM-DD}.txt` (slug is the card type, e.g. `7-day`, `total`).
+
+**No sending, queue, SMTP, or automation.**
+
+**Out of scope for Phase 4:** email delivery, notification queue, automation, migrations/RPC, permission changes.
 
 ---
 
@@ -113,11 +178,59 @@ Every preview object includes:
 
 ---
 
+## Copy and export (Phase 3)
+
+### Modal actions
+
+| Action | Behaviour |
+|--------|-----------|
+| **Copy subject** | Copies generated subject to clipboard |
+| **Copy body** | Copies generated body to clipboard |
+| **Copy full email** | Copies metadata + subject + body (see below) |
+| **Export preview text file** | Downloads `.txt` with the same full email content |
+
+### Full email text shape
+
+Used by **Copy full email** and **Export preview text file**:
+
+```
+To: jordan.coordinator@example.com
+Manager email: manager@example.com
+Reminder type: 14 Day Reminder
+
+Subject: 14-day reminder: Basic Awareness — Jordan Coordinator
+
+Body:
+Dear Jordan Coordinator,
+...
+```
+
+- **To** — recipient email or `—` when missing
+- **Manager email** — included only when present on the person record
+- **Reminder type**, **Subject**, **Body** — from the generated preview
+- Does **not** include record notes, evidence, or other sensitive register content
+
+### Export filename
+
+`reminder-preview-{person-slug}-{YYYY-MM-DD}.txt`
+
+Example: `reminder-preview-jordan-coordinator-2026-06-17.txt`
+
+The date segment uses the export date (today when the user clicks export).
+
+### Clipboard unavailable
+
+When `navigator.clipboard` is unavailable or copy fails, the modal shows a clear warning and **Export preview text file** remains available.
+
+---
+
 ## Verification
 
 ```powershell
 npm run verify-reminder-template-preview
 npm run verify-reminder-template-preview-ui
+npm run verify-reminder-template-preview-actions
+npm run verify-reminder-preview-dashboard
 ```
 
 **Phase 1** checks:
@@ -135,9 +248,25 @@ npm run verify-reminder-template-preview-ui
 - Bundle includes template preview helpers
 - No email delivery or automation hooks in UI wiring
 
+**Phase 3** checks:
+
+- Full email text and export filename helpers
+- Copy/export buttons and handlers in modal
+- Clipboard-unavailable message; export still wired
+- No email delivery or automation hooks
+
+**Phase 4** checks:
+
+- Previewable reminder metrics (qualifying + email only)
+- Drilldown filtering by reminder window type
+- Export reminder pack text and filename
+- Dashboard section, cards, drilldown table, and action wiring in `index.html` / `app.js`
+- Reuse of preview modal, workspace, and edit contact (V5-1A / V5-1B)
+- No email delivery or automation hooks
+
 ---
 
-## Deliberately out of scope (Phases 1–2)
+## Deliberately out of scope (Phases 1–4)
 
 | Item | Notes |
 |------|-------|
@@ -151,7 +280,7 @@ npm run verify-reminder-template-preview-ui
 
 ## Next phases (indicative)
 
-- **Phase 3+:** Link preview gaps to Contact Readiness drilldowns; delivery queue (see [`docs/v5-automated-compliance-operations.md`](v5-automated-compliance-operations.md))
+- **Phase 5+:** Combined V5-1B release gate; delivery queue (see [`docs/v5-automated-compliance-operations.md`](v5-automated-compliance-operations.md))
 
 ---
 

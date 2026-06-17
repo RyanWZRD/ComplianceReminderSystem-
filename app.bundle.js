@@ -25382,6 +25382,235 @@ ${suffix}`;
       organisationName: options.organisationName
     });
   }
+  function slugifyReminderPreviewLabel(label) {
+    const slug = String(label ?? "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+    return slug || "record";
+  }
+  function formatReminderPreviewExportDate(date = /* @__PURE__ */ new Date()) {
+    if (typeof date === "string") {
+      return date;
+    }
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }
+  function buildReminderPreviewExportFilename(preview, personName, date = /* @__PURE__ */ new Date()) {
+    const slug = slugifyReminderPreviewLabel(personName);
+    const datePart = formatReminderPreviewExportDate(date);
+    return `reminder-preview-${slug}-${datePart}.txt`;
+  }
+  function buildReminderTemplateFullEmailText(preview) {
+    const lines = [`To: ${preview.recipientEmail || "\u2014"}`];
+    if (preview.managerEmail) {
+      lines.push(`Manager email: ${preview.managerEmail}`);
+    }
+    lines.push(`Reminder type: ${preview.reminderType}`, "", `Subject: ${preview.subject}`, "", "Body:", preview.body);
+    return lines.join("\n");
+  }
+
+  // js/app/reminders/reminder-preview-dashboard.js
+  var REMINDER_PREVIEW_DASHBOARD_TYPES = {
+    DAYS_30: "30-day",
+    DAYS_14: "14-day",
+    DAYS_7: "7-day",
+    EXPIRED: "expired",
+    TOTAL: "total"
+  };
+  var REMINDER_PREVIEW_DASHBOARD_COLUMNS = [
+    { key: "name", label: "Person" },
+    { key: "email", label: "Email" },
+    { key: "complianceType", label: "Compliance Type" },
+    { key: "expiryDate", label: "Expiry Date" },
+    { key: "reminderType", label: "Reminder Type" }
+  ];
+  var REMINDER_TYPE_BY_DASHBOARD = {
+    [REMINDER_PREVIEW_DASHBOARD_TYPES.DAYS_30]: REMINDER_UI_LABELS[30],
+    [REMINDER_PREVIEW_DASHBOARD_TYPES.DAYS_14]: REMINDER_UI_LABELS[14],
+    [REMINDER_PREVIEW_DASHBOARD_TYPES.DAYS_7]: REMINDER_UI_LABELS[7],
+    [REMINDER_PREVIEW_DASHBOARD_TYPES.EXPIRED]: REMINDER_UI_LABELS.expired
+  };
+  var REMINDER_URGENCY = {
+    [REMINDER_UI_LABELS.expired]: 0,
+    [REMINDER_UI_LABELS[7]]: 1,
+    [REMINDER_UI_LABELS[14]]: 2,
+    [REMINDER_UI_LABELS[30]]: 3
+  };
+  var DASHBOARD_META = {
+    [REMINDER_PREVIEW_DASHBOARD_TYPES.DAYS_30]: {
+      title: "30 Day Reminders",
+      cardLabel: "30 Day Reminders",
+      emptyMessage: "No previewable 30-day reminders with email on file.",
+      previewDescription: "Records in the 30-day reminder window with a person email address. Preview reminder copy before any delivery.",
+      itemLabel: "Reminders"
+    },
+    [REMINDER_PREVIEW_DASHBOARD_TYPES.DAYS_14]: {
+      title: "14 Day Reminders",
+      cardLabel: "14 Day Reminders",
+      emptyMessage: "No previewable 14-day reminders with email on file.",
+      previewDescription: "Records in the 14-day reminder window with a person email address. Preview reminder copy before any delivery.",
+      itemLabel: "Reminders"
+    },
+    [REMINDER_PREVIEW_DASHBOARD_TYPES.DAYS_7]: {
+      title: "7 Day Reminders",
+      cardLabel: "7 Day Reminders",
+      emptyMessage: "No previewable 7-day reminders with email on file.",
+      previewDescription: "Records in the 7-day reminder window with a person email address. Preview reminder copy before any delivery.",
+      itemLabel: "Reminders"
+    },
+    [REMINDER_PREVIEW_DASHBOARD_TYPES.EXPIRED]: {
+      title: "Expired Reminders",
+      cardLabel: "Expired Reminders",
+      emptyMessage: "No previewable expired reminders with email on file.",
+      previewDescription: "Expired records with a person email address. Preview reminder copy before any delivery.",
+      itemLabel: "Reminders"
+    },
+    [REMINDER_PREVIEW_DASHBOARD_TYPES.TOTAL]: {
+      title: "Total Previewable Reminders",
+      cardLabel: "Total Previewable Reminders",
+      emptyMessage: "No previewable reminders with email on file.",
+      previewDescription: "All records currently in an active reminder window with a person email address.",
+      itemLabel: "Reminders"
+    }
+  };
+  function getUrgencyKeyForReminderType(reminderType) {
+    if (reminderType === REMINDER_UI_LABELS.expired) {
+      return "expired";
+    }
+    if (reminderType === REMINDER_UI_LABELS[7]) {
+      return 7;
+    }
+    if (reminderType === REMINDER_UI_LABELS[14]) {
+      return 14;
+    }
+    if (reminderType === REMINDER_UI_LABELS[30]) {
+      return 30;
+    }
+    return null;
+  }
+  function hasPreviewableEmail(row) {
+    return normalizePersonContactFields(row).email !== "";
+  }
+  function buildPreviewableReminderEntries(rows, settings, ctx) {
+    const entries = [];
+    for (const row of rows) {
+      if (!hasPreviewableEmail(row)) {
+        continue;
+      }
+      const reminderType = getActiveReminderType(row.expiryDate, settings, ctx);
+      if (!reminderType) {
+        continue;
+      }
+      const contact = normalizePersonContactFields(row);
+      entries.push({
+        personId: row.personId,
+        recordId: row.recordId,
+        name: row.name,
+        email: contact.email,
+        complianceType: row.complianceType,
+        expiryDate: row.expiryDate,
+        reminderType,
+        urgencyKey: getUrgencyKeyForReminderType(reminderType),
+        daysRemaining: ctx.getDaysUntilExpiry(row.expiryDate),
+        row
+      });
+    }
+    return sortPreviewableReminderEntries(entries);
+  }
+  function sortPreviewableReminderEntries(entries) {
+    return [...entries].sort((a, b) => {
+      const urgencyA = REMINDER_URGENCY[a.reminderType] ?? 99;
+      const urgencyB = REMINDER_URGENCY[b.reminderType] ?? 99;
+      if (urgencyA !== urgencyB) {
+        return urgencyA - urgencyB;
+      }
+      return a.daysRemaining - b.daysRemaining || a.name.localeCompare(b.name);
+    });
+  }
+  function countPreviewableReminderDashboardMetrics(entries) {
+    const counts = {
+      [REMINDER_PREVIEW_DASHBOARD_TYPES.DAYS_30]: 0,
+      [REMINDER_PREVIEW_DASHBOARD_TYPES.DAYS_14]: 0,
+      [REMINDER_PREVIEW_DASHBOARD_TYPES.DAYS_7]: 0,
+      [REMINDER_PREVIEW_DASHBOARD_TYPES.EXPIRED]: 0,
+      [REMINDER_PREVIEW_DASHBOARD_TYPES.TOTAL]: entries.length
+    };
+    for (const entry of entries) {
+      if (entry.reminderType === REMINDER_UI_LABELS[30]) {
+        counts[REMINDER_PREVIEW_DASHBOARD_TYPES.DAYS_30] += 1;
+      } else if (entry.reminderType === REMINDER_UI_LABELS[14]) {
+        counts[REMINDER_PREVIEW_DASHBOARD_TYPES.DAYS_14] += 1;
+      } else if (entry.reminderType === REMINDER_UI_LABELS[7]) {
+        counts[REMINDER_PREVIEW_DASHBOARD_TYPES.DAYS_7] += 1;
+      } else if (entry.reminderType === REMINDER_UI_LABELS.expired) {
+        counts[REMINDER_PREVIEW_DASHBOARD_TYPES.EXPIRED] += 1;
+      }
+    }
+    return counts;
+  }
+  function filterPreviewableRemindersByDashboardType(entries, dashboardType) {
+    if (dashboardType === REMINDER_PREVIEW_DASHBOARD_TYPES.TOTAL) {
+      return entries;
+    }
+    const targetType = REMINDER_TYPE_BY_DASHBOARD[dashboardType];
+    if (!targetType) {
+      return [];
+    }
+    return entries.filter((entry) => entry.reminderType === targetType);
+  }
+  function getReminderPreviewDashboardMeta(dashboardType) {
+    return DASHBOARD_META[dashboardType] ?? null;
+  }
+  function mapReminderPreviewDashboardRow(entry, formatExpiryDate) {
+    return {
+      personId: entry.personId,
+      recordId: entry.recordId,
+      name: entry.name,
+      email: entry.email,
+      complianceType: entry.complianceType,
+      expiryDate: formatExpiryDate(entry.expiryDate),
+      reminderType: entry.reminderType,
+      reminderTypeClass: entry.urgencyKey
+    };
+  }
+  function buildReminderPreviewDashboardReport(dashboardType, entries, options = {}) {
+    const meta = getReminderPreviewDashboardMeta(dashboardType);
+    if (!meta) {
+      throw new Error(`Unsupported reminder preview dashboard type: ${dashboardType}`);
+    }
+    const formatExpiryDate = options.formatExpiryDate ?? ((dateString) => dateString);
+    const filtered = filterPreviewableRemindersByDashboardType(entries, dashboardType);
+    const generatedAt = options.generatedAt ?? (/* @__PURE__ */ new Date()).toISOString();
+    return {
+      type: dashboardType,
+      title: meta.title,
+      emptyMessage: meta.emptyMessage,
+      previewDescription: meta.previewDescription,
+      itemLabel: meta.itemLabel,
+      generatedAt,
+      generatedDisplay: options.generatedDisplay ?? generatedAt,
+      totalCount: filtered.length,
+      columns: REMINDER_PREVIEW_DASHBOARD_COLUMNS,
+      entries: filtered,
+      tableRows: filtered.map((entry) => mapReminderPreviewDashboardRow(entry, formatExpiryDate)),
+      filename: buildReminderPreviewPackFilename(dashboardType, options.exportDate)
+    };
+  }
+  function buildReminderPreviewPackText(entries, options = {}) {
+    if (entries.length === 0) {
+      return "";
+    }
+    const sections = entries.map((entry) => {
+      const preview = buildReminderTemplatePreviewFromRow(entry.row, entry.reminderType, options);
+      return buildReminderTemplateFullEmailText(preview);
+    });
+    return sections.join("\n\n---\n\n");
+  }
+  function buildReminderPreviewPackFilename(dashboardType, date = /* @__PURE__ */ new Date()) {
+    const slug = dashboardType === REMINDER_PREVIEW_DASHBOARD_TYPES.TOTAL ? "total" : dashboardType;
+    const datePart = formatReminderPreviewExportDate(date);
+    return `reminder-preview-pack-${slug}-${datePart}.txt`;
+  }
 
   // app.js
   console.log(
@@ -25416,7 +25645,7 @@ ${suffix}`;
   var DUE_SOON_DAYS2 = 90;
   var RECORDS_PER_PAGE = 25;
   var REMINDER_LABELS = REMINDER_UI_LABELS;
-  var REMINDER_URGENCY = { expired: 0, 7: 1, 14: 2, 30: 3 };
+  var REMINDER_URGENCY2 = { expired: 0, 7: 1, 14: 2, 30: 3 };
   var HISTORY_ACTION_LABELS = {
     created: "Created",
     edited: "Edited",
@@ -25535,11 +25764,57 @@ ${suffix}`;
   var exportActionDashboardCsvBtn = document.getElementById("export-action-dashboard-csv-btn");
   var clearActionDashboardPreviewBtn = document.getElementById("clear-action-dashboard-preview-btn");
   var actionDashboardCards = document.querySelectorAll("[data-action-dashboard]");
+  var reminderPreviewDashboard30Count = document.getElementById(
+    "reminder-preview-dashboard-30-count"
+  );
+  var reminderPreviewDashboard14Count = document.getElementById(
+    "reminder-preview-dashboard-14-count"
+  );
+  var reminderPreviewDashboard7Count = document.getElementById(
+    "reminder-preview-dashboard-7-count"
+  );
+  var reminderPreviewDashboardExpiredCount = document.getElementById(
+    "reminder-preview-dashboard-expired-count"
+  );
+  var reminderPreviewDashboardTotalCount = document.getElementById(
+    "reminder-preview-dashboard-total-count"
+  );
+  var reminderPreviewDashboardEmptyHint = document.getElementById(
+    "reminder-preview-dashboard-empty-hint"
+  );
+  var reminderPreviewDashboardPreview = document.getElementById(
+    "reminder-preview-dashboard-preview"
+  );
+  var reminderPreviewDashboardPreviewTitle = document.getElementById(
+    "reminder-preview-dashboard-preview-title"
+  );
+  var reminderPreviewDashboardPreviewMeta = document.getElementById(
+    "reminder-preview-dashboard-preview-meta"
+  );
+  var reminderPreviewDashboardPreviewDescription = document.getElementById(
+    "reminder-preview-dashboard-preview-description"
+  );
+  var reminderPreviewDashboardTableHead = document.getElementById(
+    "reminder-preview-dashboard-table-head"
+  );
+  var reminderPreviewDashboardTableBody = document.getElementById(
+    "reminder-preview-dashboard-table-body"
+  );
+  var exportReminderPreviewPackBtn = document.getElementById(
+    "export-reminder-preview-pack-btn"
+  );
+  var clearReminderPreviewDashboardPreviewBtn = document.getElementById(
+    "clear-reminder-preview-dashboard-preview-btn"
+  );
+  var reminderPreviewDashboardCards = document.querySelectorAll(
+    "[data-reminder-preview-dashboard]"
+  );
   var insightStaleEvidence = document.getElementById("insight-stale-evidence");
   var renewModalContext = null;
   var evidenceModalContext = null;
   var actionModalContext = null;
   var workspaceActionFilter = "all";
+  var currentReminderPreviewDashboard = null;
   var expiryWindowFilter = null;
   var currentTablePage = 1;
   var dashboard30Count = document.getElementById("dashboard-30-count");
@@ -25744,6 +26019,8 @@ ${suffix}`;
   var reminderPreviewReminderType = document.getElementById("reminder-preview-reminder-type");
   var reminderPreviewSubject = document.getElementById("reminder-preview-subject");
   var reminderPreviewBody = document.getElementById("reminder-preview-body");
+  var reminderPreviewMessage = document.getElementById("reminder-preview-message");
+  var reminderPreviewContext = null;
   var workspaceContext = null;
   var REPORT_TYPES = {
     FULL: "full-compliance",
@@ -28046,6 +28323,64 @@ This cannot be undone.`
     if (reminderPreviewBody) {
       reminderPreviewBody.textContent = preview.body;
     }
+    if (reminderPreviewMessage) {
+      hideMessage(reminderPreviewMessage);
+    }
+  }
+  function showReminderPreviewMessage(text, type) {
+    if (reminderPreviewMessage) {
+      showMessage(reminderPreviewMessage, text, type);
+    }
+  }
+  async function copyReminderPreviewText(text, successMessage) {
+    if (!navigator.clipboard?.writeText) {
+      showReminderPreviewMessage(
+        "Copy is not available in this browser. Use Export preview text file instead.",
+        "warning"
+      );
+      return false;
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      showReminderPreviewMessage(successMessage, "success");
+      return true;
+    } catch (error) {
+      console.error("Could not copy reminder preview text.", error);
+      showReminderPreviewMessage(
+        "Could not copy to clipboard. Use Export preview text file instead.",
+        "warning"
+      );
+      return false;
+    }
+  }
+  function copyReminderPreviewSubject() {
+    if (!reminderPreviewContext) {
+      return;
+    }
+    void copyReminderPreviewText(reminderPreviewContext.preview.subject, "Subject copied to clipboard.");
+  }
+  function copyReminderPreviewBody() {
+    if (!reminderPreviewContext) {
+      return;
+    }
+    void copyReminderPreviewText(reminderPreviewContext.preview.body, "Body copied to clipboard.");
+  }
+  function copyReminderPreviewFullEmail() {
+    if (!reminderPreviewContext) {
+      return;
+    }
+    const fullEmail = buildReminderTemplateFullEmailText(reminderPreviewContext.preview);
+    void copyReminderPreviewText(fullEmail, "Full email copied to clipboard.");
+  }
+  function exportReminderPreviewTextFile() {
+    if (!reminderPreviewContext) {
+      return;
+    }
+    const { preview, personName } = reminderPreviewContext;
+    const content = buildReminderTemplateFullEmailText(preview);
+    const filename = buildReminderPreviewExportFilename(preview, personName);
+    downloadFile(content, filename, "text/plain;charset=utf-8");
+    showReminderPreviewMessage("Preview text file downloaded.", "success");
   }
   function openReminderTemplatePreview(personId, recordId, reminderType) {
     const result = findPersonAndRecord(personId, recordId);
@@ -28064,17 +28399,27 @@ This cannot be undone.`
       return;
     }
     const { person, record } = result;
-    populateReminderTemplatePreviewModal(preview, `${person.name} \u2014 ${record.complianceType}`);
+    reminderPreviewContext = {
+      preview,
+      personName: person.name,
+      recordLabel: `${person.name} \u2014 ${record.complianceType}`
+    };
+    populateReminderTemplatePreviewModal(preview, reminderPreviewContext.recordLabel);
     reminderPreviewModal.classList.remove("hidden");
     reminderPreviewModal.setAttribute("aria-hidden", "false");
     reminderPreviewCloseBtn?.focus();
   }
   function closeReminderTemplatePreviewModal() {
     if (!reminderPreviewModal) {
+      reminderPreviewContext = null;
       return;
     }
     reminderPreviewModal.classList.add("hidden");
     reminderPreviewModal.setAttribute("aria-hidden", "true");
+    reminderPreviewContext = null;
+    if (reminderPreviewMessage) {
+      hideMessage(reminderPreviewMessage);
+    }
   }
   function renderRecordWorkspace() {
     if (!workspaceContext || !workspaceContent) {
@@ -29338,6 +29683,227 @@ This cannot be undone.`
     exportActionDashboardCsvBtn?.addEventListener("click", exportActionDashboardCsv);
     clearActionDashboardPreviewBtn?.addEventListener("click", clearActionDashboardPreview);
   }
+  function getReminderPreviewDashboardContext() {
+    return createInsightsContext(getTodayAtMidnight(), reminderSettings);
+  }
+  function getNormalizedComplianceRowsForInsights() {
+    return getAllComplianceRows().map((row) => normalizeComplianceRow(row));
+  }
+  function getPreviewableReminderDashboardEntries() {
+    const ctx = getReminderPreviewDashboardContext();
+    return buildPreviewableReminderEntries(
+      getNormalizedComplianceRowsForInsights(),
+      reminderSettings,
+      ctx
+    );
+  }
+  function buildReminderPreviewDashboardReportForType(dashboardType) {
+    const generatedAt = /* @__PURE__ */ new Date();
+    const entries = getPreviewableReminderDashboardEntries();
+    return buildReminderPreviewDashboardReport(dashboardType, entries, {
+      formatExpiryDate: formatDate,
+      generatedAt: generatedAt.toISOString(),
+      generatedDisplay: generatedAt.toLocaleString("en-GB", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit"
+      }),
+      exportDate: generatedAt
+    });
+  }
+  function renderReminderPreviewDashboardCards() {
+    const metrics = countPreviewableReminderDashboardMetrics(
+      getPreviewableReminderDashboardEntries()
+    );
+    if (reminderPreviewDashboard30Count) {
+      reminderPreviewDashboard30Count.textContent = metrics[REMINDER_PREVIEW_DASHBOARD_TYPES.DAYS_30];
+    }
+    if (reminderPreviewDashboard14Count) {
+      reminderPreviewDashboard14Count.textContent = metrics[REMINDER_PREVIEW_DASHBOARD_TYPES.DAYS_14];
+    }
+    if (reminderPreviewDashboard7Count) {
+      reminderPreviewDashboard7Count.textContent = metrics[REMINDER_PREVIEW_DASHBOARD_TYPES.DAYS_7];
+    }
+    if (reminderPreviewDashboardExpiredCount) {
+      reminderPreviewDashboardExpiredCount.textContent = metrics[REMINDER_PREVIEW_DASHBOARD_TYPES.EXPIRED];
+    }
+    if (reminderPreviewDashboardTotalCount) {
+      reminderPreviewDashboardTotalCount.textContent = metrics[REMINDER_PREVIEW_DASHBOARD_TYPES.TOTAL];
+    }
+  }
+  function renderReminderPreviewDashboardPreview(report) {
+    if (!reminderPreviewDashboardPreview || !reminderPreviewDashboardPreviewTitle || !reminderPreviewDashboardPreviewMeta || !reminderPreviewDashboardTableHead || !reminderPreviewDashboardTableBody) {
+      return;
+    }
+    currentReminderPreviewDashboard = report;
+    reminderPreviewDashboardPreviewTitle.textContent = report.title;
+    const countLabel2 = `${report.totalCount} ${report.itemLabel.toLowerCase()}`;
+    reminderPreviewDashboardPreviewMeta.textContent = `Generated: ${report.generatedDisplay} \xB7 ${countLabel2}`;
+    if (reminderPreviewDashboardPreviewDescription) {
+      if (report.previewDescription) {
+        reminderPreviewDashboardPreviewDescription.textContent = report.previewDescription;
+        reminderPreviewDashboardPreviewDescription.classList.remove("hidden");
+      } else {
+        reminderPreviewDashboardPreviewDescription.textContent = "";
+        reminderPreviewDashboardPreviewDescription.classList.add("hidden");
+      }
+    }
+    reminderPreviewDashboardTableHead.innerHTML = `
+    <tr>
+      ${report.columns.map((column) => `<th>${escapeHtml(column.label)}</th>`).join("")}
+      <th>Actions</th>
+    </tr>
+  `;
+    if (report.tableRows.length === 0) {
+      reminderPreviewDashboardTableBody.innerHTML = `
+      <tr>
+        <td colspan="${report.columns.length + 1}" class="insight-empty-cell">${escapeHtml(report.emptyMessage)}</td>
+      </tr>
+    `;
+    } else {
+      reminderPreviewDashboardTableBody.innerHTML = report.tableRows.map(
+        (row) => `
+          <tr class="reminder-preview-dashboard-row">
+            <td>${escapeHtml(row.name)}</td>
+            <td>${escapeHtml(row.email)}</td>
+            <td>${escapeHtml(row.complianceType)}</td>
+            <td>${escapeHtml(row.expiryDate)}</td>
+            <td><span class="reminder-badge reminder-${row.reminderTypeClass}">${escapeHtml(row.reminderType)}</span></td>
+            <td class="reminder-preview-dashboard-row-actions">
+              <button
+                type="button"
+                class="reminder-preview-btn"
+                data-person-id="${escapeHtml(String(row.personId ?? ""))}"
+                data-record-id="${escapeHtml(String(row.recordId ?? ""))}"
+                data-reminder-type="${escapeHtml(row.reminderType)}"
+              >Preview Reminder</button>
+              <button
+                type="button"
+                class="reminder-dashboard-workspace-btn quick-action-btn"
+                data-person-id="${escapeHtml(String(row.personId ?? ""))}"
+                data-record-id="${escapeHtml(String(row.recordId ?? ""))}"
+              >Open Workspace</button>
+              <button
+                type="button"
+                class="edit-contact-btn quick-action-btn"
+                data-person-id="${escapeHtml(String(row.personId ?? ""))}"
+                data-record-id="${escapeHtml(String(row.recordId ?? ""))}"
+              >Edit Contact</button>
+            </td>
+          </tr>
+        `
+      ).join("");
+    }
+    reminderPreviewDashboardPreview.classList.remove("hidden");
+    if (reminderPreviewDashboardEmptyHint) {
+      reminderPreviewDashboardEmptyHint.classList.add("hidden");
+    }
+    updateReminderPreviewDashboardCardActiveState();
+  }
+  function showReminderPreviewDashboardPreview(dashboardType) {
+    renderReminderPreviewDashboardPreview(buildReminderPreviewDashboardReportForType(dashboardType));
+    if (reminderPreviewDashboardPreview) {
+      reminderPreviewDashboardPreview.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+  }
+  function clearReminderPreviewDashboardPreview() {
+    currentReminderPreviewDashboard = null;
+    if (reminderPreviewDashboardPreview) {
+      reminderPreviewDashboardPreview.classList.add("hidden");
+    }
+    if (reminderPreviewDashboardTableHead) {
+      reminderPreviewDashboardTableHead.innerHTML = "";
+    }
+    if (reminderPreviewDashboardTableBody) {
+      reminderPreviewDashboardTableBody.innerHTML = "";
+    }
+    if (reminderPreviewDashboardPreviewDescription) {
+      reminderPreviewDashboardPreviewDescription.textContent = "";
+      reminderPreviewDashboardPreviewDescription.classList.add("hidden");
+    }
+    if (reminderPreviewDashboardEmptyHint) {
+      reminderPreviewDashboardEmptyHint.classList.remove("hidden");
+    }
+    updateReminderPreviewDashboardCardActiveState();
+  }
+  function exportReminderPreviewPack() {
+    if (!currentReminderPreviewDashboard) {
+      showMessage(appMessage, "Select a reminder metric to preview first.", "error");
+      return;
+    }
+    if (currentReminderPreviewDashboard.entries.length === 0) {
+      showMessage(appMessage, "No previewable reminders in this drilldown.", "error");
+      return;
+    }
+    const content = buildReminderPreviewPackText(currentReminderPreviewDashboard.entries);
+    const filename = currentReminderPreviewDashboard.filename || buildReminderPreviewPackFilename(currentReminderPreviewDashboard.type);
+    downloadFile(content, filename, "text/plain;charset=utf-8");
+    showMessage(appMessage, "Reminder pack downloaded.", "success");
+  }
+  function updateReminderPreviewDashboardCardActiveState() {
+    reminderPreviewDashboardCards.forEach((card) => {
+      card.classList.toggle(
+        "active",
+        Boolean(
+          currentReminderPreviewDashboard && card.dataset.reminderPreviewDashboard === currentReminderPreviewDashboard.type
+        )
+      );
+    });
+  }
+  function refreshActiveReminderPreviewDashboardPreview() {
+    if (!currentReminderPreviewDashboard?.type || !reminderPreviewDashboardPreview || reminderPreviewDashboardPreview.classList.contains("hidden")) {
+      return;
+    }
+    renderReminderPreviewDashboardPreview(
+      buildReminderPreviewDashboardReportForType(currentReminderPreviewDashboard.type)
+    );
+  }
+  function handleReminderPreviewDashboardRowClick(event) {
+    const previewButton = event.target.closest(".reminder-preview-btn");
+    if (previewButton) {
+      openReminderTemplatePreview(
+        parseEntityId(previewButton.dataset.personId),
+        parseEntityId(previewButton.dataset.recordId),
+        previewButton.dataset.reminderType
+      );
+      return;
+    }
+    const workspaceButton = event.target.closest(".reminder-dashboard-workspace-btn");
+    if (workspaceButton) {
+      const personId = parseEntityId(workspaceButton.dataset.personId);
+      const recordId = parseEntityId(workspaceButton.dataset.recordId);
+      if (personId != null && recordId != null) {
+        openRecordWorkspace(personId, recordId);
+      }
+      return;
+    }
+    const editContactBtn = event.target.closest(".edit-contact-btn");
+    if (editContactBtn) {
+      const personId = parseEntityId(editContactBtn.dataset.personId);
+      const recordId = parseEntityId(editContactBtn.dataset.recordId);
+      if (personId != null && recordId != null) {
+        startEdit(personId, recordId, { focusContact: true });
+      }
+    }
+  }
+  function setupReminderPreviewDashboardListeners() {
+    reminderPreviewDashboardCards.forEach((card) => {
+      card.addEventListener("click", () => {
+        showReminderPreviewDashboardPreview(card.dataset.reminderPreviewDashboard);
+      });
+    });
+    exportReminderPreviewPackBtn?.addEventListener("click", exportReminderPreviewPack);
+    clearReminderPreviewDashboardPreviewBtn?.addEventListener(
+      "click",
+      clearReminderPreviewDashboardPreview
+    );
+    reminderPreviewDashboardTableBody?.addEventListener(
+      "click",
+      handleReminderPreviewDashboardRowClick
+    );
+  }
   function renderActionSummaryCards() {
     const metrics = getGlobalActionMetrics();
     if (actionDashboardOpen) {
@@ -29561,6 +30127,8 @@ This cannot be undone.`
     };
     await saveReminderSettings();
     renderReminders();
+    renderReminderPreviewDashboardCards();
+    refreshActiveReminderPreviewDashboardPreview();
   }
   function getActiveReminderDays() {
     const activeDays = [];
@@ -30096,8 +30664,8 @@ ${auditLine}` : auditLine;
       });
     });
     reminders.sort((a, b) => {
-      const urgencyA = REMINDER_URGENCY[a.urgencyKey];
-      const urgencyB = REMINDER_URGENCY[b.urgencyKey];
+      const urgencyA = REMINDER_URGENCY2[a.urgencyKey];
+      const urgencyB = REMINDER_URGENCY2[b.urgencyKey];
       if (urgencyA !== urgencyB) {
         return urgencyA - urgencyB;
       }
@@ -30353,6 +30921,7 @@ ${auditLine}` : auditLine;
     dashboard60Count.textContent = countExpiringWithinDays(60);
     dashboard90Count.textContent = countExpiringWithinDays(90);
     renderReminders();
+    renderReminderPreviewDashboardCards();
     updateFilterActiveState();
   }
   function renderReminders() {
@@ -31183,6 +31752,7 @@ ${auditLine}` : auditLine;
     refreshActiveReportPreview();
     refreshActiveInsightPreview();
     refreshActiveActionDashboardPreview();
+    refreshActiveReminderPreviewDashboardPreview();
     refreshActiveComplianceInsightDrilldownPreview();
     renderBulkSelectionToolbar();
     updateSelectAllPageCheckbox(pageRows);
@@ -32219,12 +32789,28 @@ Your current data will be overwritten. Continue?`
         return;
       }
       const actionButton = target.closest(
-        "#reminder-preview-close-btn, #reminder-preview-modal-close-btn"
+        "#reminder-preview-copy-subject-btn, #reminder-preview-copy-body-btn, #reminder-preview-copy-full-btn, #reminder-preview-export-btn, #reminder-preview-close-btn, #reminder-preview-modal-close-btn"
       );
       if (!actionButton) {
         return;
       }
       event.preventDefault();
+      if (actionButton.id === "reminder-preview-copy-subject-btn") {
+        copyReminderPreviewSubject();
+        return;
+      }
+      if (actionButton.id === "reminder-preview-copy-body-btn") {
+        copyReminderPreviewBody();
+        return;
+      }
+      if (actionButton.id === "reminder-preview-copy-full-btn") {
+        copyReminderPreviewFullEmail();
+        return;
+      }
+      if (actionButton.id === "reminder-preview-export-btn") {
+        exportReminderPreviewTextFile();
+        return;
+      }
       closeReminderTemplatePreviewModal();
     });
   }
@@ -32727,6 +33313,7 @@ Your current data will be overwritten. Continue?`
     setupComplianceInsightsDrilldownListeners();
     setupVisualInsightsListeners();
     setupActionDashboardListeners();
+    setupReminderPreviewDashboardListeners();
     setupRecordWorkspaceListeners();
     setupReportListeners();
   }

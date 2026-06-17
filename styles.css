@@ -244,6 +244,136 @@ header h1 {
   gap: 0.75rem;
 }
 
+.reminder-preview-dashboard-section {
+  margin-bottom: 1.5rem;
+}
+
+.reminder-preview-dashboard-cards {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+@media (min-width: 640px) {
+  .reminder-preview-dashboard-cards {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 900px) {
+  .reminder-preview-dashboard-cards {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (min-width: 1100px) {
+  .reminder-preview-dashboard-cards {
+    grid-template-columns: repeat(5, 1fr);
+  }
+}
+
+.reminder-preview-dashboard-card {
+  background: #fff;
+  border: 2px solid #e8eaed;
+  border-radius: 10px;
+  padding: 1rem 1.25rem;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.reminder-preview-dashboard-card:hover {
+  box-shadow: 0 2px 8px rgba(67, 97, 238, 0.12);
+}
+
+.reminder-preview-dashboard-card.active {
+  border-color: #4361ee;
+  background: #eef1ff;
+}
+
+.reminder-preview-dashboard-card-hint {
+  display: block;
+  margin-top: 0.35rem;
+  font-size: 0.8rem;
+  color: #5a6270;
+}
+
+.reminder-preview-dashboard-30 {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+}
+
+.reminder-preview-dashboard-14 {
+  border-color: #fde68a;
+  background: #fffbeb;
+}
+
+.reminder-preview-dashboard-7 {
+  border-color: #fed7aa;
+  background: #fff7ed;
+}
+
+.reminder-preview-dashboard-expired {
+  border-color: #fecaca;
+  background: #fff5f5;
+}
+
+.reminder-preview-dashboard-total {
+  border-color: #c7d2fe;
+  background: #f5f3ff;
+}
+
+.reminder-preview-dashboard-preview {
+  margin-top: 1.25rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid #e8eaed;
+}
+
+.reminder-preview-dashboard-preview-title {
+  margin: 0 0 0.35rem;
+  font-size: 1.15rem;
+  color: #16213e;
+}
+
+.reminder-preview-dashboard-preview-meta {
+  margin: 0 0 0.5rem;
+  font-size: 0.9rem;
+  color: #5a6270;
+}
+
+.reminder-preview-dashboard-preview-description {
+  margin: 0 0 1rem;
+}
+
+.reminder-preview-dashboard-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.reminder-preview-dashboard-table th,
+.reminder-preview-dashboard-table td {
+  text-align: left;
+  padding: 0.6rem 0.5rem;
+  border-bottom: 1px solid #e8eaed;
+  vertical-align: top;
+}
+
+.reminder-preview-dashboard-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  min-width: 12rem;
+}
+
+.reminder-preview-dashboard-preview-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
 .action-filter-row {
   margin-bottom: 1rem;
 }
@@ -3154,6 +3284,38 @@ tr:last-child td {
   word-break: break-word;
   max-height: 280px;
   overflow: auto;
+}
+
+.reminder-preview-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.reminder-preview-action-btn {
+  background: #fff;
+  color: #1d4e89;
+  border: 1px solid #b8d4f0;
+  padding: 0.45rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.reminder-preview-action-btn:hover:not(:disabled) {
+  background: #e8f1fb;
+}
+
+.reminder-preview-export-btn {
+  color: #2d6a4f;
+  border-color: #b7e4c7;
+}
+
+.reminder-preview-export-btn:hover:not(:disabled) {
+  background: #e8f5e9;
 }
 
 .empty-message {

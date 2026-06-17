@@ -164,6 +164,56 @@
       </div>
     </section>
 
+    <section class="card reminder-preview-dashboard-section" id="reminder-preview-dashboard-section">
+      <h2>Reminder Preview Dashboard</h2>
+      <p class="settings-hint">Previewable reminders are records in an active reminder window with a person email on file. Click a card to drill down. No emails are sent from this dashboard.</p>
+      <div class="reminder-preview-dashboard-cards">
+        <button type="button" class="reminder-preview-dashboard-card reminder-preview-dashboard-30" data-reminder-preview-dashboard="30-day" aria-label="30 Day Reminders. Click to preview.">
+          <p class="summary-label">30 Day Reminders</p>
+          <p id="reminder-preview-dashboard-30-count" class="summary-number">0</p>
+          <span class="reminder-preview-dashboard-card-hint">Click to preview</span>
+        </button>
+        <button type="button" class="reminder-preview-dashboard-card reminder-preview-dashboard-14" data-reminder-preview-dashboard="14-day" aria-label="14 Day Reminders. Click to preview.">
+          <p class="summary-label">14 Day Reminders</p>
+          <p id="reminder-preview-dashboard-14-count" class="summary-number">0</p>
+          <span class="reminder-preview-dashboard-card-hint">Click to preview</span>
+        </button>
+        <button type="button" class="reminder-preview-dashboard-card reminder-preview-dashboard-7" data-reminder-preview-dashboard="7-day" aria-label="7 Day Reminders. Click to preview.">
+          <p class="summary-label">7 Day Reminders</p>
+          <p id="reminder-preview-dashboard-7-count" class="summary-number">0</p>
+          <span class="reminder-preview-dashboard-card-hint">Click to preview</span>
+        </button>
+        <button type="button" class="reminder-preview-dashboard-card reminder-preview-dashboard-expired" data-reminder-preview-dashboard="expired" aria-label="Expired Reminders. Click to preview.">
+          <p class="summary-label">Expired Reminders</p>
+          <p id="reminder-preview-dashboard-expired-count" class="summary-number">0</p>
+          <span class="reminder-preview-dashboard-card-hint">Click to preview</span>
+        </button>
+        <button type="button" class="reminder-preview-dashboard-card reminder-preview-dashboard-total" data-reminder-preview-dashboard="total" aria-label="Total Previewable Reminders. Click to preview.">
+          <p class="summary-label">Total Previewable Reminders</p>
+          <p id="reminder-preview-dashboard-total-count" class="summary-number">0</p>
+          <span class="reminder-preview-dashboard-card-hint">Click to preview</span>
+        </button>
+      </div>
+      <p id="reminder-preview-dashboard-empty-hint" class="settings-hint reminder-preview-dashboard-empty-hint">Select a reminder metric above to preview.</p>
+      <div id="reminder-preview-dashboard-preview" class="reminder-preview-dashboard-preview hidden">
+        <div class="reminder-preview-dashboard-preview-header">
+          <h3 id="reminder-preview-dashboard-preview-title" class="reminder-preview-dashboard-preview-title"></h3>
+          <p id="reminder-preview-dashboard-preview-meta" class="reminder-preview-dashboard-preview-meta"></p>
+          <p id="reminder-preview-dashboard-preview-description" class="settings-hint reminder-preview-dashboard-preview-description hidden"></p>
+        </div>
+        <div class="table-wrapper reminder-preview-dashboard-table-wrapper">
+          <table class="reminder-preview-dashboard-table">
+            <thead id="reminder-preview-dashboard-table-head"></thead>
+            <tbody id="reminder-preview-dashboard-table-body"></tbody>
+          </table>
+        </div>
+        <div class="reminder-preview-dashboard-preview-actions no-print">
+          <button type="button" id="export-reminder-preview-pack-btn" class="export-btn">Export Reminder Pack</button>
+          <button type="button" id="clear-reminder-preview-dashboard-preview-btn" class="quick-action-btn">Clear Preview</button>
+        </div>
+      </div>
+    </section>
+
     <section class="card" id="compliance-dashboard">
       <h2>Compliance Dashboard</h2>
       <p class="dashboard-hint">Counts across all compliance records. Click a card to filter the register table by expiry window.</p>
@@ -1018,6 +1068,13 @@
       <div class="reminder-preview-body-block">
         <h3 class="reminder-preview-body-title">Body</h3>
         <pre id="reminder-preview-body" class="reminder-preview-body"></pre>
+      </div>
+      <p id="reminder-preview-message" class="form-message hidden" role="status"></p>
+      <div class="reminder-preview-actions no-print">
+        <button type="button" id="reminder-preview-copy-subject-btn" class="reminder-preview-action-btn">Copy subject</button>
+        <button type="button" id="reminder-preview-copy-body-btn" class="reminder-preview-action-btn">Copy body</button>
+        <button type="button" id="reminder-preview-copy-full-btn" class="reminder-preview-action-btn">Copy full email</button>
+        <button type="button" id="reminder-preview-export-btn" class="reminder-preview-action-btn reminder-preview-export-btn">Export preview text file</button>
       </div>
       <div class="modal-actions">
         <button type="button" id="reminder-preview-close-btn" class="cancel-btn">Close</button>

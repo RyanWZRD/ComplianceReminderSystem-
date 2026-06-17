@@ -191,3 +191,68 @@ export function buildReminderTemplatePreviewFromRow(row, reminderType, options =
     organisationName: options.organisationName,
   });
 }
+
+/**
+ * Slug for reminder preview export filenames.
+ *
+ * @param {string} label — person name or record label
+ * @returns {string}
+ */
+export function slugifyReminderPreviewLabel(label) {
+  const slug = String(label ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+  return slug || "record";
+}
+
+/**
+ * @param {Date | string} [date] — Date instance or ISO `YYYY-MM-DD` string
+ * @returns {string}
+ */
+export function formatReminderPreviewExportDate(date = new Date()) {
+  if (typeof date === "string") {
+    return date;
+  }
+
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * Build export filename for a reminder preview text file.
+ *
+ * @param {ReminderTemplatePreview} preview
+ * @param {string} personName
+ * @param {Date | string} [date]
+ * @returns {string}
+ */
+export function buildReminderPreviewExportFilename(preview, personName, date = new Date()) {
+  const slug = slugifyReminderPreviewLabel(personName);
+  const datePart = formatReminderPreviewExportDate(date);
+
+  return `reminder-preview-${slug}-${datePart}.txt`;
+}
+
+/**
+ * Build full reminder email text for copy/export (preview metadata + subject + body).
+ *
+ * @param {ReminderTemplatePreview} preview
+ * @returns {string}
+ */
+export function buildReminderTemplateFullEmailText(preview) {
+  const lines = [`To: ${preview.recipientEmail || "—"}`];
+
+  if (preview.managerEmail) {
+    lines.push(`Manager email: ${preview.managerEmail}`);
+  }
+
+  lines.push(`Reminder type: ${preview.reminderType}`, "", `Subject: ${preview.subject}`, "", "Body:", preview.body);
+
+  return lines.join("\n");
+}

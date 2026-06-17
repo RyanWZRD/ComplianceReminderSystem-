@@ -21474,7 +21474,7 @@ ${suffix}`;
       return "Cloud mode is read-only. You can view and export data; changes are not saved to the cloud yet.";
     }
     if (canMarkReminderSent() || canSetActionStatus() || canMutateActions() || canRenewCompliance() || canAddComplianceRecord() || canEditComplianceRecord() || canArchiveComplianceRecord() || canUpdateComplianceRecordNotes() || canMutateReminderSettings()) {
-      return "Cloud mode (limited writes). Mark Reminder Sent, renew compliance, action complete/reopen, add/delete actions, add compliance records, edit compliance records, delete compliance records, workspace notes, and reminder settings (admin) are saved to the cloud.";
+      return "Cloud mode (limited writes). Mark Reminder Sent, renew compliance, action complete/reopen, add/delete actions, add compliance records, edit compliance records, archive compliance records, workspace notes, and reminder settings (admin) are saved to the cloud.";
     }
     const role = getCurrentUserRole();
     if (role === "viewer") {
@@ -25012,7 +25012,7 @@ ${suffix}`;
     edited: "Edited",
     reminder_sent: "Reminder sent",
     renewed: "Renewed",
-    deleted: "Deleted",
+    deleted: "Archived",
     evidence_added: "Evidence added",
     evidence_updated: "Evidence updated",
     evidence_deleted: "Evidence deleted",
@@ -25358,7 +25358,7 @@ ${suffix}`;
   var currentComplianceInsightDrilldown = null;
   var STATUS_FILTER_LABELS = {
     valid: "Valid",
-    dueSoon: "Due Soon",
+    dueSoon: "Expiring Soon",
     expired: "Expired"
   };
   function getDateDaysFromToday(daysFromToday) {
@@ -25495,7 +25495,7 @@ ${suffix}`;
     if (isCloudMode() && CLOUD_WRITES_ENABLED) {
       showMessage(
         appMessage,
-        "Your role cannot delete compliance records in cloud mode.",
+        "Your role cannot archive compliance records in cloud mode.",
         "error"
       );
       return;
@@ -25634,6 +25634,12 @@ ${suffix}`;
   function historyRowKey(personId, recordId) {
     return `${personId}:${recordId}`;
   }
+  function formatHistoryDescription(entry) {
+    if (entry.action === HISTORY_ACTIONS.DELETED && typeof entry.description === "string") {
+      return entry.description.replace(/^Record deleted\b/, "Record archived");
+    }
+    return entry.description;
+  }
   function buildHistoryPanelHtml(personId, recordId) {
     const result = findPersonAndRecord(personId, recordId);
     if (!result) {
@@ -25650,7 +25656,7 @@ ${suffix}`;
         <li class="history-entry">
           <span class="history-entry-action">${escapeHtml(actionLabel)}</span>
           <span class="history-entry-time">${escapeHtml(formatHistoryTimestamp(entry.timestamp))}${userLine ? ` ${userLine}` : ""}</span>
-          <span class="history-entry-desc">${escapeHtml(entry.description)}</span>
+          <span class="history-entry-desc">${escapeHtml(formatHistoryDescription(entry))}</span>
         </li>
       `;
     }).join("");
@@ -26361,7 +26367,7 @@ This cannot be undone.`
     const counts = getSummaryCounts();
     return [
       { label: "Valid", count: counts.valid, barClass: "chart-bar-valid" },
-      { label: "Due Soon", count: counts.dueSoon, barClass: "chart-bar-due-soon" },
+      { label: "Expiring Soon", count: counts.dueSoon, barClass: "chart-bar-due-soon" },
       { label: "Expired", count: counts.expired, barClass: "chart-bar-expired" }
     ];
   }
@@ -29010,7 +29016,7 @@ This cannot be undone.`
       return { label: "Expired", className: "status-expired", key: "expired" };
     }
     if (daysUntilExpiry <= DUE_SOON_DAYS2) {
-      return { label: "Due Soon", className: "status-due-soon", key: "dueSoon" };
+      return { label: "Expiring Soon", className: "status-due-soon", key: "dueSoon" };
     }
     return { label: "Valid", className: "status-valid", key: "valid" };
   }
@@ -30014,7 +30020,7 @@ ${auditLine}` : auditLine;
     }
     const { person, record } = result;
     const confirmed = confirm(
-      `Delete this compliance record?
+      `Archive this compliance record?
 
 ${person.name} \u2014 ${record.complianceType}
 Expires: ${formatDate(record.expiryDate)}
@@ -30067,7 +30073,7 @@ This cannot be undone.`
       savePeople();
       showMessage(
         appMessage,
-        `Deleted: ${person.name} \u2014 ${record.complianceType}.`,
+        `Archived: ${person.name} \u2014 ${record.complianceType}.`,
         "success"
       );
       renderTable();
@@ -30078,14 +30084,14 @@ This cannot be undone.`
       return;
     }
     if (typeof repository.archiveComplianceRecord !== "function") {
-      showMessage(appMessage, "Cloud record delete is not available.", "error");
+      showMessage(appMessage, "Cloud record archive is not available.", "error");
       return;
     }
     const persistResult = await repository.archiveComplianceRecord(String(recordId));
     if (!persistResult.ok) {
       showMessage(
         appMessage,
-        persistResult.error || "Could not delete record from the cloud.",
+        persistResult.error || "Could not archive record in the cloud.",
         "error"
       );
       return;
@@ -30095,7 +30101,7 @@ This cannot be undone.`
       return;
     }
     if (persistResult.status !== "archived") {
-      showMessage(appMessage, "Could not delete record.", "error");
+      showMessage(appMessage, "Could not archive record.", "error");
       return;
     }
     if (String(editIdInput.value) === String(personId) && String(editRecordIdInput.value) === String(recordId)) {
@@ -30117,7 +30123,7 @@ This cannot be undone.`
     }
     showMessage(
       appMessage,
-      `Deleted: ${person.name} \u2014 ${record.complianceType}.`,
+      `Archived: ${person.name} \u2014 ${record.complianceType}.`,
       "success"
     );
   }

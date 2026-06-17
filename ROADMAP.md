@@ -224,7 +224,7 @@ Versions are listed **oldest to newest**. Everything through **v3.0.0** is shipp
 
 * Compliance analytics dashboard (above the records table)
 * Compliance health score (% of records with more than 90 days until expiry)
-* Total Records, Compliant, Expiring 30/60/90, Expired metrics
+* Total Records, Valid, Expiring 30/60/90, Expired metrics
 
 ### v1.5.0 — Advanced filtering · Shipped
 
@@ -237,7 +237,7 @@ Versions are listed **oldest to newest**. Everything through **v3.0.0** is shipp
 ### v1.6.0 — Record management and UX · Shipped
 
 * Edit compliance record (name, role, type, expiry, notes)
-* Delete confirmation
+* Archive confirmation
 * Renew UX improvements (clearer dates and feedback)
 * Friendly empty states
 
@@ -535,7 +535,7 @@ Tag: v3.0.0
 **Status:** COMPLETE ✅
 
 - RPC `archive_compliance_record` (migration `20260203000016`) — deleted snapshot with record/history/evidence/actions JSON, then remove active row (and person when last record)
-- Workspace **Delete Record** when `canArchiveComplianceRecord()`; `persistArchiveComplianceRecord()` + `reloadCloudDataAfterWrite()`
+- Workspace **Archive Record** when `canArchiveComplianceRecord()`; `persistArchiveComplianceRecord()` + `reloadCloudDataAfterWrite()`
 - Local delete unchanged (in-memory snapshot + remove active record); cloud RPC-first (no browser table writes)
 - `canMutateData()` stays false in cloud
 - Reset: `pruneNonSeedDeletedSnapshots()` in `reset-alpha-staging-data.mjs`

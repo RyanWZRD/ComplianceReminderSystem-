@@ -393,7 +393,7 @@ npm run verify-cloud-update-evidence
 ## Phase 3 Step 7A — Archive / delete compliance record
 
 - Migration: `20260203000016_archive_compliance_record_rpc.sql`
-- `canMutateData()` stays false; `canArchiveComplianceRecord()` enables workspace **Delete Record** (editor/admin)
+- `canMutateData()` stays false; `canArchiveComplianceRecord()` enables workspace **Archive Record** (editor/admin)
 - `archive_compliance_record` — deleted snapshot with full record/history/evidence/actions JSON, then removes active row (and person when last record)
 - History `deleted` entry is preserved in snapshot only (active `history_entries` cascade on record delete)
 - Not in scope: restore/unarchive, bulk archive/delete, hard delete without snapshot

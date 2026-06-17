@@ -117,7 +117,7 @@ export function getCloudModeBannerText() {
     canUpdateComplianceRecordNotes() ||
     canMutateReminderSettings()
   ) {
-    return "Cloud mode (limited writes). Mark Reminder Sent, renew compliance, action complete/reopen, add/delete actions, add compliance records, edit compliance records, delete compliance records, workspace notes, and reminder settings (admin) are saved to the cloud.";
+    return "Cloud mode (limited writes). Mark Reminder Sent, renew compliance, action complete/reopen, add/delete actions, add compliance records, edit compliance records, archive compliance records, workspace notes, and reminder settings (admin) are saved to the cloud.";
   }
 
   const role = getCurrentUserRole();

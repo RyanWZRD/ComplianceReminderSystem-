@@ -45,7 +45,7 @@
         <span class="header-user-item">Role: <strong id="header-user-role">Admin</strong></span>
         <button type="button" id="sign-out-btn" class="sign-out-btn hidden">Sign out</button>
       </div>
-      <p class="subtitle">Track safeguarding compliance, training renewals and DBS expiry dates</p>
+      <p class="subtitle">Track safeguarding compliance, training renewals, and expiry dates</p>
       <button type="button" id="reset-sample-btn" class="reset-btn">Reset sample data</button>
     </header>
 
@@ -61,7 +61,7 @@
         <p id="summary-valid" class="summary-number">0</p>
       </button>
       <button type="button" class="summary-card summary-due-soon" data-status="dueSoon">
-        <p class="summary-label">Due Soon</p>
+        <p class="summary-label">Expiring Soon</p>
         <p id="summary-due-soon" class="summary-number">0</p>
       </button>
       <button type="button" class="summary-card summary-expired" data-status="expired">
@@ -112,7 +112,7 @@
 
     <section class="card reminder-engine-card" id="reminders-section">
       <h2>Reminder Engine</h2>
-      <p class="reminders-hint">Reminders stay visible once someone enters a 30, 14, or 7 day window until their DBS is renewed.</p>
+      <p class="reminders-hint">Reminders stay visible once someone enters a 30, 14, or 7 day window until the record is renewed.</p>
 
       <div class="reminder-settings">
         <h3 class="reminders-subheading">Reminder Settings</h3>
@@ -190,7 +190,7 @@
         <div class="quick-actions-buttons">
           <button type="button" id="action-show-all" class="quick-action-btn">Show all</button>
           <button type="button" id="action-show-expired" class="quick-action-btn">Show expired</button>
-          <button type="button" id="action-show-due-soon" class="quick-action-btn">Show due soon</button>
+          <button type="button" id="action-show-due-soon" class="quick-action-btn">Show expiring soon</button>
           <button type="button" id="action-add-person" class="quick-action-btn">Add person</button>
           <button type="button" id="action-export-csv" class="quick-action-btn">Export CSV</button>
         </div>
@@ -307,7 +307,7 @@
           <p id="analytics-total" class="analytics-number">0</p>
         </button>
         <button type="button" class="analytics-card analytics-compliant" data-analytics-filter="valid">
-          <p class="analytics-label">Compliant</p>
+          <p class="analytics-label">Valid</p>
           <p id="analytics-compliant" class="analytics-number">0</p>
         </button>
         <button type="button" class="analytics-card analytics-expiring-30" data-analytics-filter="expiring-30">
@@ -656,7 +656,7 @@
 
     <section class="card" id="people-section">
       <div class="table-header">
-        <h2>People</h2>
+        <h2>Compliance Register</h2>
         <div class="table-header-actions">
           <input type="file" id="csv-file-input" accept=".csv,text/csv" class="file-input-offscreen">
           <input type="file" id="backup-file-input" accept=".json,application/json" class="file-input-offscreen">
@@ -682,7 +682,7 @@
           <select id="status-filter">
             <option value="all">All</option>
             <option value="valid">Valid</option>
-            <option value="dueSoon">Due Soon</option>
+            <option value="dueSoon">Expiring Soon</option>
             <option value="expired">Expired</option>
           </select>
         </div>
@@ -729,8 +729,8 @@
             <option value="expiry-desc">Expiry Date (Latest First)</option>
             <option value="name-asc">Name (A-Z)</option>
             <option value="name-desc">Name (Z-A)</option>
-            <option value="category-asc">Category (A-Z)</option>
-            <option value="category-desc">Category (Z-A)</option>
+            <option value="category-asc">Compliance Type (A-Z)</option>
+            <option value="category-desc">Compliance Type (Z-A)</option>
           </select>
         </div>
         <p id="pagination-summary" class="pagination-summary"></p>
@@ -959,7 +959,7 @@
       </div>
       <footer class="workspace-footer">
         <button type="button" id="workspace-close-footer-btn" class="cancel-btn">Close Workspace</button>
-        <button type="button" id="workspace-delete-btn" class="delete-btn workspace-delete-btn">Delete Record</button>
+        <button type="button" id="workspace-delete-btn" class="delete-btn workspace-delete-btn">Archive Record</button>
       </footer>
     </div>
   </div>

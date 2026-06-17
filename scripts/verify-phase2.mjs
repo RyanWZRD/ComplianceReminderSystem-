@@ -72,6 +72,7 @@ const STEPS = [
   { label: "reset-alpha-staging-post", node: resetScriptPath },
   { label: "verify-insights-engine", script: "verify-insights-engine" },
   { label: "build", script: "build" },
+  { label: "verify-terminology-rc004", script: "verify-terminology-rc004" },
 ];
 
 console.log("v3.0.0 release verification (verify:phase2)\n");

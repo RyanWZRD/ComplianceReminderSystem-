@@ -152,8 +152,8 @@ Repeat as **admin**, **editor**, and **viewer** at `?backend=cloud` (no `cloudWr
 
 | # | Check | Local | Cloud (`cloudWrites=1`) |
 |---|--------|:-----:|:-------------------------:|
-| 8.1 | Workspace **Delete Record** prompts for confirmation | ☐ | ☐ |
-| 8.2 | Delete/archive removes record from active register | ☐ | ☐ |
+| 8.1 | Workspace **Archive Record** prompts for confirmation | ☐ | ☐ |
+| 8.2 | Archive removes record from active register | ☐ | ☐ |
 | 8.3 | Cloud: seed includes 1 deleted snapshot; load does not error | N/A | ☐ |
 | 8.4 | Local: deleted snapshot retained in `deletedRecordHistory` (backup export includes it) | ☐ | N/A |
 | 8.5 | Restore / unarchive remains unavailable (out of scope) | ☐ | ☐ |

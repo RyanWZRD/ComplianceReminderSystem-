@@ -17,6 +17,7 @@ const STEPS = [
   { label: "verify-insights-engine", script: "verify-insights-engine" },
   { label: "verify-insights-browser", script: "verify-insights-browser" },
   { label: "build", script: "build" },
+  { label: "verify-terminology-rc004", script: "verify-terminology-rc004" },
 ];
 
 console.log("Compliance Insights release verification (verify-insights-release)\n");

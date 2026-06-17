@@ -137,7 +137,7 @@ const HISTORY_ACTION_LABELS = {
   edited: "Edited",
   reminder_sent: "Reminder sent",
   renewed: "Renewed",
-  deleted: "Deleted",
+  deleted: "Archived",
   evidence_added: "Evidence added",
   evidence_updated: "Evidence updated",
   evidence_deleted: "Evidence deleted",
@@ -507,7 +507,7 @@ let currentComplianceInsightDrilldown = null;
 
 const STATUS_FILTER_LABELS = {
   valid: "Valid",
-  dueSoon: "Due Soon",
+  dueSoon: "Expiring Soon",
   expired: "Expired",
 };
 
@@ -670,7 +670,7 @@ function notifyArchiveComplianceRecordBlocked() {
   if (isCloudMode() && CLOUD_WRITES_ENABLED) {
     showMessage(
       appMessage,
-      "Your role cannot delete compliance records in cloud mode.",
+      "Your role cannot archive compliance records in cloud mode.",
       "error"
     );
     return;
@@ -865,6 +865,14 @@ function toggleHistoryRow(personId, recordId) {
   renderTable({ refreshDashboards: false });
 }
 
+function formatHistoryDescription(entry) {
+  if (entry.action === HISTORY_ACTIONS.DELETED && typeof entry.description === "string") {
+    return entry.description.replace(/^Record deleted\b/, "Record archived");
+  }
+
+  return entry.description;
+}
+
 function buildHistoryPanelHtml(personId, recordId) {
   const result = findPersonAndRecord(personId, recordId);
   if (!result) {
@@ -889,7 +897,7 @@ function buildHistoryPanelHtml(personId, recordId) {
         <li class="history-entry">
           <span class="history-entry-action">${escapeHtml(actionLabel)}</span>
           <span class="history-entry-time">${escapeHtml(formatHistoryTimestamp(entry.timestamp))}${userLine ? ` ${userLine}` : ""}</span>
-          <span class="history-entry-desc">${escapeHtml(entry.description)}</span>
+          <span class="history-entry-desc">${escapeHtml(formatHistoryDescription(entry))}</span>
         </li>
       `;
     })
@@ -1860,7 +1868,7 @@ function getComplianceStatusChartData() {
 
   return [
     { label: "Valid", count: counts.valid, barClass: "chart-bar-valid" },
-    { label: "Due Soon", count: counts.dueSoon, barClass: "chart-bar-due-soon" },
+    { label: "Expiring Soon", count: counts.dueSoon, barClass: "chart-bar-due-soon" },
     { label: "Expired", count: counts.expired, barClass: "chart-bar-expired" },
   ];
 }
@@ -5366,7 +5374,7 @@ function formatDaysRemaining(expiryDate) {
   return String(daysRemaining);
 }
 
-// Work out if a DBS is valid, due soon, or expired
+// Work out if a compliance record is valid, expiring soon, or expired
 function getStatus(expiryDate) {
   const daysUntilExpiry = getDaysUntilExpiry(expiryDate);
 
@@ -5374,7 +5382,7 @@ function getStatus(expiryDate) {
     return { label: "Expired", className: "status-expired", key: "expired" };
   }
   if (daysUntilExpiry <= DUE_SOON_DAYS) {
-    return { label: "Due Soon", className: "status-due-soon", key: "dueSoon" };
+    return { label: "Expiring Soon", className: "status-due-soon", key: "dueSoon" };
   }
   return { label: "Valid", className: "status-valid", key: "valid" };
 }
@@ -5870,7 +5878,7 @@ function setExpiryWindowFilter(days) {
   syncExpiryWindowFilterToUI();
 }
 
-// Expiry windows only apply to non-expired records; Due Soon can combine with them
+// Expiry windows only apply to non-expired records; Expiring Soon can combine with them
 function areStatusAndExpiryCompatible(statusKey, expiryDays) {
   if (expiryDays === null || statusKey === "all") {
     return true;
@@ -6723,7 +6731,7 @@ async function persistArchiveComplianceRecord(personId, recordId) {
 
   const { person, record } = result;
   const confirmed = confirm(
-    `Delete this compliance record?\n\n${person.name} — ${record.complianceType}\nExpires: ${formatDate(record.expiryDate)}\n\nThis cannot be undone.`
+    `Archive this compliance record?\n\n${person.name} — ${record.complianceType}\nExpires: ${formatDate(record.expiryDate)}\n\nThis cannot be undone.`
   );
 
   if (!confirmed) {
@@ -6787,7 +6795,7 @@ async function persistArchiveComplianceRecord(personId, recordId) {
     savePeople();
     showMessage(
       appMessage,
-      `Deleted: ${person.name} — ${record.complianceType}.`,
+      `Archived: ${person.name} — ${record.complianceType}.`,
       "success"
     );
     renderTable();
@@ -6800,7 +6808,7 @@ async function persistArchiveComplianceRecord(personId, recordId) {
   }
 
   if (typeof repository.archiveComplianceRecord !== "function") {
-    showMessage(appMessage, "Cloud record delete is not available.", "error");
+    showMessage(appMessage, "Cloud record archive is not available.", "error");
     return;
   }
 
@@ -6809,7 +6817,7 @@ async function persistArchiveComplianceRecord(personId, recordId) {
   if (!persistResult.ok) {
     showMessage(
       appMessage,
-      persistResult.error || "Could not delete record from the cloud.",
+      persistResult.error || "Could not archive record in the cloud.",
       "error"
     );
     return;
@@ -6821,7 +6829,7 @@ async function persistArchiveComplianceRecord(personId, recordId) {
   }
 
   if (persistResult.status !== "archived") {
-    showMessage(appMessage, "Could not delete record.", "error");
+    showMessage(appMessage, "Could not archive record.", "error");
     return;
   }
 
@@ -6856,7 +6864,7 @@ async function persistArchiveComplianceRecord(personId, recordId) {
 
   showMessage(
     appMessage,
-    `Deleted: ${person.name} — ${record.complianceType}.`,
+    `Archived: ${person.name} — ${record.complianceType}.`,
     "success"
   );
 }

@@ -1696,8 +1696,18 @@ button[type="submit"]:hover {
 }
 
 .message-error {
+  background: #fef2f2;
+  color: #991b1b;
+}
+
+.message-warning {
   background: #fff3cd;
   color: #856404;
+}
+
+.message-info {
+  background: #eff6ff;
+  color: #1e40af;
 }
 
 .badge {

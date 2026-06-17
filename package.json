@@ -17,6 +17,7 @@
     "verify-register-csv-export": "node scripts/verify-register-csv-export.mjs",
     "verify-terminology-rc004": "node scripts/verify-terminology-rc004.mjs",
     "verify-terminology-rc005": "node scripts/verify-terminology-rc005.mjs",
+    "verify-terminology-rc006": "node scripts/verify-terminology-rc006.mjs",
     "verify-cloud-set-action-status": "node scripts/verify-cloud-set-action-status.mjs",
     "verify-action-status-transitions": "node scripts/verify-action-status-transitions.mjs",
     "verify-cloud-renew-compliance": "node scripts/verify-cloud-renew-compliance.mjs",

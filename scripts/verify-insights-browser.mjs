@@ -1,5 +1,6 @@
 /**
  * V4-3D Compliance Insights browser smoke test pack.
+ * V5-1A Phase 5 contact readiness section checks.
  * Deterministic static checks against index.html, app.js, and the built bundle.
  * No Supabase, browser login, localStorage mutation, or live DOM required.
  */
@@ -60,6 +61,7 @@ if (!insightsSection) {
     "Evidence Gaps",
     "Renewal Forecast",
     "Recommendations",
+    "Contact Readiness",
     "Operational Health",
   ];
 
@@ -123,6 +125,26 @@ if (!insightsSection) {
     'id="compliance-insights-operational-cards"',
     "operational health cards container"
   );
+  assertContains(
+    insightsSection,
+    'id="compliance-insights-contact-heading"',
+    "contact readiness section heading"
+  );
+  assertContains(
+    insightsSection,
+    'id="compliance-insights-contact-cards"',
+    "contact readiness cards container"
+  );
+
+  const contactDrilldowns = ["people-missing-email", "people-missing-email-reminder-window"];
+
+  for (const drilldown of contactDrilldowns) {
+    assertContains(
+      insightsSection,
+      `data-compliance-insight-drilldown="${drilldown}"`,
+      `contact readiness card drilldown: ${drilldown}`
+    );
+  }
 
   assertContains(
     insightsSection,
@@ -157,6 +179,7 @@ if (!insightsSection) {
     "compliance-insights-evidence-gaps-empty",
     "compliance-insights-forecast-empty",
     "compliance-insights-recommendations-empty",
+    "compliance-insights-contact-empty",
     "compliance-insights-operational-empty",
     "compliance-insights-preview-empty-hint",
   ];
@@ -174,6 +197,8 @@ const domElementIds = [
   "compliance-insights-evidence-gap-high",
   "compliance-insights-evidence-gap-stale",
   "compliance-insights-operational-score",
+  "compliance-insights-contact-missing-count",
+  "compliance-insights-contact-reminder-count",
   "compliance-insights-preview",
   "export-compliance-insights-summary-btn",
   "export-compliance-insights-drilldown-btn",
@@ -243,5 +268,6 @@ console.log("Compliance Insights browser smoke test: OK");
 console.log("  index.html section, headings, helper text, and empty states verified");
 console.log("  export buttons and drilldown preview panel verified");
 console.log("  evidence gap cards and operational health section verified");
+console.log("  contact readiness section and drilldown cards verified");
 console.log("  app.js DOM wiring and export/drilldown handlers verified");
 console.log("  app.bundle.js includes insights render and export helpers");

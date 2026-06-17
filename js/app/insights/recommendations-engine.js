@@ -50,6 +50,7 @@ export const RECOMMENDATION_CATEGORIES = {
   ACTIONS: "actions",
   FORECAST: "forecast",
   OPERATIONAL: "operational",
+  CONTACT: "contact",
 };
 
 /** Default recommendation count thresholds (override via `generateComplianceRecommendations`). */
@@ -202,6 +203,23 @@ function buildRecommendationRules(insights, thresholds) {
         affectedCount: risk.overdueActions,
         drilldownKey: COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.OVERDUE_ACTIONS,
         sortOrder: 50,
+      })
+    );
+  }
+
+  const contactReadiness = insights.contactReadiness;
+
+  if (contactReadiness?.peopleMissingEmail > 0) {
+    recommendations.push(
+      finalizeRecommendation({
+        id: "contact-missing-email",
+        priority: RECOMMENDATION_PRIORITIES.HIGH,
+        category: RECOMMENDATION_CATEGORIES.CONTACT,
+        title: "Add missing email addresses",
+        description: `${countLabel(contactReadiness.peopleMissingEmail, "person", "people")} ${contactReadiness.peopleMissingEmail === 1 ? "has" : "have"} no email address on file.`,
+        affectedCount: contactReadiness.peopleMissingEmail,
+        drilldownKey: COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.PEOPLE_MISSING_EMAIL,
+        sortOrder: 42,
       })
     );
   }

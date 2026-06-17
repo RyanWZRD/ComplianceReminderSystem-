@@ -23883,6 +23883,9 @@ ${suffix}`;
       return getHistoryEntryDescription(entry).includes(sentLabel);
     });
   }
+  function isRecordInReminderWindow(row, ctx) {
+    return getActiveReminderType(row.expiryDate, ctx.settings, ctx) !== null;
+  }
   function filterRecordsMissingReminderActivity(rows, ctx) {
     return rows.filter((row) => {
       const reminderType = getActiveReminderType(row.expiryDate, ctx.settings, ctx);
@@ -24202,6 +24205,113 @@ ${suffix}`;
     return { byTier, records };
   }
 
+  // js/app/insights/metrics-contact-readiness.js
+  var REMINDER_WINDOW_PRIORITY = {
+    [REMINDER_UI_LABELS.expired]: 0,
+    [REMINDER_UI_LABELS[7]]: 1,
+    [REMINDER_UI_LABELS[14]]: 2,
+    [REMINDER_UI_LABELS[30]]: 3
+  };
+  function personRowHasEmail(row) {
+    return normalizeEmail(row.email) !== "";
+  }
+  function pickMoreUrgentReminderWindow(current, candidate) {
+    if (!candidate) {
+      return current ?? null;
+    }
+    if (!current) {
+      return candidate;
+    }
+    const currentRank = REMINDER_WINDOW_PRIORITY[current] ?? 99;
+    const candidateRank = REMINDER_WINDOW_PRIORITY[candidate] ?? 99;
+    return candidateRank < currentRank ? candidate : current;
+  }
+  function buildPersonContactSummaries(rows, ctx) {
+    const byPerson = /* @__PURE__ */ new Map();
+    rows.forEach((row) => {
+      const personId = row.personId;
+      let summary = byPerson.get(personId);
+      if (!summary) {
+        summary = {
+          personId,
+          name: row.name,
+          role: row.role,
+          email: normalizeEmail(row.email),
+          hasEmail: personRowHasEmail(row),
+          recordCount: 0,
+          recordsInReminderWindow: 0,
+          mostUrgentReminderWindow: null
+        };
+        byPerson.set(personId, summary);
+      }
+      summary.recordCount += 1;
+      if (isRecordInReminderWindow(row, ctx)) {
+        summary.recordsInReminderWindow += 1;
+        summary.mostUrgentReminderWindow = pickMoreUrgentReminderWindow(
+          summary.mostUrgentReminderWindow,
+          getActiveReminderType(row.expiryDate, ctx.settings, ctx)
+        );
+      }
+    });
+    return Array.from(byPerson.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }
+  function filterPeopleMissingEmail(rows, ctx) {
+    return buildPersonContactSummaries(rows, ctx).filter((person) => !person.hasEmail);
+  }
+  function filterPeopleMissingEmailInReminderWindow(rows, ctx) {
+    return buildPersonContactSummaries(rows, ctx).filter(
+      (person) => !person.hasEmail && person.recordsInReminderWindow > 0
+    );
+  }
+  function computeContactReadiness(rows, ctx) {
+    const people = buildPersonContactSummaries(rows, ctx);
+    const peopleWithEmail = people.filter((person) => person.hasEmail).length;
+    const peopleMissingEmail = people.length - peopleWithEmail;
+    const peopleInReminderWindowMissingEmail = people.filter(
+      (person) => !person.hasEmail && person.recordsInReminderWindow > 0
+    ).length;
+    return {
+      peopleTotal: people.length,
+      peopleWithEmail,
+      peopleMissingEmail,
+      peopleInReminderWindowMissingEmail,
+      people
+    };
+  }
+  function formatContactReadinessSummary(contactReadiness) {
+    const peopleTotal = contactReadiness.peopleTotal ?? 0;
+    const peopleWithEmail = contactReadiness.peopleWithEmail ?? 0;
+    const peopleMissingEmail = contactReadiness.peopleMissingEmail ?? 0;
+    const peopleInReminderWindowMissingEmail = contactReadiness.peopleInReminderWindowMissingEmail ?? 0;
+    if (peopleTotal === 0) {
+      const fallback = "No people on register";
+      return {
+        summaryText: fallback,
+        detailText: "",
+        title: "",
+        ariaLabel: fallback
+      };
+    }
+    const summaryText = `${peopleWithEmail} of ${peopleTotal} people have email`;
+    if (peopleMissingEmail === 0) {
+      const note2 = "All people have email addresses on file.";
+      return {
+        summaryText,
+        detailText: note2,
+        title: note2,
+        ariaLabel: `${summaryText}. ${note2}`
+      };
+    }
+    const detailText = `${peopleMissingEmail} missing email \xB7 ${peopleInReminderWindowMissingEmail} in reminder windows`;
+    const note = `${peopleMissingEmail} of ${peopleTotal} people are missing an email address. ${peopleInReminderWindowMissingEmail} of those people have compliance records in active reminder windows.`;
+    return {
+      summaryText,
+      detailText,
+      title: note,
+      ariaLabel: `${summaryText}. ${detailText}. ${note}`
+    };
+  }
+
   // js/app/insights/insights-engine.js
   var DUE_SOON_DAYS = 90;
   var STALE_EVIDENCE_DAYS = 365;
@@ -24235,11 +24345,14 @@ ${suffix}`;
     }
     const evidence = Array.isArray(row.evidence) ? row.evidence.map(normalizeEvidenceItem) : [];
     const actions = Array.isArray(row.actions) ? row.actions.map(normalizeActionItem) : [];
+    const contact = normalizePersonContactFields(row);
     return {
       personId: row.personId ?? row.person_id,
       recordId: row.recordId ?? row.record_id,
       name: row.name ?? "",
       role: row.role ?? "",
+      email: contact.email,
+      managerEmail: contact.managerEmail,
       complianceType: row.complianceType ?? row.compliance_type ?? "",
       expiryDate: normalizeExpiryDate(row.expiryDate ?? row.expiry_date ?? ""),
       renewalCycle: row.renewalCycle ?? row.renewal_cycle ?? "manual",
@@ -24393,6 +24506,7 @@ ${suffix}`;
     const risk = computeRiskSummary(normalizedRows, ctx);
     const forecast = computeRenewalForecast(normalizedRows, ctx);
     const evidenceGaps = computeEvidenceGaps(normalizedRows, ctx);
+    const contactReadiness = computeContactReadiness(normalizedRows, ctx);
     return {
       recordCount: normalizedRows.length,
       asOfDate: ctx.asOfDateISO,
@@ -24403,7 +24517,8 @@ ${suffix}`;
       compositeHealthScore,
       risk,
       forecast,
-      evidenceGaps
+      evidenceGaps,
+      contactReadiness
     };
   }
 
@@ -24459,8 +24574,23 @@ ${suffix}`;
     MISSING_REMINDER_ACTIVITY: "missing-reminder-activity",
     CRITICAL_EVIDENCE_GAPS: "critical-evidence-gaps",
     HIGH_EVIDENCE_GAPS: "high-evidence-gaps",
-    STALE_EVIDENCE_RECORDS: "stale-evidence-records"
+    STALE_EVIDENCE_RECORDS: "stale-evidence-records",
+    PEOPLE_MISSING_EMAIL: "people-missing-email",
+    PEOPLE_MISSING_EMAIL_REMINDER_WINDOW: "people-missing-email-reminder-window"
   };
+  var COMPLIANCE_INSIGHT_CONTACT_PREVIEW_COLUMNS = [
+    { key: "name", label: "Name" },
+    { key: "role", label: "Role" },
+    { key: "emailStatus", label: "Email" },
+    { key: "recordCount", label: "Compliance Records" }
+  ];
+  var COMPLIANCE_INSIGHT_CONTACT_REMINDER_PREVIEW_COLUMNS = [
+    { key: "name", label: "Name" },
+    { key: "role", label: "Role" },
+    { key: "emailStatus", label: "Email" },
+    { key: "recordsInReminderWindow", label: "Records in Reminder Window" },
+    { key: "mostUrgentReminderWindow", label: "Most Urgent Window" }
+  ];
   var COMPLIANCE_INSIGHT_REMINDER_ACTIVITY_PREVIEW_COLUMNS = [
     { key: "name", label: "Name" },
     { key: "role", label: "Role" },
@@ -24598,10 +24728,27 @@ ${suffix}`;
       previewDescription: "Records with evidence on file where the newest item is older than 12 months, excluding records already prioritised as critical or high evidence gaps.",
       filename: "compliance-insight-stale_evidence_records.csv",
       itemLabel: "Records"
+    },
+    [COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.PEOPLE_MISSING_EMAIL]: {
+      title: "People Missing Email",
+      emptyMessage: "All people have email addresses on file.",
+      previewDescription: "Unique people with no email address recorded. Add email addresses in the register or person edit form.",
+      filename: "compliance-insight-people_missing_email.csv",
+      itemLabel: "People"
+    },
+    [COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.PEOPLE_MISSING_EMAIL_REMINDER_WINDOW]: {
+      title: "Missing Email in Reminder Window",
+      emptyMessage: "No people in active reminder windows are missing email addresses.",
+      previewDescription: "Unique people with no email address who have at least one compliance record in an active reminder window (expired, 7-, 14-, or 30-day).",
+      filename: "compliance-insight-people_missing_email_reminder_window.csv",
+      itemLabel: "People"
     }
   };
   function isActionLevelDrilldown(drilldownType) {
     return drilldownType === COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.OVERDUE_ACTIONS;
+  }
+  function isPersonLevelDrilldown(drilldownType) {
+    return drilldownType === COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.PEOPLE_MISSING_EMAIL || drilldownType === COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.PEOPLE_MISSING_EMAIL_REMINDER_WINDOW;
   }
   function getActiveActionCount(row, ctx) {
     const actions = Array.isArray(row.actions) ? row.actions : [];
@@ -24611,7 +24758,7 @@ ${suffix}`;
     }).length;
   }
   function filterComplianceInsightDrilldownRecords(drilldownType, rows, ctx) {
-    if (isActionLevelDrilldown(drilldownType)) {
+    if (isActionLevelDrilldown(drilldownType) || isPersonLevelDrilldown(drilldownType)) {
       return [];
     }
     return rows.filter((row) => {
@@ -24683,6 +24830,49 @@ ${suffix}`;
       reminderActivityStatus: hasActivity ? "Recorded" : "Missing"
     };
   }
+  function resolveContactDrilldownWorkspaceRecord(personId, drilldownType, rows, ctx) {
+    const personRows = rows.filter((row) => row.personId === personId);
+    if (personRows.length === 0) {
+      return null;
+    }
+    if (drilldownType === COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.PEOPLE_MISSING_EMAIL_REMINDER_WINDOW) {
+      const inWindow = personRows.filter((row) => isRecordInReminderWindow(row, ctx));
+      if (inWindow.length > 0) {
+        return inWindow.sort(
+          (a, b) => a.expiryDate.localeCompare(b.expiryDate) || a.complianceType.localeCompare(b.complianceType)
+        )[0].recordId;
+      }
+    }
+    return personRows.sort(
+      (a, b) => a.expiryDate.localeCompare(b.expiryDate) || a.complianceType.localeCompare(b.complianceType)
+    )[0].recordId;
+  }
+  function mapPersonContactPreviewRow(person, drilldownType) {
+    if (drilldownType === COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.PEOPLE_MISSING_EMAIL_REMINDER_WINDOW) {
+      return {
+        name: person.name,
+        role: person.role,
+        emailStatus: "Missing",
+        recordsInReminderWindow: String(person.recordsInReminderWindow),
+        mostUrgentReminderWindow: person.mostUrgentReminderWindow || "\u2014"
+      };
+    }
+    return {
+      name: person.name,
+      role: person.role,
+      emailStatus: "Missing",
+      recordCount: String(person.recordCount)
+    };
+  }
+  function filterPersonContactDrilldown(drilldownType, rows, ctx) {
+    if (drilldownType === COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.PEOPLE_MISSING_EMAIL) {
+      return filterPeopleMissingEmail(rows, ctx);
+    }
+    if (drilldownType === COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.PEOPLE_MISSING_EMAIL_REMINDER_WINDOW) {
+      return filterPeopleMissingEmailInReminderWindow(rows, ctx);
+    }
+    return [];
+  }
   function mapEvidenceGapPreviewRow(row, ctx) {
     const status = ctx.getExpiryStatus(row.expiryDate);
     const evidenceItems = Array.isArray(row.evidence) ? row.evidence : [];
@@ -24708,6 +24898,12 @@ ${suffix}`;
     }
     if (drilldownType === COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.MISSING_REMINDER_ACTIVITY) {
       return COMPLIANCE_INSIGHT_REMINDER_ACTIVITY_PREVIEW_COLUMNS;
+    }
+    if (drilldownType === COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.PEOPLE_MISSING_EMAIL) {
+      return COMPLIANCE_INSIGHT_CONTACT_PREVIEW_COLUMNS;
+    }
+    if (drilldownType === COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.PEOPLE_MISSING_EMAIL_REMINDER_WINDOW) {
+      return COMPLIANCE_INSIGHT_CONTACT_REMINDER_PREVIEW_COLUMNS;
     }
     if (drilldownType === COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.CRITICAL_EVIDENCE_GAPS || drilldownType === COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.HIGH_EVIDENCE_GAPS || drilldownType === COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.STALE_EVIDENCE_RECORDS) {
       return COMPLIANCE_INSIGHT_EVIDENCE_GAP_PREVIEW_COLUMNS;
@@ -24742,7 +24938,8 @@ ${suffix}`;
     EVIDENCE: "evidence",
     ACTIONS: "actions",
     FORECAST: "forecast",
-    OPERATIONAL: "operational"
+    OPERATIONAL: "operational",
+    CONTACT: "contact"
   };
   var DEFAULT_RECOMMENDATION_THRESHOLDS = {
     expiringWithin30Days: 0,
@@ -24859,6 +25056,21 @@ ${suffix}`;
         })
       );
     }
+    const contactReadiness = insights.contactReadiness;
+    if (contactReadiness?.peopleMissingEmail > 0) {
+      recommendations.push(
+        finalizeRecommendation({
+          id: "contact-missing-email",
+          priority: RECOMMENDATION_PRIORITIES.HIGH,
+          category: RECOMMENDATION_CATEGORIES.CONTACT,
+          title: "Add missing email addresses",
+          description: `${countLabel(contactReadiness.peopleMissingEmail, "person", "people")} ${contactReadiness.peopleMissingEmail === 1 ? "has" : "have"} no email address on file.`,
+          affectedCount: contactReadiness.peopleMissingEmail,
+          drilldownKey: COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.PEOPLE_MISSING_EMAIL,
+          sortOrder: 42
+        })
+      );
+    }
     const operational = insights.operationalHealth;
     if (operational?.available && operational.recordsMissingReminderActivity > 0) {
       recommendations.push(
@@ -24971,7 +25183,9 @@ ${suffix}`;
   function buildComplianceInsightsSummaryCsv(insights, recommendations, generatedAt = /* @__PURE__ */ new Date()) {
     const generatedDisplay = formatInsightsGeneratedDisplay(generatedAt);
     const operationalSummary = formatOperationalHealthSummary(insights.operationalHealth);
+    const contactSummary = formatContactReadinessSummary(insights.contactReadiness || {});
     const operational = insights.operationalHealth || {};
+    const contactReadiness = insights.contactReadiness || {};
     const risk = insights.risk || {};
     const evidenceGaps = insights.evidenceGaps?.byTier || {};
     const forecast = insights.forecast || {};
@@ -25016,7 +25230,18 @@ ${suffix}`;
         "Records missing reminder follow-up",
         operational.recordsMissingReminderActivity ?? 0
       ),
-      csvMetricLine("Operational health note", operational.note || operationalSummary.title || "")
+      csvMetricLine("Operational health note", operational.note || operationalSummary.title || ""),
+      "",
+      "Contact Readiness,Value",
+      csvMetricLine("People on register", contactReadiness.peopleTotal ?? 0),
+      csvMetricLine("People with email", contactReadiness.peopleWithEmail ?? 0),
+      csvMetricLine("People missing email", contactReadiness.peopleMissingEmail ?? 0),
+      csvMetricLine(
+        "People missing email in reminder window",
+        contactReadiness.peopleInReminderWindowMissingEmail ?? 0
+      ),
+      csvMetricLine("Contact readiness summary", contactSummary.summaryText),
+      csvMetricLine("Contact readiness detail", contactSummary.detailText)
     ];
     if (recs.length > 0) {
       lines.push("", "Priority,Title,Action");
@@ -25257,6 +25482,21 @@ ${suffix}`;
   );
   var complianceInsightsOperationalEmpty = document.getElementById(
     "compliance-insights-operational-empty"
+  );
+  var complianceInsightsContactEmpty = document.getElementById("compliance-insights-contact-empty");
+  var complianceInsightsContactCards = document.getElementById("compliance-insights-contact-cards");
+  var complianceInsightsContactSummary = document.getElementById(
+    "compliance-insights-contact-summary"
+  );
+  var complianceInsightsContactSummaryText = document.getElementById(
+    "compliance-insights-contact-summary-text"
+  );
+  var complianceInsightsContactDetail = document.getElementById("compliance-insights-contact-detail");
+  var complianceInsightsContactMissingCount = document.getElementById(
+    "compliance-insights-contact-missing-count"
+  );
+  var complianceInsightsContactReminderCount = document.getElementById(
+    "compliance-insights-contact-reminder-count"
   );
   var complianceInsightsRiskEmpty = document.getElementById("compliance-insights-risk-empty");
   var complianceInsightsRiskStrip = document.getElementById("compliance-insights-risk-strip");
@@ -26823,6 +27063,32 @@ This cannot be undone.`
     if (complianceInsightsForecast90Days) {
       complianceInsightsForecast90Days.textContent = insights.forecast.expiringWithin90Days;
     }
+    if (complianceInsightsContactSummary) {
+      const contactSummary = formatContactReadinessSummary(insights.contactReadiness || {});
+      if (complianceInsightsContactSummaryText) {
+        complianceInsightsContactSummaryText.textContent = contactSummary.summaryText;
+      }
+      if (complianceInsightsContactDetail) {
+        complianceInsightsContactDetail.textContent = contactSummary.detailText;
+        complianceInsightsContactDetail.classList.toggle("hidden", !contactSummary.detailText);
+      }
+      if (contactSummary.title) {
+        complianceInsightsContactSummary.title = contactSummary.title;
+      } else {
+        complianceInsightsContactSummary.removeAttribute("title");
+      }
+      if (contactSummary.ariaLabel) {
+        complianceInsightsContactSummary.setAttribute("aria-label", contactSummary.ariaLabel);
+      } else {
+        complianceInsightsContactSummary.removeAttribute("aria-label");
+      }
+    }
+    if (complianceInsightsContactMissingCount) {
+      complianceInsightsContactMissingCount.textContent = insights.contactReadiness?.peopleMissingEmail ?? 0;
+    }
+    if (complianceInsightsContactReminderCount) {
+      complianceInsightsContactReminderCount.textContent = insights.contactReadiness?.peopleInReminderWindowMissingEmail ?? 0;
+    }
     updateComplianceInsightsSectionEmptyStates(insights);
     renderComplianceRecommendations(insights);
   }
@@ -26861,6 +27127,23 @@ This cannot be undone.`
     );
     if (operationalMissingBtn) {
       operationalMissingBtn.classList.toggle("hidden", !hasOperationalIssues);
+    }
+    const peopleMissingEmail = insights.contactReadiness?.peopleMissingEmail ?? 0;
+    const hasContactIssues = peopleMissingEmail > 0;
+    if (complianceInsightsContactEmpty) {
+      complianceInsightsContactEmpty.classList.toggle("hidden", hasContactIssues);
+    }
+    if (complianceInsightsContactCards) {
+      complianceInsightsContactCards.classList.toggle("hidden", !hasContactIssues);
+    }
+    const contactMissingBtn = document.getElementById("compliance-insights-contact-missing-btn");
+    const contactReminderBtn = document.getElementById("compliance-insights-contact-reminder-btn");
+    if (contactMissingBtn) {
+      contactMissingBtn.classList.toggle("hidden", !hasContactIssues);
+    }
+    if (contactReminderBtn) {
+      const reminderWindowMissing = insights.contactReadiness?.peopleInReminderWindowMissingEmail ?? 0;
+      contactReminderBtn.classList.toggle("hidden", reminderWindowMissing === 0);
     }
   }
   function renderComplianceRecommendations(insights) {
@@ -26979,6 +27262,13 @@ This cannot be undone.`
         return a.row.name.localeCompare(b.row.name);
       });
       tableRows = entries.map(buildComplianceInsightDrilldownActionRow);
+    } else if (isPersonLevelDrilldown(drilldownType)) {
+      const matchedPeople = filterPersonContactDrilldown(drilldownType, rows, ctx);
+      tableRows = matchedPeople.map((person) => ({
+        ...mapPersonContactPreviewRow(person, drilldownType),
+        personId: person.personId,
+        recordId: resolveContactDrilldownWorkspaceRecord(person.personId, drilldownType, rows, ctx)
+      }));
     } else {
       const matchedRows = filterComplianceInsightDrilldownRecords(drilldownType, rows, ctx).sort(
         (a, b) => a.expiryDate.localeCompare(b.expiryDate) || a.name.localeCompare(b.name)
@@ -27040,14 +27330,41 @@ This cannot be undone.`
     complianceInsightsPreviewTableHead.innerHTML = `
     <tr>
       ${report.columns.map((column) => `<th>${escapeHtml(column.label)}</th>`).join("")}
+      ${isPersonLevelDrilldown(report.type) ? "<th>Actions</th>" : ""}
     </tr>
   `;
     if (report.tableRows.length === 0) {
       complianceInsightsPreviewTableBody.innerHTML = `
       <tr>
-        <td colspan="${report.columns.length}" class="insight-empty-cell">${escapeHtml(report.emptyMessage)}</td>
+        <td colspan="${report.columns.length + (isPersonLevelDrilldown(report.type) ? 1 : 0)}" class="insight-empty-cell">${escapeHtml(report.emptyMessage)}</td>
       </tr>
     `;
+    } else if (isPersonLevelDrilldown(report.type)) {
+      complianceInsightsPreviewTableBody.innerHTML = report.tableRows.map((row) => {
+        const personId = row.personId;
+        const recordId = row.recordId;
+        const rowLabel = `Open ${row.name || "person"} compliance record workspace`;
+        return `
+          <tr
+            class="compliance-insight-drilldown-row compliance-insight-contact-row"
+            data-person-id="${escapeHtml(String(personId ?? ""))}"
+            data-record-id="${escapeHtml(String(recordId ?? ""))}"
+            tabindex="0"
+            role="button"
+            aria-label="${escapeHtml(rowLabel)}"
+          >
+            ${report.columns.map((column) => `<td>${escapeHtml(row[column.key] ?? "")}</td>`).join("")}
+            <td class="compliance-insight-drilldown-actions">
+              <button
+                type="button"
+                class="edit-contact-btn quick-action-btn"
+                data-person-id="${escapeHtml(String(personId ?? ""))}"
+                data-record-id="${escapeHtml(String(recordId ?? ""))}"
+              >Edit Contact</button>
+            </td>
+          </tr>
+        `;
+      }).join("");
     } else {
       complianceInsightsPreviewTableBody.innerHTML = report.tableRows.map(
         (row) => `
@@ -27158,6 +27475,11 @@ This cannot be undone.`
         showComplianceInsightDrilldownPreview(tile.dataset.complianceInsightDrilldown);
       });
     });
+    complianceInsightsPreviewTableBody?.addEventListener("click", handleComplianceInsightDrilldownRowClick);
+    complianceInsightsPreviewTableBody?.addEventListener(
+      "keydown",
+      handleComplianceInsightDrilldownRowKeydown
+    );
     exportComplianceInsightsPreviewCsvBtn?.addEventListener(
       "click",
       exportComplianceInsightDrilldownCsv
@@ -27174,6 +27496,48 @@ This cannot be undone.`
       "click",
       clearComplianceInsightDrilldownPreview
     );
+  }
+  function handleComplianceInsightDrilldownRowClick(event) {
+    const editContactBtn = event.target.closest(".edit-contact-btn");
+    if (editContactBtn) {
+      event.stopPropagation();
+      const personId2 = parseEntityId(editContactBtn.dataset.personId);
+      const recordId2 = parseEntityId(editContactBtn.dataset.recordId);
+      if (personId2 != null && recordId2 != null) {
+        startEdit(personId2, recordId2, { focusContact: true });
+      }
+      return;
+    }
+    if (!currentComplianceInsightDrilldown?.type || !isPersonLevelDrilldown(currentComplianceInsightDrilldown.type)) {
+      return;
+    }
+    const row = event.target.closest(".compliance-insight-contact-row");
+    if (!row) {
+      return;
+    }
+    const personId = parseEntityId(row.dataset.personId);
+    const recordId = parseEntityId(row.dataset.recordId);
+    if (personId != null && recordId != null) {
+      openRecordWorkspace(personId, recordId);
+    }
+  }
+  function handleComplianceInsightDrilldownRowKeydown(event) {
+    if (event.key !== "Enter" && event.key !== " ") {
+      return;
+    }
+    if (!currentComplianceInsightDrilldown?.type || !isPersonLevelDrilldown(currentComplianceInsightDrilldown.type)) {
+      return;
+    }
+    const row = event.target.closest(".compliance-insight-contact-row");
+    if (!row || event.target.closest(".edit-contact-btn")) {
+      return;
+    }
+    event.preventDefault();
+    const personId = parseEntityId(row.dataset.personId);
+    const recordId = parseEntityId(row.dataset.recordId);
+    if (personId != null && recordId != null) {
+      openRecordWorkspace(personId, recordId);
+    }
   }
   function updateInsightCardActiveState() {
     insightCards.forEach((card) => {
@@ -27499,6 +27863,14 @@ This cannot be undone.`
     document.body.classList.remove("workspace-open");
     renderTable({ refreshDashboards: false });
   }
+  function getContactEmailStatus(person) {
+    const hasEmail = normalizeEmail(person.email) !== "";
+    return {
+      hasEmail,
+      badgeClass: hasEmail ? "status-valid" : "status-expired",
+      badgeLabel: hasEmail ? "Email Present" : "Missing Email"
+    };
+  }
   function renderRecordWorkspace() {
     if (!workspaceContext || !workspaceContent) {
       return;
@@ -27517,6 +27889,7 @@ This cannot be undone.`
     const actionSummary = getActionSummary(record.actions);
     const evidenceCountLabel = evidenceSummary.count === 1 ? "1 document" : `${evidenceSummary.count} documents`;
     const actionMeta = `Open: ${actionSummary.openCount} \xB7 In Progress: ${actionSummary.inProgressCount} \xB7 Completed: ${actionSummary.completedCount}`;
+    const contactStatus = getContactEmailStatus(person);
     const existingNotesInput = workspaceContent.querySelector("#workspace-notes-input");
     const notesValue = existingNotesInput ? existingNotesInput.value : record.notes || "";
     if (workspaceTitle) {
@@ -27526,6 +27899,23 @@ This cannot be undone.`
       workspaceSubtitle.textContent = `${record.complianceType} \xB7 ${person.role}`;
     }
     workspaceContent.innerHTML = `
+    <section class="workspace-section workspace-contact" aria-labelledby="workspace-contact-title">
+      <div class="workspace-section-header">
+        <h3 id="workspace-contact-title" class="workspace-section-title">Contact Information</h3>
+        <span class="status status-badge workspace-contact-status ${contactStatus.badgeClass}">${escapeHtml(contactStatus.badgeLabel)}</span>
+      </div>
+      <dl class="workspace-info-grid workspace-contact-grid">
+        <div class="workspace-info-item workspace-contact-email">
+          <dt>Email</dt>
+          <dd class="workspace-contact-value">${escapeHtml(person.email || "\u2014")}</dd>
+        </div>
+        <div class="workspace-info-item workspace-contact-manager-email">
+          <dt>Manager Email</dt>
+          <dd class="workspace-contact-value">${escapeHtml(person.managerEmail || "\u2014")}</dd>
+        </div>
+      </dl>
+    </section>
+
     <section class="workspace-section workspace-general" aria-labelledby="workspace-general-title">
       <h3 id="workspace-general-title" class="workspace-section-title">General Information</h3>
       <dl class="workspace-info-grid">
@@ -27536,14 +27926,6 @@ This cannot be undone.`
         <div class="workspace-info-item">
           <dt>Role</dt>
           <dd>${escapeHtml(person.role)}</dd>
-        </div>
-        <div class="workspace-info-item">
-          <dt>Email</dt>
-          <dd>${escapeHtml(person.email || "\u2014")}</dd>
-        </div>
-        <div class="workspace-info-item">
-          <dt>Manager Email</dt>
-          <dd>${escapeHtml(person.managerEmail || "\u2014")}</dd>
         </div>
         <div class="workspace-info-item">
           <dt>Compliance Type</dt>
@@ -29913,7 +30295,7 @@ ${auditLine}` : auditLine;
       filterByExpiryWindow(90);
     }
   }
-  function startEdit(personId, recordId) {
+  function startEdit(personId, recordId, options = {}) {
     if (isCloudMode()) {
       if (!canEditComplianceRecord()) {
         notifyEditComplianceRecordBlocked();
@@ -29938,6 +30320,12 @@ ${auditLine}` : auditLine;
     hideMessage(editFormMessage);
     editSection.classList.remove("hidden");
     editSection.scrollIntoView({ behavior: "smooth" });
+    if (options.focusContact) {
+      const emailInput = document.getElementById("edit-email");
+      window.requestAnimationFrame(() => {
+        emailInput?.focus();
+      });
+    }
   }
   function hideEditForm() {
     editSection.classList.add("hidden");

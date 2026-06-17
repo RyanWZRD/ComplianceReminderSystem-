@@ -16,6 +16,7 @@
     "verify-bulk-mark-reminders": "node scripts/verify-bulk-mark-reminders.mjs",
     "verify-register-csv-export": "node scripts/verify-register-csv-export.mjs",
     "verify-register-csv-contact-fields": "node scripts/verify-register-csv-contact-fields.mjs",
+    "verify-contact-readiness-workspace": "node scripts/verify-contact-readiness-workspace.mjs",
     "verify-terminology-rc004": "node scripts/verify-terminology-rc004.mjs",
     "verify-terminology-rc005": "node scripts/verify-terminology-rc005.mjs",
     "verify-terminology-rc006": "node scripts/verify-terminology-rc006.mjs",

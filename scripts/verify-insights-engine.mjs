@@ -4,6 +4,7 @@
  * V4-1B recommendation polish and thresholds, V4-1C alpha hardening, V4-2A operational health,
  * and V4-2B composite score including operational health, and V4-2C operational drilldown polish,
  * and V4-3A evidence gap tiers, and V4-3C export pack.
+ * and V5-1A Phase 5 contact readiness insights.
  * Uses fixture rows only — no Supabase or browser required.
  */
 
@@ -21,8 +22,10 @@ import {
   getExpectedDrilldownCounts,
   mapMissingReminderActivityPreviewRow,
   mapEvidenceGapPreviewRow,
+  mapPersonContactPreviewRow,
 } from "../js/app/insights/compliance-insights-drilldowns.js";
 import { formatOperationalHealthSummary } from "../js/app/insights/metrics-operational.js";
+import { formatContactReadinessSummary } from "../js/app/insights/metrics-contact-readiness.js";
 import {
   DEFAULT_RECOMMENDATION_THRESHOLDS,
   generateComplianceRecommendations,
@@ -72,6 +75,15 @@ function assertDeepEqual(actual, expected, label) {
   }
 }
 
+function contactReadinessCounts(contactReadiness = {}) {
+  return {
+    peopleTotal: contactReadiness.peopleTotal ?? 0,
+    peopleWithEmail: contactReadiness.peopleWithEmail ?? 0,
+    peopleMissingEmail: contactReadiness.peopleMissingEmail ?? 0,
+    peopleInReminderWindowMissingEmail: contactReadiness.peopleInReminderWindowMissingEmail ?? 0,
+  };
+}
+
 function verifyInsights(label, rows) {
   const insights = computeComplianceInsights(rows, FIXTURE_SETTINGS, FIXTURE_AS_OF_DATE);
 
@@ -93,6 +105,11 @@ function verifyInsights(label, rows) {
   assertDeepEqual(insights.risk, EXPECTED_INSIGHTS.risk, `${label} risk`);
   assertDeepEqual(insights.forecast, EXPECTED_INSIGHTS.forecast, `${label} forecast`);
   assertDeepEqual(insights.evidenceGaps, EXPECTED_INSIGHTS.evidenceGaps, `${label} evidenceGaps`);
+  assertDeepEqual(
+    contactReadinessCounts(insights.contactReadiness),
+    EXPECTED_INSIGHTS.contactReadiness,
+    `${label} contactReadiness`
+  );
 }
 
 function getLegacyStatus(expiryDate, asOfDate) {
@@ -336,6 +353,16 @@ function verifyDrilldownCounts(label, rows) {
     insights.evidenceGaps.byTier.stale,
     `${label} drilldown stale evidence records`
   );
+  assertEqual(
+    drilldownCounts[COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.PEOPLE_MISSING_EMAIL],
+    insights.contactReadiness.peopleMissingEmail,
+    `${label} drilldown people missing email`
+  );
+  assertEqual(
+    drilldownCounts[COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.PEOPLE_MISSING_EMAIL_REMINDER_WINDOW],
+    insights.contactReadiness.peopleInReminderWindowMissingEmail,
+    `${label} drilldown people missing email in reminder window`
+  );
 }
 
 function verifyRecommendations(label, rows) {
@@ -351,7 +378,7 @@ function verifyRecommendations(label, rows) {
   assertDeepEqual(recommendations, EXPECTED_RECOMMENDATIONS, `${label} recommendations`);
   assertDeepEqual(
     getRecommendationPriorityOrder(recommendations),
-    ["critical", "critical", "critical", "high", "high", "high", "medium"],
+    ["critical", "critical", "critical", "high", "high", "high", "high", "medium"],
     `${label} recommendation priority order`
   );
 
@@ -424,6 +451,11 @@ function verifyHealthyFixture(label, rows) {
     insights.evidenceGaps,
     EXPECTED_HEALTHY_INSIGHTS.evidenceGaps,
     `${label} evidenceGaps`
+  );
+  assertDeepEqual(
+    contactReadinessCounts(insights.contactReadiness),
+    EXPECTED_HEALTHY_INSIGHTS.contactReadiness,
+    `${label} contactReadiness`
   );
 
   const recommendations = generateComplianceRecommendations(insights, normalizeFixtureRows(rows));
@@ -745,6 +777,36 @@ if (!summaryCsv.includes("Renew expired compliance records")) {
   process.exit(1);
 }
 
+if (!summaryCsv.includes("People missing email")) {
+  console.error("FAIL summary export missing contact readiness metrics");
+  process.exit(1);
+}
+
+const contactSummary = formatContactReadinessSummary(
+  computeComplianceInsights(LOCAL_FIXTURE_ROWS, FIXTURE_SETTINGS, FIXTURE_AS_OF_DATE).contactReadiness
+);
+
+if (!contactSummary.summaryText.includes("1 of 6 people have email")) {
+  console.error("FAIL contact readiness summary text");
+  process.exit(1);
+}
+
+const contactPreview = mapPersonContactPreviewRow(
+  {
+    name: "Jordan Coordinator",
+    role: "Coordinator",
+    recordCount: 1,
+    recordsInReminderWindow: 1,
+    mostUrgentReminderWindow: "14 Day Reminder",
+  },
+  COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.PEOPLE_MISSING_EMAIL_REMINDER_WINDOW
+);
+
+if (contactPreview.emailStatus !== "Missing" || contactPreview.recordsInReminderWindow !== "1") {
+  console.error("FAIL contact readiness drilldown preview mapping");
+  process.exit(1);
+}
+
 if (!summaryCsv.includes(getRecommendationPriorityLabel("critical"))) {
   console.error("FAIL summary export missing recommendation priority");
   process.exit(1);
@@ -777,4 +839,5 @@ console.log("  healthy local + cloud-shaped fixtures produce 100% scores and zer
 console.log("  operational health scenarios (notes, history, empty windows) verified");
 console.log("  operational health drilldown polish (columns, preview, summary) verified");
 console.log("  evidence gap tiers, drilldowns, and recommendations verified");
+console.log("  contact readiness metrics, drilldowns, and recommendations verified");
 console.log("  insights summary and drilldown export helpers verified");

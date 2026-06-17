@@ -1,5 +1,14 @@
 import { ACTION_STATUSES } from "../../data/constants.js";
-import { filterRecordsMissingReminderActivity, getActiveReminderType, hasReminderActivityForType } from "./metrics-operational.js";
+import {
+  filterRecordsMissingReminderActivity,
+  getActiveReminderType,
+  hasReminderActivityForType,
+  isRecordInReminderWindow,
+} from "./metrics-operational.js";
+import {
+  filterPeopleMissingEmail,
+  filterPeopleMissingEmailInReminderWindow,
+} from "./metrics-contact-readiness.js";
 import {
   EVIDENCE_GAP_TIERS,
   getNewestEvidenceDate,
@@ -24,7 +33,24 @@ export const COMPLIANCE_INSIGHT_DRILLDOWN_TYPES = {
   CRITICAL_EVIDENCE_GAPS: "critical-evidence-gaps",
   HIGH_EVIDENCE_GAPS: "high-evidence-gaps",
   STALE_EVIDENCE_RECORDS: "stale-evidence-records",
+  PEOPLE_MISSING_EMAIL: "people-missing-email",
+  PEOPLE_MISSING_EMAIL_REMINDER_WINDOW: "people-missing-email-reminder-window",
 };
+
+export const COMPLIANCE_INSIGHT_CONTACT_PREVIEW_COLUMNS = [
+  { key: "name", label: "Name" },
+  { key: "role", label: "Role" },
+  { key: "emailStatus", label: "Email" },
+  { key: "recordCount", label: "Compliance Records" },
+];
+
+export const COMPLIANCE_INSIGHT_CONTACT_REMINDER_PREVIEW_COLUMNS = [
+  { key: "name", label: "Name" },
+  { key: "role", label: "Role" },
+  { key: "emailStatus", label: "Email" },
+  { key: "recordsInReminderWindow", label: "Records in Reminder Window" },
+  { key: "mostUrgentReminderWindow", label: "Most Urgent Window" },
+];
 
 export const COMPLIANCE_INSIGHT_REMINDER_ACTIVITY_PREVIEW_COLUMNS = [
   { key: "name", label: "Name" },
@@ -181,6 +207,22 @@ const DRILLDOWN_META = {
     filename: "compliance-insight-stale_evidence_records.csv",
     itemLabel: "Records",
   },
+  [COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.PEOPLE_MISSING_EMAIL]: {
+    title: "People Missing Email",
+    emptyMessage: "All people have email addresses on file.",
+    previewDescription:
+      "Unique people with no email address recorded. Add email addresses in the register or person edit form.",
+    filename: "compliance-insight-people_missing_email.csv",
+    itemLabel: "People",
+  },
+  [COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.PEOPLE_MISSING_EMAIL_REMINDER_WINDOW]: {
+    title: "Missing Email in Reminder Window",
+    emptyMessage: "No people in active reminder windows are missing email addresses.",
+    previewDescription:
+      "Unique people with no email address who have at least one compliance record in an active reminder window (expired, 7-, 14-, or 30-day).",
+    filename: "compliance-insight-people_missing_email_reminder_window.csv",
+    itemLabel: "People",
+  },
 };
 
 /**
@@ -189,6 +231,17 @@ const DRILLDOWN_META = {
  */
 export function isActionLevelDrilldown(drilldownType) {
   return drilldownType === COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.OVERDUE_ACTIONS;
+}
+
+/**
+ * @param {string} drilldownType
+ * @returns {boolean}
+ */
+export function isPersonLevelDrilldown(drilldownType) {
+  return (
+    drilldownType === COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.PEOPLE_MISSING_EMAIL ||
+    drilldownType === COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.PEOPLE_MISSING_EMAIL_REMINDER_WINDOW
+  );
 }
 
 /**
@@ -212,7 +265,7 @@ function getActiveActionCount(row, ctx) {
  * @returns {NormalizedComplianceRow[]}
  */
 export function filterComplianceInsightDrilldownRecords(drilldownType, rows, ctx) {
-  if (isActionLevelDrilldown(drilldownType)) {
+  if (isActionLevelDrilldown(drilldownType) || isPersonLevelDrilldown(drilldownType)) {
     return [];
   }
 
@@ -321,6 +374,80 @@ export function mapMissingReminderActivityPreviewRow(row, ctx) {
   };
 }
 
+/**
+ * @param {ReturnType<import("./metrics-contact-readiness.js").buildPersonContactSummaries>[number]} person
+ * @param {string} drilldownType
+ */
+/**
+ * Pick a representative compliance record when opening workspace from a person drilldown.
+ *
+ * @param {string | number} personId
+ * @param {string} drilldownType
+ * @param {NormalizedComplianceRow[]} rows
+ * @param {InsightsContext} ctx
+ * @returns {string | number | null}
+ */
+export function resolveContactDrilldownWorkspaceRecord(personId, drilldownType, rows, ctx) {
+  const personRows = rows.filter((row) => row.personId === personId);
+
+  if (personRows.length === 0) {
+    return null;
+  }
+
+  if (drilldownType === COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.PEOPLE_MISSING_EMAIL_REMINDER_WINDOW) {
+    const inWindow = personRows.filter((row) => isRecordInReminderWindow(row, ctx));
+
+    if (inWindow.length > 0) {
+      return inWindow.sort(
+        (a, b) =>
+          a.expiryDate.localeCompare(b.expiryDate) ||
+          a.complianceType.localeCompare(b.complianceType)
+      )[0].recordId;
+    }
+  }
+
+  return personRows.sort(
+    (a, b) =>
+      a.expiryDate.localeCompare(b.expiryDate) || a.complianceType.localeCompare(b.complianceType)
+  )[0].recordId;
+}
+
+export function mapPersonContactPreviewRow(person, drilldownType) {
+  if (drilldownType === COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.PEOPLE_MISSING_EMAIL_REMINDER_WINDOW) {
+    return {
+      name: person.name,
+      role: person.role,
+      emailStatus: "Missing",
+      recordsInReminderWindow: String(person.recordsInReminderWindow),
+      mostUrgentReminderWindow: person.mostUrgentReminderWindow || "—",
+    };
+  }
+
+  return {
+    name: person.name,
+    role: person.role,
+    emailStatus: "Missing",
+    recordCount: String(person.recordCount),
+  };
+}
+
+/**
+ * @param {string} drilldownType
+ * @param {NormalizedComplianceRow[]} rows
+ * @param {InsightsContext} ctx
+ */
+export function filterPersonContactDrilldown(drilldownType, rows, ctx) {
+  if (drilldownType === COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.PEOPLE_MISSING_EMAIL) {
+    return filterPeopleMissingEmail(rows, ctx);
+  }
+
+  if (drilldownType === COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.PEOPLE_MISSING_EMAIL_REMINDER_WINDOW) {
+    return filterPeopleMissingEmailInReminderWindow(rows, ctx);
+  }
+
+  return [];
+}
+
 export function mapEvidenceGapPreviewRow(row, ctx) {
   const status = ctx.getExpiryStatus(row.expiryDate);
   const evidenceItems = Array.isArray(row.evidence) ? row.evidence : [];
@@ -354,6 +481,14 @@ export function getComplianceInsightDrilldownColumns(drilldownType) {
 
   if (drilldownType === COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.MISSING_REMINDER_ACTIVITY) {
     return COMPLIANCE_INSIGHT_REMINDER_ACTIVITY_PREVIEW_COLUMNS;
+  }
+
+  if (drilldownType === COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.PEOPLE_MISSING_EMAIL) {
+    return COMPLIANCE_INSIGHT_CONTACT_PREVIEW_COLUMNS;
+  }
+
+  if (drilldownType === COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.PEOPLE_MISSING_EMAIL_REMINDER_WINDOW) {
+    return COMPLIANCE_INSIGHT_CONTACT_REMINDER_PREVIEW_COLUMNS;
   }
 
   if (
@@ -392,6 +527,10 @@ export function getComplianceInsightDrilldownMeta(drilldownType) {
 export function countComplianceInsightDrilldownMatches(drilldownType, rows, ctx) {
   if (isActionLevelDrilldown(drilldownType)) {
     return flattenOverdueActionEntries(rows, ctx).length;
+  }
+
+  if (isPersonLevelDrilldown(drilldownType)) {
+    return filterPersonContactDrilldown(drilldownType, rows, ctx).length;
   }
 
   return filterComplianceInsightDrilldownRecords(drilldownType, rows, ctx).length;
@@ -475,6 +614,18 @@ export function getExpectedDrilldownCounts(rows, ctx) {
     [COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.STALE_EVIDENCE_RECORDS]:
       countComplianceInsightDrilldownMatches(
         COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.STALE_EVIDENCE_RECORDS,
+        rows,
+        ctx
+      ),
+    [COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.PEOPLE_MISSING_EMAIL]:
+      countComplianceInsightDrilldownMatches(
+        COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.PEOPLE_MISSING_EMAIL,
+        rows,
+        ctx
+      ),
+    [COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.PEOPLE_MISSING_EMAIL_REMINDER_WINDOW]:
+      countComplianceInsightDrilldownMatches(
+        COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.PEOPLE_MISSING_EMAIL_REMINDER_WINDOW,
         rows,
         ctx
       ),

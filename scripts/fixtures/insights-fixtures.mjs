@@ -16,6 +16,7 @@ export const LOCAL_FIXTURE_ROWS = [
     recordId: 101,
     name: "Alex Volunteer",
     role: "Volunteer",
+    email: "alex.volunteer@example.com",
     complianceType: "DBS",
     expiryDate: "2026-12-01",
     renewalCycle: "3-years",
@@ -98,6 +99,7 @@ export const CLOUD_FIXTURE_ROWS = [
     record_id: "33333333-3333-3333-3333-333333333301",
     name: "Alex Volunteer",
     role: "Volunteer",
+    email: "alex.volunteer@example.com",
     compliance_type: "DBS",
     expiry_date: "2026-12-01",
     renewal_cycle: "3-years",
@@ -219,6 +221,7 @@ export const HEALTHY_FIXTURE_ROWS = [
     recordId: 201,
     name: "Healthy Volunteer",
     role: "Volunteer",
+    email: "healthy.volunteer@example.com",
     complianceType: "DBS",
     expiryDate: "2027-06-01",
     renewalCycle: "3-years",
@@ -239,6 +242,7 @@ export const HEALTHY_FIXTURE_ROWS = [
     recordId: 202,
     name: "Healthy Coordinator",
     role: "Coordinator",
+    email: "healthy.coordinator@example.com",
     complianceType: "Basic Awareness",
     expiryDate: "2027-12-01",
     renewalCycle: "3-years",
@@ -263,6 +267,7 @@ export const HEALTHY_CLOUD_FIXTURE_ROWS = [
     record_id: "33333333-3333-3333-3333-333333333311",
     name: "Healthy Volunteer",
     role: "Volunteer",
+    email: "healthy.volunteer@example.com",
     compliance_type: "DBS",
     expiry_date: "2027-06-01",
     renewal_cycle: "3-years",
@@ -292,6 +297,7 @@ export const HEALTHY_CLOUD_FIXTURE_ROWS = [
     record_id: "33333333-3333-3333-3333-333333333312",
     name: "Healthy Coordinator",
     role: "Coordinator",
+    email: "healthy.coordinator@example.com",
     compliance_type: "Basic Awareness",
     expiry_date: "2027-12-01",
     renewal_cycle: "3-years",
@@ -409,6 +415,12 @@ export const EXPECTED_HEALTHY_INSIGHTS = {
         recommendedAction: "No action required — evidence is current.",
       },
     ],
+  },
+  contactReadiness: {
+    peopleTotal: 2,
+    peopleWithEmail: 2,
+    peopleMissingEmail: 0,
+    peopleInReminderWindowMissingEmail: 0,
   },
 };
 
@@ -550,6 +562,12 @@ export const EXPECTED_INSIGHTS = {
       },
     ],
   },
+  contactReadiness: {
+    peopleTotal: 6,
+    peopleWithEmail: 1,
+    peopleMissingEmail: 5,
+    peopleInReminderWindowMissingEmail: 3,
+  },
 };
 
 export const EXPECTED_RECOMMENDATIONS = [
@@ -593,6 +611,16 @@ export const EXPECTED_RECOMMENDATIONS = [
     affectedCount: 2,
     drilldownKey: "expiring-within-30-days",
     sortOrder: 30,
+  },
+  {
+    id: "contact-missing-email",
+    priority: "high",
+    category: "contact",
+    title: "Add missing email addresses",
+    description: "5 people have no email address on file.",
+    affectedCount: 5,
+    drilldownKey: "people-missing-email",
+    sortOrder: 42,
   },
   {
     id: "operational-missing-reminder-activity",

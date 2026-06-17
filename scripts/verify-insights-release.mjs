@@ -16,6 +16,7 @@ const root = join(__dirname, "..");
 const STEPS = [
   { label: "verify-insights-engine", script: "verify-insights-engine" },
   { label: "verify-insights-browser", script: "verify-insights-browser" },
+  { label: "verify-contact-readiness-workspace", script: "verify-contact-readiness-workspace" },
   { label: "build", script: "build" },
   { label: "verify-terminology-rc004", script: "verify-terminology-rc004" },
   { label: "verify-terminology-rc005", script: "verify-terminology-rc005" },

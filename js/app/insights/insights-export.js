@@ -1,4 +1,5 @@
 import { formatOperationalHealthSummary } from "./metrics-operational.js";
+import { formatContactReadinessSummary } from "./metrics-contact-readiness.js";
 import { getRecommendationPriorityLabel } from "./recommendations-engine.js";
 
 /**
@@ -97,7 +98,9 @@ function getHealthBandLabel(score) {
 export function buildComplianceInsightsSummaryCsv(insights, recommendations, generatedAt = new Date()) {
   const generatedDisplay = formatInsightsGeneratedDisplay(generatedAt);
   const operationalSummary = formatOperationalHealthSummary(insights.operationalHealth);
+  const contactSummary = formatContactReadinessSummary(insights.contactReadiness || {});
   const operational = insights.operationalHealth || {};
+  const contactReadiness = insights.contactReadiness || {};
   const risk = insights.risk || {};
   const evidenceGaps = insights.evidenceGaps?.byTier || {};
   const forecast = insights.forecast || {};
@@ -144,6 +147,17 @@ export function buildComplianceInsightsSummaryCsv(insights, recommendations, gen
       operational.recordsMissingReminderActivity ?? 0
     ),
     csvMetricLine("Operational health note", operational.note || operationalSummary.title || ""),
+    "",
+    "Contact Readiness,Value",
+    csvMetricLine("People on register", contactReadiness.peopleTotal ?? 0),
+    csvMetricLine("People with email", contactReadiness.peopleWithEmail ?? 0),
+    csvMetricLine("People missing email", contactReadiness.peopleMissingEmail ?? 0),
+    csvMetricLine(
+      "People missing email in reminder window",
+      contactReadiness.peopleInReminderWindowMissingEmail ?? 0
+    ),
+    csvMetricLine("Contact readiness summary", contactSummary.summaryText),
+    csvMetricLine("Contact readiness detail", contactSummary.detailText),
   ];
 
   if (recs.length > 0) {

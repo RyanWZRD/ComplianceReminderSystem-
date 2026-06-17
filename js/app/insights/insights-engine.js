@@ -14,6 +14,8 @@ import { computeOperationalHealth } from "./metrics-operational.js";
 import { computeRiskSummary } from "./metrics-risk.js";
 import { computeRenewalForecast } from "./metrics-forecast.js";
 import { computeEvidenceGaps } from "./metrics-evidence-gaps.js";
+import { computeContactReadiness } from "./metrics-contact-readiness.js";
+import { normalizePersonContactFields } from "../../data/email.js";
 
 export const DUE_SOON_DAYS = 90;
 export const STALE_EVIDENCE_DAYS = 365;
@@ -31,6 +33,8 @@ export const STALE_EVIDENCE_DAYS = 365;
  * @property {Array<object>} history
  * @property {Array<object>} evidence
  * @property {Array<object>} actions
+ * @property {string} email
+ * @property {string} managerEmail
  */
 
 /**
@@ -99,12 +103,15 @@ export function normalizeComplianceRow(row) {
   const actions = Array.isArray(row.actions)
     ? row.actions.map(normalizeActionItem)
     : [];
+  const contact = normalizePersonContactFields(row);
 
   return {
     personId: row.personId ?? row.person_id,
     recordId: row.recordId ?? row.record_id,
     name: row.name ?? "",
     role: row.role ?? "",
+    email: contact.email,
+    managerEmail: contact.managerEmail,
     complianceType: row.complianceType ?? row.compliance_type ?? "",
     expiryDate: normalizeExpiryDate(row.expiryDate ?? row.expiry_date ?? ""),
     renewalCycle: row.renewalCycle ?? row.renewal_cycle ?? "manual",
@@ -311,6 +318,7 @@ export function computeComplianceInsights(rows, settings = DEFAULT_REMINDER_SETT
   const risk = computeRiskSummary(normalizedRows, ctx);
   const forecast = computeRenewalForecast(normalizedRows, ctx);
   const evidenceGaps = computeEvidenceGaps(normalizedRows, ctx);
+  const contactReadiness = computeContactReadiness(normalizedRows, ctx);
 
   return {
     recordCount: normalizedRows.length,
@@ -323,5 +331,6 @@ export function computeComplianceInsights(rows, settings = DEFAULT_REMINDER_SETT
     risk,
     forecast,
     evidenceGaps,
+    contactReadiness,
   };
 }

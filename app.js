@@ -44,6 +44,7 @@ import { validateEditComplianceRecordInput } from "./js/data/edit-compliance-rec
 import {
   normalizePersonContactFields,
   validatePersonContact,
+  normalizeEmail,
 } from "./js/data/email.js";
 import { buildRecordDeletedHistoryDescription } from "./js/data/archive-compliance-record.js";
 import {
@@ -78,15 +79,20 @@ import {
 } from "./js/app/insights/insights-engine.js";
 import {
   filterComplianceInsightDrilldownRecords,
+  filterPersonContactDrilldown,
   flattenOverdueActionEntries,
   getComplianceInsightDrilldownColumns,
   getComplianceInsightDrilldownMeta,
   isActionLevelDrilldown,
+  isPersonLevelDrilldown,
   mapMissingReminderActivityPreviewRow,
+  mapPersonContactPreviewRow,
   mapEvidenceGapPreviewRow,
+  resolveContactDrilldownWorkspaceRecord,
   COMPLIANCE_INSIGHT_DRILLDOWN_TYPES,
 } from "./js/app/insights/compliance-insights-drilldowns.js";
 import { formatOperationalHealthSummary } from "./js/app/insights/metrics-operational.js";
+import { formatContactReadinessSummary } from "./js/app/insights/metrics-contact-readiness.js";
 import {
   generateComplianceRecommendations,
   getRecommendationPriorityLabel,
@@ -321,6 +327,21 @@ const complianceInsightsOperationalMissingCount = document.getElementById(
 );
 const complianceInsightsOperationalEmpty = document.getElementById(
   "compliance-insights-operational-empty"
+);
+const complianceInsightsContactEmpty = document.getElementById("compliance-insights-contact-empty");
+const complianceInsightsContactCards = document.getElementById("compliance-insights-contact-cards");
+const complianceInsightsContactSummary = document.getElementById(
+  "compliance-insights-contact-summary"
+);
+const complianceInsightsContactSummaryText = document.getElementById(
+  "compliance-insights-contact-summary-text"
+);
+const complianceInsightsContactDetail = document.getElementById("compliance-insights-contact-detail");
+const complianceInsightsContactMissingCount = document.getElementById(
+  "compliance-insights-contact-missing-count"
+);
+const complianceInsightsContactReminderCount = document.getElementById(
+  "compliance-insights-contact-reminder-count"
 );
 const complianceInsightsRiskEmpty = document.getElementById("compliance-insights-risk-empty");
 const complianceInsightsRiskStrip = document.getElementById("compliance-insights-risk-strip");
@@ -2353,6 +2374,41 @@ function renderComplianceInsights() {
     complianceInsightsForecast90Days.textContent = insights.forecast.expiringWithin90Days;
   }
 
+  if (complianceInsightsContactSummary) {
+    const contactSummary = formatContactReadinessSummary(insights.contactReadiness || {});
+
+    if (complianceInsightsContactSummaryText) {
+      complianceInsightsContactSummaryText.textContent = contactSummary.summaryText;
+    }
+
+    if (complianceInsightsContactDetail) {
+      complianceInsightsContactDetail.textContent = contactSummary.detailText;
+      complianceInsightsContactDetail.classList.toggle("hidden", !contactSummary.detailText);
+    }
+
+    if (contactSummary.title) {
+      complianceInsightsContactSummary.title = contactSummary.title;
+    } else {
+      complianceInsightsContactSummary.removeAttribute("title");
+    }
+
+    if (contactSummary.ariaLabel) {
+      complianceInsightsContactSummary.setAttribute("aria-label", contactSummary.ariaLabel);
+    } else {
+      complianceInsightsContactSummary.removeAttribute("aria-label");
+    }
+  }
+
+  if (complianceInsightsContactMissingCount) {
+    complianceInsightsContactMissingCount.textContent =
+      insights.contactReadiness?.peopleMissingEmail ?? 0;
+  }
+
+  if (complianceInsightsContactReminderCount) {
+    complianceInsightsContactReminderCount.textContent =
+      insights.contactReadiness?.peopleInReminderWindowMissingEmail ?? 0;
+  }
+
   updateComplianceInsightsSectionEmptyStates(insights);
 
   renderComplianceRecommendations(insights);
@@ -2417,6 +2473,30 @@ function updateComplianceInsightsSectionEmptyStates(insights) {
 
   if (operationalMissingBtn) {
     operationalMissingBtn.classList.toggle("hidden", !hasOperationalIssues);
+  }
+
+  const peopleMissingEmail = insights.contactReadiness?.peopleMissingEmail ?? 0;
+  const hasContactIssues = peopleMissingEmail > 0;
+
+  if (complianceInsightsContactEmpty) {
+    complianceInsightsContactEmpty.classList.toggle("hidden", hasContactIssues);
+  }
+
+  if (complianceInsightsContactCards) {
+    complianceInsightsContactCards.classList.toggle("hidden", !hasContactIssues);
+  }
+
+  const contactMissingBtn = document.getElementById("compliance-insights-contact-missing-btn");
+  const contactReminderBtn = document.getElementById("compliance-insights-contact-reminder-btn");
+
+  if (contactMissingBtn) {
+    contactMissingBtn.classList.toggle("hidden", !hasContactIssues);
+  }
+
+  if (contactReminderBtn) {
+    const reminderWindowMissing =
+      insights.contactReadiness?.peopleInReminderWindowMissingEmail ?? 0;
+    contactReminderBtn.classList.toggle("hidden", reminderWindowMissing === 0);
   }
 }
 
@@ -2576,6 +2656,14 @@ function buildComplianceInsightDrilldownReport(drilldownType) {
     });
 
     tableRows = entries.map(buildComplianceInsightDrilldownActionRow);
+  } else if (isPersonLevelDrilldown(drilldownType)) {
+    const matchedPeople = filterPersonContactDrilldown(drilldownType, rows, ctx);
+
+    tableRows = matchedPeople.map((person) => ({
+      ...mapPersonContactPreviewRow(person, drilldownType),
+      personId: person.personId,
+      recordId: resolveContactDrilldownWorkspaceRecord(person.personId, drilldownType, rows, ctx),
+    }));
   } else {
     const matchedRows = filterComplianceInsightDrilldownRecords(drilldownType, rows, ctx).sort(
       (a, b) => a.expiryDate.localeCompare(b.expiryDate) || a.name.localeCompare(b.name)
@@ -2657,15 +2745,47 @@ function renderComplianceInsightDrilldownPreview(report) {
   complianceInsightsPreviewTableHead.innerHTML = `
     <tr>
       ${report.columns.map((column) => `<th>${escapeHtml(column.label)}</th>`).join("")}
+      ${isPersonLevelDrilldown(report.type) ? "<th>Actions</th>" : ""}
     </tr>
   `;
 
   if (report.tableRows.length === 0) {
     complianceInsightsPreviewTableBody.innerHTML = `
       <tr>
-        <td colspan="${report.columns.length}" class="insight-empty-cell">${escapeHtml(report.emptyMessage)}</td>
+        <td colspan="${report.columns.length + (isPersonLevelDrilldown(report.type) ? 1 : 0)}" class="insight-empty-cell">${escapeHtml(report.emptyMessage)}</td>
       </tr>
     `;
+  } else if (isPersonLevelDrilldown(report.type)) {
+    complianceInsightsPreviewTableBody.innerHTML = report.tableRows
+      .map((row) => {
+        const personId = row.personId;
+        const recordId = row.recordId;
+        const rowLabel = `Open ${row.name || "person"} compliance record workspace`;
+
+        return `
+          <tr
+            class="compliance-insight-drilldown-row compliance-insight-contact-row"
+            data-person-id="${escapeHtml(String(personId ?? ""))}"
+            data-record-id="${escapeHtml(String(recordId ?? ""))}"
+            tabindex="0"
+            role="button"
+            aria-label="${escapeHtml(rowLabel)}"
+          >
+            ${report.columns
+              .map((column) => `<td>${escapeHtml(row[column.key] ?? "")}</td>`)
+              .join("")}
+            <td class="compliance-insight-drilldown-actions">
+              <button
+                type="button"
+                class="edit-contact-btn quick-action-btn"
+                data-person-id="${escapeHtml(String(personId ?? ""))}"
+                data-record-id="${escapeHtml(String(recordId ?? ""))}"
+              >Edit Contact</button>
+            </td>
+          </tr>
+        `;
+      })
+      .join("");
   } else {
     complianceInsightsPreviewTableBody.innerHTML = report.tableRows
       .map(
@@ -2814,6 +2934,12 @@ function setupComplianceInsightsDrilldownListeners() {
     });
   });
 
+  complianceInsightsPreviewTableBody?.addEventListener("click", handleComplianceInsightDrilldownRowClick);
+  complianceInsightsPreviewTableBody?.addEventListener(
+    "keydown",
+    handleComplianceInsightDrilldownRowKeydown
+  );
+
   exportComplianceInsightsPreviewCsvBtn?.addEventListener(
     "click",
     exportComplianceInsightDrilldownCsv
@@ -2830,6 +2956,70 @@ function setupComplianceInsightsDrilldownListeners() {
     "click",
     clearComplianceInsightDrilldownPreview
   );
+}
+
+function handleComplianceInsightDrilldownRowClick(event) {
+  const editContactBtn = event.target.closest(".edit-contact-btn");
+
+  if (editContactBtn) {
+    event.stopPropagation();
+    const personId = parseEntityId(editContactBtn.dataset.personId);
+    const recordId = parseEntityId(editContactBtn.dataset.recordId);
+
+    if (personId != null && recordId != null) {
+      startEdit(personId, recordId, { focusContact: true });
+    }
+
+    return;
+  }
+
+  if (
+    !currentComplianceInsightDrilldown?.type ||
+    !isPersonLevelDrilldown(currentComplianceInsightDrilldown.type)
+  ) {
+    return;
+  }
+
+  const row = event.target.closest(".compliance-insight-contact-row");
+
+  if (!row) {
+    return;
+  }
+
+  const personId = parseEntityId(row.dataset.personId);
+  const recordId = parseEntityId(row.dataset.recordId);
+
+  if (personId != null && recordId != null) {
+    openRecordWorkspace(personId, recordId);
+  }
+}
+
+function handleComplianceInsightDrilldownRowKeydown(event) {
+  if (event.key !== "Enter" && event.key !== " ") {
+    return;
+  }
+
+  if (
+    !currentComplianceInsightDrilldown?.type ||
+    !isPersonLevelDrilldown(currentComplianceInsightDrilldown.type)
+  ) {
+    return;
+  }
+
+  const row = event.target.closest(".compliance-insight-contact-row");
+
+  if (!row || event.target.closest(".edit-contact-btn")) {
+    return;
+  }
+
+  event.preventDefault();
+
+  const personId = parseEntityId(row.dataset.personId);
+  const recordId = parseEntityId(row.dataset.recordId);
+
+  if (personId != null && recordId != null) {
+    openRecordWorkspace(personId, recordId);
+  }
 }
 
 function updateInsightCardActiveState() {
@@ -3303,6 +3493,16 @@ function closeRecordWorkspace() {
   renderTable({ refreshDashboards: false });
 }
 
+function getContactEmailStatus(person) {
+  const hasEmail = normalizeEmail(person.email) !== "";
+
+  return {
+    hasEmail,
+    badgeClass: hasEmail ? "status-valid" : "status-expired",
+    badgeLabel: hasEmail ? "Email Present" : "Missing Email",
+  };
+}
+
 function renderRecordWorkspace() {
   if (!workspaceContext || !workspaceContent) {
     return;
@@ -3326,6 +3526,7 @@ function renderRecordWorkspace() {
   const evidenceCountLabel =
     evidenceSummary.count === 1 ? "1 document" : `${evidenceSummary.count} documents`;
   const actionMeta = `Open: ${actionSummary.openCount} · In Progress: ${actionSummary.inProgressCount} · Completed: ${actionSummary.completedCount}`;
+  const contactStatus = getContactEmailStatus(person);
   const existingNotesInput = workspaceContent.querySelector("#workspace-notes-input");
   const notesValue = existingNotesInput ? existingNotesInput.value : record.notes || "";
 
@@ -3338,6 +3539,23 @@ function renderRecordWorkspace() {
   }
 
   workspaceContent.innerHTML = `
+    <section class="workspace-section workspace-contact" aria-labelledby="workspace-contact-title">
+      <div class="workspace-section-header">
+        <h3 id="workspace-contact-title" class="workspace-section-title">Contact Information</h3>
+        <span class="status status-badge workspace-contact-status ${contactStatus.badgeClass}">${escapeHtml(contactStatus.badgeLabel)}</span>
+      </div>
+      <dl class="workspace-info-grid workspace-contact-grid">
+        <div class="workspace-info-item workspace-contact-email">
+          <dt>Email</dt>
+          <dd class="workspace-contact-value">${escapeHtml(person.email || "—")}</dd>
+        </div>
+        <div class="workspace-info-item workspace-contact-manager-email">
+          <dt>Manager Email</dt>
+          <dd class="workspace-contact-value">${escapeHtml(person.managerEmail || "—")}</dd>
+        </div>
+      </dl>
+    </section>
+
     <section class="workspace-section workspace-general" aria-labelledby="workspace-general-title">
       <h3 id="workspace-general-title" class="workspace-section-title">General Information</h3>
       <dl class="workspace-info-grid">
@@ -3348,14 +3566,6 @@ function renderRecordWorkspace() {
         <div class="workspace-info-item">
           <dt>Role</dt>
           <dd>${escapeHtml(person.role)}</dd>
-        </div>
-        <div class="workspace-info-item">
-          <dt>Email</dt>
-          <dd>${escapeHtml(person.email || "—")}</dd>
-        </div>
-        <div class="workspace-info-item">
-          <dt>Manager Email</dt>
-          <dd>${escapeHtml(person.managerEmail || "—")}</dd>
         </div>
         <div class="workspace-info-item">
           <dt>Compliance Type</dt>
@@ -6494,7 +6704,7 @@ function filterByAnalyticsCard(filterKey) {
 }
 
 // Show the edit form for one compliance record
-function startEdit(personId, recordId) {
+function startEdit(personId, recordId, options = {}) {
   if (isCloudMode()) {
     if (!canEditComplianceRecord()) {
       notifyEditComplianceRecordBlocked();
@@ -6523,6 +6733,13 @@ function startEdit(personId, recordId) {
   hideMessage(editFormMessage);
   editSection.classList.remove("hidden");
   editSection.scrollIntoView({ behavior: "smooth" });
+
+  if (options.focusContact) {
+    const emailInput = document.getElementById("edit-email");
+    window.requestAnimationFrame(() => {
+      emailInput?.focus();
+    });
+  }
 }
 
 // Hide the edit form and clear its fields

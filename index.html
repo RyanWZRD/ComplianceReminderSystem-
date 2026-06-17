@@ -474,8 +474,31 @@
         <section class="compliance-insights-block compliance-insights-recommendations" aria-labelledby="compliance-insights-recommendations-heading">
           <h3 id="compliance-insights-recommendations-heading" class="compliance-insights-subheading">Recommendations</h3>
           <p class="compliance-insights-section-help">Prioritised suggested actions derived from current metrics. Click a recommendation to open the same preview as its linked tile.</p>
-          <p id="compliance-insights-recommendations-empty" class="compliance-insights-section-empty compliance-insights-recommendations-empty hidden">No recommendations — your register looks healthy across expiry, evidence, actions, and reminder follow-up.</p>
+          <p id="compliance-insights-recommendations-empty" class="compliance-insights-section-empty compliance-insights-recommendations-empty hidden">No recommendations — your register looks healthy across expiry, evidence, actions, contact readiness, and reminder follow-up.</p>
           <ul id="compliance-insights-recommendations-list" class="compliance-recommendations-list" aria-live="polite"></ul>
+        </section>
+
+        <section class="compliance-insights-block" aria-labelledby="compliance-insights-contact-heading">
+          <h3 id="compliance-insights-contact-heading" class="compliance-insights-subheading">Contact Readiness</h3>
+          <p class="compliance-insights-section-help">Email addresses on file for people in the register. Counts are unique people, not compliance records.</p>
+          <p id="compliance-insights-contact-empty" class="compliance-insights-section-empty hidden">All people have email addresses on file.</p>
+          <div id="compliance-insights-contact-cards" class="compliance-insights-contact-cards">
+            <div id="compliance-insights-contact-summary" class="compliance-insights-contact-summary">
+              <span class="compliance-insights-metric-label">People with email</span>
+              <span id="compliance-insights-contact-summary-text" class="compliance-insights-contact-summary-text">0 of 0 people have email</span>
+              <span id="compliance-insights-contact-detail" class="compliance-insights-contact-detail hidden"></span>
+            </div>
+            <button type="button" id="compliance-insights-contact-missing-btn" class="compliance-insights-metric compliance-insights-metric-warning compliance-insights-drilldown" data-compliance-insight-drilldown="people-missing-email" aria-label="People missing email. Click to preview.">
+              <span class="compliance-insights-metric-label">People missing email</span>
+              <span id="compliance-insights-contact-missing-count" class="compliance-insights-metric-value">0</span>
+              <span class="compliance-insights-metric-hint">Click to preview</span>
+            </button>
+            <button type="button" id="compliance-insights-contact-reminder-btn" class="compliance-insights-metric compliance-insights-metric-warning compliance-insights-drilldown" data-compliance-insight-drilldown="people-missing-email-reminder-window" aria-label="Missing email in reminder window. Click to preview.">
+              <span class="compliance-insights-metric-label">Missing email in reminder window</span>
+              <span id="compliance-insights-contact-reminder-count" class="compliance-insights-metric-value">0</span>
+              <span class="compliance-insights-metric-hint">Click to preview</span>
+            </button>
+          </div>
         </section>
 
         <section class="compliance-insights-block" aria-labelledby="compliance-insights-operational-heading">

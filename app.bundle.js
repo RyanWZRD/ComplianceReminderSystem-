@@ -24647,7 +24647,7 @@ ${suffix}`;
 
   // app.js
   console.log(
-    `Compliance Reminder System v${APP_VERSION} \u2014 app.js loaded (${DATA_BACKEND} data, ${AUTH_MODE} auth)`
+    `Compliance Reminder System ${APP_VERSION} \u2014 app.js loaded (${DATA_BACKEND} data, ${AUTH_MODE} auth)`
   );
   var samplePeople = [
     { id: 1, name: "Jane Smith", role: "Team Leader", dbsExpiry: "2026-09-15" },

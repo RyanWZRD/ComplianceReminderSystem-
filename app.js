@@ -88,7 +88,7 @@ import {
 } from "./js/app/insights/recommendations-engine.js";
 
 console.log(
-  `Compliance Reminder System v${APP_VERSION} — app.js loaded (${DATA_BACKEND} data, ${AUTH_MODE} auth)`
+  `Compliance Reminder System ${APP_VERSION} — app.js loaded (${DATA_BACKEND} data, ${AUTH_MODE} auth)`
 );
 
 // Fake sample data — used only on the very first visit

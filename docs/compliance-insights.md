@@ -24,12 +24,14 @@ Verification (no live browser login or Supabase required):
 ```powershell
 npm run verify-insights-engine
 npm run verify-insights-browser
+npm run verify-insights-release
 ```
 
 | Script | What it checks |
 |--------|----------------|
 | `verify-insights-engine` | Insight calculations, dashboard mappings, drilldown counts, recommendations, and CSV export helpers using fixture rows |
 | `verify-insights-browser` | Static DOM wiring in `index.html`, `app.js` element bindings and click handlers, and built `app.bundle.js` export/render symbols |
+| `verify-insights-release` | Full release chain in order: engine verification, browser smoke verification, then `npm run build` (stops on first failure) |
 
 The browser smoke pack catches regressions such as missing section cards, export buttons, empty-state elements, or broken drilldown preview wiring without mutating `localStorage` or requiring cloud data.
 

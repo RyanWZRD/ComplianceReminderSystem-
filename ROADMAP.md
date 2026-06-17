@@ -571,6 +571,7 @@ Verification: `npm run verify-insights-engine`, `npm run verify-insights-browser
 | V4-3B | **COMPLETE** | Compliance Insights UX polish — section hierarchy, helper text, empty states, drilldown preview clarity, recommendation priority badges |
 | V4-3C | **COMPLETE** | Compliance Insights export pack — summary CSV, drilldown preview export, dated filenames, read-only export helpers |
 | V4-3D | **COMPLETE** | Compliance Insights browser smoke test pack — static DOM/wiring checks for section UI, exports, drilldown preview, and empty states |
+| V4-3E | **COMPLETE** | Compliance Insights release verification — single command runs engine, browser smoke, and build checks in order |
 
 **Constraints (V4 to date):** No new CRUD, migrations, cloud-write changes, or AI/LLM dependency.
 

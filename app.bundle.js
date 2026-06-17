@@ -20944,8 +20944,8 @@ ${suffix}`;
   if (shouldShowDeprecationWarning()) console.warn("\u26A0\uFE0F  Node.js 18 and below are deprecated and will no longer be supported in future versions of @supabase/supabase-js. Please upgrade to Node.js 20 or later. For more information, visit: https://github.com/orgs/supabase/discussions/37217");
 
   // js/data/supabase-env.js
-  var SUPABASE_URL = "https://YOUR_PROJECT_REF.supabase.co";
-  var SUPABASE_ANON_KEY = "your-publishable-key-here";
+  var SUPABASE_URL = "https://vmrotpztwoeifbdjwdis.supabase.co";
+  var SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZtcm90cHp0d29laWZiZGp3ZGlzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzOTEwMTYsImV4cCI6MjA5NTk2NzAxNn0.h2QJY287icJh3GS2h6bL08wmLx1qvH4Y2KwWd5Leo38";
   var STAGING_APP_HOSTNAMES = [];
 
   // js/data/supabase-client.js
@@ -21707,7 +21707,7 @@ ${suffix}`;
   }
   function isAllowedActionStatusTransition(currentStatus, targetStatus) {
     if (targetStatus === ACTION_STATUSES.COMPLETED) {
-      return currentStatus === ACTION_STATUSES.OPEN;
+      return currentStatus === ACTION_STATUSES.OPEN || currentStatus === ACTION_STATUSES.IN_PROGRESS;
     }
     if (targetStatus === ACTION_STATUSES.OPEN) {
       return currentStatus === ACTION_STATUSES.COMPLETED;
@@ -27247,7 +27247,7 @@ This cannot be undone.`
     }
     let statusButtons = "";
     if (canSetActionStatus()) {
-      if (status === ACTION_STATUSES.OPEN) {
+      if (status === ACTION_STATUSES.OPEN || status === ACTION_STATUSES.IN_PROGRESS) {
         statusButtons = `<button type="button" class="action-complete-btn" data-person-id="${personId}" data-record-id="${recordId}" data-action-id="${item.id}">Mark complete</button>`;
       } else if (status === ACTION_STATUSES.COMPLETED) {
         statusButtons = `<button type="button" class="action-reopen-btn" data-person-id="${personId}" data-record-id="${recordId}" data-action-id="${item.id}">Reopen</button>`;

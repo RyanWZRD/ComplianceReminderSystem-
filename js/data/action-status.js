@@ -28,7 +28,10 @@ export function mapActionStatusToRpcTarget(targetStatus) {
  */
 export function isAllowedActionStatusTransition(currentStatus, targetStatus) {
   if (targetStatus === ACTION_STATUSES.COMPLETED) {
-    return currentStatus === ACTION_STATUSES.OPEN;
+    return (
+      currentStatus === ACTION_STATUSES.OPEN ||
+      currentStatus === ACTION_STATUSES.IN_PROGRESS
+    );
   }
 
   if (targetStatus === ACTION_STATUSES.OPEN) {

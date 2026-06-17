@@ -3051,7 +3051,10 @@ function buildActionMutationButtons(personId, recordId, item) {
   let statusButtons = "";
 
   if (canSetActionStatus()) {
-    if (status === ACTION_STATUSES.OPEN) {
+    if (
+      status === ACTION_STATUSES.OPEN ||
+      status === ACTION_STATUSES.IN_PROGRESS
+    ) {
       statusButtons = `<button type="button" class="action-complete-btn" data-person-id="${personId}" data-record-id="${recordId}" data-action-id="${item.id}">Mark complete</button>`;
     } else if (status === ACTION_STATUSES.COMPLETED) {
       statusButtons = `<button type="button" class="action-reopen-btn" data-person-id="${personId}" data-record-id="${recordId}" data-action-id="${item.id}">Reopen</button>`;

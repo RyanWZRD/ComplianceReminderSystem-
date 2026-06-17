@@ -1,9 +1,9 @@
 /**
  * v3.0.0 release gate — full automated verification (Phase 2 + Phase 3 cloud writes).
- * Requires .env + staging Supabase with migrations through 20260203000016.
+ * Requires .env + staging Supabase with migrations through 20260203000017.
  * Does not enable CLOUD_WRITES_ENABLED globally; RPC smoke scripts set env internally.
  *
- * RPC migrations (20260203*): 000001 mark_reminder_sent … 000016 archive_compliance_record.
+ * RPC migrations (20260203*): 000001 mark_reminder_sent … 000017 set_action_status_in_progress_complete.
  * Pre/post reset: reset-alpha-staging-data.mjs (service role; canonical seed counts).
  */
 
@@ -22,6 +22,7 @@ const STEPS = [
   { label: "verify-staging-config", script: "verify-staging-config" },
   { label: "verify-read-only-guards", script: "verify-read-only-guards" },
   { label: "verify-local-mode", script: "verify-local-mode" },
+  { label: "verify-action-status-transitions", script: "verify-action-status-transitions" },
   { label: "verify-supabase", script: "verify-supabase" },
   { label: "verify-supabase-auth", script: "verify-supabase-auth" },
   { label: "reset-alpha-staging-pre", node: resetScriptPath },

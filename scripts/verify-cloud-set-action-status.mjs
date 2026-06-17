@@ -1,6 +1,6 @@
 /**
- * Cloud write smoke: set_action_status RPC (open <-> completed only).
- * Requires migration 20260203000002 and CLOUD_WRITES_ENABLED=true.
+ * Cloud write smoke: set_action_status RPC (open/in_progress -> completed, completed -> open).
+ * Requires migrations 20260203000002 and 20260203000017 and CLOUD_WRITES_ENABLED=true.
  */
 
 import { readFileSync } from "node:fs";
@@ -16,7 +16,7 @@ const envPath = join(root, ".env");
 /** Open action on record 333...305 (Chase renewal paperwork). */
 const TEST_ACTION_OPEN_ID = "66666666-6666-6666-6666-666666666601";
 
-/** In-progress action — transitions must be rejected. */
+/** In-progress action — complete + restore for downstream verify scripts. */
 const TEST_ACTION_IN_PROGRESS_ID = "66666666-6666-6666-6666-666666666602";
 
 /** Completed action on record 333...303. */
@@ -197,18 +197,77 @@ if (!afterReopen || getActionStatus(afterReopen.action) !== ACTION_STATUSES.OPEN
   process.exit(1);
 }
 
-const inProgressAttempt = await store.setActionStatus(
+const inProgressBefore = findAction(store, TEST_ACTION_IN_PROGRESS_ID);
+
+if (!inProgressBefore) {
+  console.error(`In-progress test action ${TEST_ACTION_IN_PROGRESS_ID} not found.`);
+  process.exit(1);
+}
+
+if (getActionStatus(inProgressBefore.action) !== ACTION_STATUSES.IN_PROGRESS) {
+  console.error("In-progress test action should start as in_progress (reset seed if needed).");
+  process.exit(1);
+}
+
+const inProgressHistoryBefore = inProgressBefore.record.history?.length ?? 0;
+
+const inProgressComplete = await store.setActionStatus(
   TEST_ACTION_IN_PROGRESS_ID,
   ACTION_STATUSES.COMPLETED
 );
 
-if (
-  !inProgressAttempt.ok ||
-  inProgressAttempt.status !== "invalid_transition"
-) {
+if (!inProgressComplete.ok || inProgressComplete.status !== "updated") {
   console.error(
-    `In-progress -> completed should be invalid_transition, got ${JSON.stringify(inProgressAttempt)}.`
+    `In-progress -> completed failed: ${JSON.stringify(inProgressComplete)}.`
   );
+  process.exit(1);
+}
+
+await store.load();
+
+const afterInProgressComplete = findAction(store, TEST_ACTION_IN_PROGRESS_ID);
+
+if (
+  !afterInProgressComplete ||
+  getActionStatus(afterInProgressComplete.action) !== ACTION_STATUSES.COMPLETED
+) {
+  console.error("In-progress action should be completed after RPC + reload.");
+  process.exit(1);
+}
+
+if ((afterInProgressComplete.record.history?.length ?? 0) <= inProgressHistoryBefore) {
+  console.error("History count should increase after in-progress complete.");
+  process.exit(1);
+}
+
+const inProgressReopen = await store.setActionStatus(
+  TEST_ACTION_IN_PROGRESS_ID,
+  ACTION_STATUSES.OPEN
+);
+
+if (!inProgressReopen.ok || inProgressReopen.status !== "updated") {
+  console.error(`Restore in-progress action to open failed: ${JSON.stringify(inProgressReopen)}.`);
+  process.exit(1);
+}
+
+const restoreInProgress = await store.setActionInProgress(TEST_ACTION_IN_PROGRESS_ID);
+
+if (!restoreInProgress.ok || restoreInProgress.status !== "updated") {
+  console.error(
+    `Restore in-progress seed state failed: ${JSON.stringify(restoreInProgress)}.`
+  );
+  process.exit(1);
+}
+
+await store.load();
+
+const afterRestoreInProgress = findAction(store, TEST_ACTION_IN_PROGRESS_ID);
+
+if (
+  !afterRestoreInProgress ||
+  getActionStatus(afterRestoreInProgress.action) !== ACTION_STATUSES.IN_PROGRESS
+) {
+  console.error("In-progress test action should be restored to in_progress for later verify scripts.");
   process.exit(1);
 }
 
@@ -251,6 +310,6 @@ await signOut();
 
 console.log("Cloud set action status smoke test: OK");
 console.log(`  Open action: ${TEST_ACTION_OPEN_ID} (complete + reopen verified)`);
-console.log("  In-progress -> completed: rejected");
+console.log(`  In-progress action: ${TEST_ACTION_IN_PROGRESS_ID} (complete + restore verified)`);
 console.log("  Viewer: RPC denied");
 console.log("  canMutateData() remains false in cloud");

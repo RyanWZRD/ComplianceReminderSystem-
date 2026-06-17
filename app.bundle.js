@@ -24290,6 +24290,163 @@ ${suffix}`;
     };
   }
 
+  // js/app/insights/recommendations-engine.js
+  var RECOMMENDATION_PRIORITIES = {
+    CRITICAL: "critical",
+    HIGH: "high",
+    MEDIUM: "medium",
+    LOW: "low"
+  };
+  var RECOMMENDATION_CATEGORIES = {
+    EXPIRY: "expiry",
+    EVIDENCE: "evidence",
+    ACTIONS: "actions",
+    FORECAST: "forecast"
+  };
+  var DEFAULT_RECOMMENDATION_THRESHOLDS = {
+    expiringWithin30Days: 0,
+    expiringNextMonth: 0
+  };
+  var PRIORITY_RANK = {
+    critical: 0,
+    high: 1,
+    medium: 2,
+    low: 3
+  };
+  function countLabel(count, singular, plural = `${singular}s`) {
+    return `${count} ${count === 1 ? singular : plural}`;
+  }
+  function finalizeRecommendation(recommendation) {
+    return {
+      ...recommendation,
+      affectedCount: Number(recommendation.affectedCount) || 0
+    };
+  }
+  function buildRecommendationRules(insights, thresholds) {
+    const { risk, forecast } = insights;
+    const recommendations = [];
+    if (risk.expiredRecords > 0) {
+      recommendations.push(
+        finalizeRecommendation({
+          id: "expiry-expired-records",
+          priority: RECOMMENDATION_PRIORITIES.CRITICAL,
+          category: RECOMMENDATION_CATEGORIES.EXPIRY,
+          title: "Renew expired records",
+          description: `${countLabel(risk.expiredRecords, "expired record")} ${risk.expiredRecords === 1 ? "requires" : "require"} immediate renewal.`,
+          affectedCount: risk.expiredRecords,
+          drilldownKey: COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.EXPIRED,
+          sortOrder: 10
+        })
+      );
+    }
+    if (risk.expiredWithActiveActions > 0) {
+      recommendations.push(
+        finalizeRecommendation({
+          id: "actions-expired-active-actions",
+          priority: RECOMMENDATION_PRIORITIES.CRITICAL,
+          category: RECOMMENDATION_CATEGORIES.ACTIONS,
+          title: "Resolve actions on expired records",
+          description: `${countLabel(risk.expiredWithActiveActions, "expired record")} still ${risk.expiredWithActiveActions === 1 ? "has" : "have"} active actions.`,
+          affectedCount: risk.expiredWithActiveActions,
+          drilldownKey: COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.EXPIRED_ACTIVE_ACTIONS,
+          sortOrder: 20
+        })
+      );
+    }
+    if (forecast.expiringWithin30Days > thresholds.expiringWithin30Days) {
+      recommendations.push(
+        finalizeRecommendation({
+          id: "expiry-expiring-within-30-days",
+          priority: RECOMMENDATION_PRIORITIES.HIGH,
+          category: RECOMMENDATION_CATEGORIES.EXPIRY,
+          title: "Plan renewals within 30 days",
+          description: `${countLabel(forecast.expiringWithin30Days, "record")} ${forecast.expiringWithin30Days === 1 ? "expires" : "expire"} within 30 days.`,
+          affectedCount: forecast.expiringWithin30Days,
+          drilldownKey: COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.EXPIRING_30_DAYS,
+          sortOrder: 30
+        })
+      );
+    }
+    if (risk.missingEvidenceRecords > 0) {
+      recommendations.push(
+        finalizeRecommendation({
+          id: "evidence-missing-evidence",
+          priority: RECOMMENDATION_PRIORITIES.HIGH,
+          category: RECOMMENDATION_CATEGORIES.EVIDENCE,
+          title: "Attach missing evidence",
+          description: `${countLabel(risk.missingEvidenceRecords, "record")} have no evidence attached.`,
+          affectedCount: risk.missingEvidenceRecords,
+          drilldownKey: COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.MISSING_EVIDENCE,
+          sortOrder: 40
+        })
+      );
+    }
+    if (risk.overdueActions > 0) {
+      recommendations.push(
+        finalizeRecommendation({
+          id: "actions-overdue-actions",
+          priority: RECOMMENDATION_PRIORITIES.HIGH,
+          category: RECOMMENDATION_CATEGORIES.ACTIONS,
+          title: "Review overdue actions",
+          description: `${countLabel(risk.overdueActions, "overdue action")} should be reviewed.`,
+          affectedCount: risk.overdueActions,
+          drilldownKey: COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.OVERDUE_ACTIONS,
+          sortOrder: 50
+        })
+      );
+    }
+    if (risk.staleEvidenceRecords > 0) {
+      recommendations.push(
+        finalizeRecommendation({
+          id: "evidence-stale-evidence",
+          priority: RECOMMENDATION_PRIORITIES.MEDIUM,
+          category: RECOMMENDATION_CATEGORIES.EVIDENCE,
+          title: "Refresh stale evidence",
+          description: `${countLabel(risk.staleEvidenceRecords, "record")} ${risk.staleEvidenceRecords === 1 ? "has" : "have"} evidence older than 12 months.`,
+          affectedCount: risk.staleEvidenceRecords,
+          drilldownKey: COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.STALE_EVIDENCE,
+          sortOrder: 60
+        })
+      );
+    }
+    if (forecast.expiringNextMonth > thresholds.expiringNextMonth) {
+      recommendations.push(
+        finalizeRecommendation({
+          id: "forecast-expiring-next-month",
+          priority: RECOMMENDATION_PRIORITIES.MEDIUM,
+          category: RECOMMENDATION_CATEGORIES.FORECAST,
+          title: "Prepare next month renewals",
+          description: `${countLabel(forecast.expiringNextMonth, "record")} ${forecast.expiringNextMonth === 1 ? "expires" : "expire"} next month.`,
+          affectedCount: forecast.expiringNextMonth,
+          drilldownKey: COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.EXPIRING_NEXT_MONTH,
+          sortOrder: 70
+        })
+      );
+    }
+    return recommendations;
+  }
+  function generateComplianceRecommendations(insights, rows = [], thresholdOverrides = {}) {
+    if (!insights || insights.recordCount === 0) {
+      return [];
+    }
+    const inputRows = Array.isArray(rows) ? rows : [];
+    if (inputRows.length === 0 && insights.recordCount === 0) {
+      return [];
+    }
+    const thresholds = {
+      ...DEFAULT_RECOMMENDATION_THRESHOLDS,
+      ...thresholdOverrides
+    };
+    const recommendations = buildRecommendationRules(insights, thresholds);
+    return recommendations.sort((a, b) => {
+      const priorityCompare = PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority];
+      if (priorityCompare !== 0) {
+        return priorityCompare;
+      }
+      return a.sortOrder - b.sortOrder;
+    });
+  }
+
   // app.js
   console.log(
     `Compliance Reminder System v${APP_VERSION} \u2014 app.js loaded (${DATA_BACKEND} data, ${AUTH_MODE} auth)`
@@ -24526,6 +24683,12 @@ ${suffix}`;
   );
   var complianceInsightDrilldownTiles = document.querySelectorAll(
     "[data-compliance-insight-drilldown]"
+  );
+  var complianceInsightsRecommendationsEmpty = document.getElementById(
+    "compliance-insights-recommendations-empty"
+  );
+  var complianceInsightsRecommendationsList = document.getElementById(
+    "compliance-insights-recommendations-list"
   );
   var insightHealthScore = document.getElementById("insight-health-score");
   var insightOpenActions = document.getElementById("insight-open-actions");
@@ -25954,6 +26117,66 @@ This cannot be undone.`
     if (complianceInsightsForecast90Days) {
       complianceInsightsForecast90Days.textContent = insights.forecast.expiringWithin90Days;
     }
+    renderComplianceRecommendations(insights);
+  }
+  function getComplianceRecommendationPriorityLabel(priority) {
+    const labels = {
+      critical: "Critical",
+      high: "High",
+      medium: "Medium",
+      low: "Low"
+    };
+    return labels[priority] || priority;
+  }
+  function renderComplianceRecommendations(insights) {
+    if (!complianceInsightsRecommendationsList) {
+      return;
+    }
+    const rows = getAllComplianceRows();
+    const recommendations = generateComplianceRecommendations(insights, rows);
+    const hasRecommendations = recommendations.length > 0;
+    if (complianceInsightsRecommendationsEmpty) {
+      complianceInsightsRecommendationsEmpty.classList.toggle("hidden", hasRecommendations);
+    }
+    complianceInsightsRecommendationsList.innerHTML = recommendations.map((recommendation) => {
+      const affectedLabel = recommendation.affectedCount === 1 ? "1 affected" : `${recommendation.affectedCount} affected`;
+      return `
+        <li>
+          <button
+            type="button"
+            class="compliance-recommendation-item"
+            data-compliance-insight-drilldown="${escapeHtml(recommendation.drilldownKey)}"
+            data-recommendation-id="${escapeHtml(recommendation.id)}"
+            aria-label="${escapeHtml(`${recommendation.title}. ${recommendation.description} Click to preview.`)}"
+          >
+            <span class="compliance-recommendation-priority priority-${escapeHtml(recommendation.priority)}">${escapeHtml(getComplianceRecommendationPriorityLabel(recommendation.priority))}</span>
+            <span class="compliance-recommendation-title">${escapeHtml(recommendation.title)}</span>
+            <span class="compliance-recommendation-description">${escapeHtml(recommendation.description)}</span>
+            <span class="compliance-recommendation-count">${escapeHtml(affectedLabel)}</span>
+          </button>
+        </li>
+      `;
+    }).join("");
+    complianceInsightsRecommendationsList.querySelectorAll("[data-compliance-insight-drilldown]").forEach((button) => {
+      button.addEventListener("click", () => {
+        showComplianceInsightDrilldownPreview(button.dataset.complianceInsightDrilldown);
+      });
+    });
+    updateComplianceInsightDrilldownTileActiveState();
+    updateComplianceRecommendationActiveState();
+  }
+  function updateComplianceRecommendationActiveState() {
+    if (!complianceInsightsRecommendationsList) {
+      return;
+    }
+    complianceInsightsRecommendationsList.querySelectorAll("[data-recommendation-id]").forEach((button) => {
+      button.classList.toggle(
+        "active",
+        Boolean(
+          currentComplianceInsightDrilldown && button.dataset.complianceInsightDrilldown === currentComplianceInsightDrilldown.type
+        )
+      );
+    });
   }
   function getComplianceInsightsDrilldownContext() {
     return createInsightsContext(getTodayAtMidnight(), reminderSettings, {
@@ -26073,6 +26296,7 @@ This cannot be undone.`
       complianceInsightsPreviewEmptyHint.classList.add("hidden");
     }
     updateComplianceInsightDrilldownTileActiveState();
+    updateComplianceRecommendationActiveState();
   }
   function showComplianceInsightDrilldownPreview(drilldownType) {
     renderComplianceInsightDrilldownPreview(buildComplianceInsightDrilldownReport(drilldownType));
@@ -26095,6 +26319,7 @@ This cannot be undone.`
       complianceInsightsPreviewEmptyHint.classList.remove("hidden");
     }
     updateComplianceInsightDrilldownTileActiveState();
+    updateComplianceRecommendationActiveState();
   }
   function exportComplianceInsightDrilldownCsv() {
     if (!currentComplianceInsightDrilldown) {

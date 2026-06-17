@@ -76,6 +76,7 @@ import {
   getComplianceInsightDrilldownMeta,
   isActionLevelDrilldown,
 } from "./js/app/insights/compliance-insights-drilldowns.js";
+import { generateComplianceRecommendations } from "./js/app/insights/recommendations-engine.js";
 
 console.log(
   `Compliance Reminder System v${APP_VERSION} — app.js loaded (${DATA_BACKEND} data, ${AUTH_MODE} auth)`
@@ -327,6 +328,12 @@ const clearComplianceInsightsPreviewBtn = document.getElementById(
 );
 const complianceInsightDrilldownTiles = document.querySelectorAll(
   "[data-compliance-insight-drilldown]"
+);
+const complianceInsightsRecommendationsEmpty = document.getElementById(
+  "compliance-insights-recommendations-empty"
+);
+const complianceInsightsRecommendationsList = document.getElementById(
+  "compliance-insights-recommendations-list"
 );
 
 const insightHealthScore = document.getElementById("insight-health-score");
@@ -2199,6 +2206,89 @@ function renderComplianceInsights() {
   if (complianceInsightsForecast90Days) {
     complianceInsightsForecast90Days.textContent = insights.forecast.expiringWithin90Days;
   }
+
+  renderComplianceRecommendations(insights);
+}
+
+function getComplianceRecommendationPriorityLabel(priority) {
+  const labels = {
+    critical: "Critical",
+    high: "High",
+    medium: "Medium",
+    low: "Low",
+  };
+
+  return labels[priority] || priority;
+}
+
+function renderComplianceRecommendations(insights) {
+  if (!complianceInsightsRecommendationsList) {
+    return;
+  }
+
+  const rows = getAllComplianceRows();
+  const recommendations = generateComplianceRecommendations(insights, rows);
+  const hasRecommendations = recommendations.length > 0;
+
+  if (complianceInsightsRecommendationsEmpty) {
+    complianceInsightsRecommendationsEmpty.classList.toggle("hidden", hasRecommendations);
+  }
+
+  complianceInsightsRecommendationsList.innerHTML = recommendations
+    .map((recommendation) => {
+      const affectedLabel =
+        recommendation.affectedCount === 1
+          ? "1 affected"
+          : `${recommendation.affectedCount} affected`;
+
+      return `
+        <li>
+          <button
+            type="button"
+            class="compliance-recommendation-item"
+            data-compliance-insight-drilldown="${escapeHtml(recommendation.drilldownKey)}"
+            data-recommendation-id="${escapeHtml(recommendation.id)}"
+            aria-label="${escapeHtml(`${recommendation.title}. ${recommendation.description} Click to preview.`)}"
+          >
+            <span class="compliance-recommendation-priority priority-${escapeHtml(recommendation.priority)}">${escapeHtml(getComplianceRecommendationPriorityLabel(recommendation.priority))}</span>
+            <span class="compliance-recommendation-title">${escapeHtml(recommendation.title)}</span>
+            <span class="compliance-recommendation-description">${escapeHtml(recommendation.description)}</span>
+            <span class="compliance-recommendation-count">${escapeHtml(affectedLabel)}</span>
+          </button>
+        </li>
+      `;
+    })
+    .join("");
+
+  complianceInsightsRecommendationsList
+    .querySelectorAll("[data-compliance-insight-drilldown]")
+    .forEach((button) => {
+      button.addEventListener("click", () => {
+        showComplianceInsightDrilldownPreview(button.dataset.complianceInsightDrilldown);
+      });
+    });
+
+  updateComplianceInsightDrilldownTileActiveState();
+  updateComplianceRecommendationActiveState();
+}
+
+function updateComplianceRecommendationActiveState() {
+  if (!complianceInsightsRecommendationsList) {
+    return;
+  }
+
+  complianceInsightsRecommendationsList
+    .querySelectorAll("[data-recommendation-id]")
+    .forEach((button) => {
+      button.classList.toggle(
+        "active",
+        Boolean(
+          currentComplianceInsightDrilldown &&
+            button.dataset.complianceInsightDrilldown ===
+              currentComplianceInsightDrilldown.type
+        )
+      );
+    });
 }
 
 function getComplianceInsightsDrilldownContext() {
@@ -2349,6 +2439,7 @@ function renderComplianceInsightDrilldownPreview(report) {
   }
 
   updateComplianceInsightDrilldownTileActiveState();
+  updateComplianceRecommendationActiveState();
 }
 
 function showComplianceInsightDrilldownPreview(drilldownType) {
@@ -2379,6 +2470,7 @@ function clearComplianceInsightDrilldownPreview() {
   }
 
   updateComplianceInsightDrilldownTileActiveState();
+  updateComplianceRecommendationActiveState();
 }
 
 function exportComplianceInsightDrilldownCsv() {

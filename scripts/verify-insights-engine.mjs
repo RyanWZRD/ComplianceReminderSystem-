@@ -1,6 +1,6 @@
 /**
  * Deterministic verification for the V4-0A Compliance Insights engine,
- * V4-0B dashboard metric mappings, and V4-0D drilldown filters.
+ * V4-0B dashboard metric mappings, V4-0D drilldown filters, and V4-1A recommendations.
  * Uses fixture rows only — no Supabase or browser required.
  */
 
@@ -15,8 +15,13 @@ import {
   getExpectedDrilldownCounts,
 } from "../js/app/insights/compliance-insights-drilldowns.js";
 import {
+  generateComplianceRecommendations,
+  getRecommendationPriorityOrder,
+} from "../js/app/insights/recommendations-engine.js";
+import {
   CLOUD_FIXTURE_ROWS,
   EXPECTED_INSIGHTS,
+  EXPECTED_RECOMMENDATIONS,
   FIXTURE_AS_OF_DATE,
   FIXTURE_SETTINGS,
   LOCAL_FIXTURE_ROWS,
@@ -291,7 +296,35 @@ function verifyDrilldownCounts(label, rows) {
   );
 }
 
-console.log("Compliance Insights engine verification (V4-0A + V4-0B mappings + V4-0D drilldowns)\n");
+function verifyRecommendations(label, rows) {
+  const insights = computeComplianceInsights(rows, FIXTURE_SETTINGS, FIXTURE_AS_OF_DATE);
+  const normalizedRows = normalizeFixtureRows(rows);
+  const recommendations = generateComplianceRecommendations(insights, normalizedRows);
+
+  assertEqual(
+    recommendations.length,
+    EXPECTED_RECOMMENDATIONS.length,
+    `${label} recommendation count`
+  );
+  assertDeepEqual(recommendations, EXPECTED_RECOMMENDATIONS, `${label} recommendations`);
+  assertDeepEqual(
+    getRecommendationPriorityOrder(recommendations),
+    ["critical", "critical", "high", "high", "high", "medium", "medium"],
+    `${label} recommendation priority order`
+  );
+
+  recommendations.forEach((recommendation) => {
+    assertEqual(
+      recommendation.affectedCount > 0,
+      true,
+      `${label} recommendation ${recommendation.id} affectedCount > 0`
+    );
+  });
+}
+
+console.log(
+  "Compliance Insights engine verification (V4-0A + V4-0B + V4-0D + V4-1A recommendations)\n"
+);
 
 verifyInsights("local fixture rows", LOCAL_FIXTURE_ROWS);
 verifyInsights("cloud-shaped fixture rows", CLOUD_FIXTURE_ROWS);
@@ -299,6 +332,8 @@ verifyDashboardMappings("local fixture rows", LOCAL_FIXTURE_ROWS);
 verifyDashboardMappings("cloud-shaped fixture rows", CLOUD_FIXTURE_ROWS);
 verifyDrilldownCounts("local fixture rows", LOCAL_FIXTURE_ROWS);
 verifyDrilldownCounts("cloud-shaped fixture rows", CLOUD_FIXTURE_ROWS);
+verifyRecommendations("local fixture rows", LOCAL_FIXTURE_ROWS);
+verifyRecommendations("cloud-shaped fixture rows", CLOUD_FIXTURE_ROWS);
 
 const emptyInsights = computeComplianceInsights([], FIXTURE_SETTINGS, FIXTURE_AS_OF_DATE);
 
@@ -313,6 +348,10 @@ assertDeepEqual(
   "empty summary counts mapping"
 );
 
+const emptyRecommendations = generateComplianceRecommendations(emptyInsights, []);
+
+assertEqual(emptyRecommendations.length, 0, "empty recommendations");
+
 console.log("Insights engine verification: OK");
 console.log(`  asOfDate=${FIXTURE_AS_OF_DATE}`);
 console.log(`  recordCount=${EXPECTED_INSIGHTS.recordCount}`);
@@ -320,3 +359,4 @@ console.log(`  compositeHealthScore=${EXPECTED_INSIGHTS.compositeHealthScore}`);
 console.log("  local + cloud-shaped fixtures produce identical metrics");
 console.log("  dashboard summary/action/evidence mappings match legacy formulas");
 console.log("  compliance insight drilldown counts match risk/forecast tiles");
+console.log(`  recommendations generated=${EXPECTED_RECOMMENDATIONS.length}`);

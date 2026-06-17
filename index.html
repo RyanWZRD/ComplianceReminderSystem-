@@ -51,7 +51,8 @@
 
     <p id="app-message" class="app-message hidden"></p>
 
-    <section class="summary-cards">
+    <p id="summary-cards-hint" class="settings-hint summary-cards-hint">Status counts across all compliance records. Click a card to filter the register below.</p>
+    <section class="summary-cards" aria-describedby="summary-cards-hint">
       <button type="button" class="summary-card" data-status="all">
         <p class="summary-label">Total Records</p>
         <p id="summary-total" class="summary-number">0</p>
@@ -165,7 +166,7 @@
 
     <section class="card" id="compliance-dashboard">
       <h2>Compliance Dashboard</h2>
-      <p class="dashboard-hint">Click a card to filter the table by expiry window.</p>
+      <p class="dashboard-hint">Counts across all compliance records. Click a card to filter the register table by expiry window.</p>
       <div class="dashboard-cards">
         <button type="button" class="dashboard-card dashboard-all" id="dashboard-all-card">
           <p class="dashboard-label">All Records</p>
@@ -715,7 +716,8 @@
         <span id="active-filter-chips" class="active-filter-chips"></span>
         <button type="button" id="clear-filters-btn" class="clear-filters-btn hidden">Clear all</button>
       </div>
-      <div class="register-summary-strip" id="register-summary-strip">
+      <div class="register-summary-strip" id="register-summary-strip" aria-label="Current register view counts">
+        <span class="register-summary-scope">Current register view (matches active filters):</span>
         <span class="register-summary-item">Total Records: <strong id="strip-total">0</strong></span>
         <span class="register-summary-item register-summary-valid">Valid: <strong id="strip-valid">0</strong></span>
         <span class="register-summary-item register-summary-due-soon">Expiring Soon: <strong id="strip-due-soon">0</strong></span>

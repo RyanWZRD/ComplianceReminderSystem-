@@ -20,6 +20,7 @@ const STEPS = [
   { label: "verify-terminology-rc004", script: "verify-terminology-rc004" },
   { label: "verify-terminology-rc005", script: "verify-terminology-rc005" },
   { label: "verify-terminology-rc006", script: "verify-terminology-rc006" },
+  { label: "verify-terminology-rc007", script: "verify-terminology-rc007" },
 ];
 
 console.log("Compliance Insights release verification (verify-insights-release)\n");

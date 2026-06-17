@@ -121,6 +121,10 @@ header h1 {
   color: #16213e;
 }
 
+.summary-cards-hint {
+  margin-bottom: 0.75rem;
+}
+
 .summary-cards {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -1749,6 +1753,13 @@ button[type="submit"]:hover {
   border-radius: 8px;
   font-size: 0.9rem;
   color: #334155;
+}
+
+.register-summary-scope {
+  flex: 1 0 100%;
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: #475569;
 }
 
 .register-summary-item strong {

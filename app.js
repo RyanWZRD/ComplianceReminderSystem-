@@ -5458,7 +5458,7 @@ function renderPagination(filteredCount, visibleCount) {
 
   const startIndex = (currentTablePage - 1) * RECORDS_PER_PAGE + 1;
   const endIndex = startIndex + visibleCount - 1;
-  paginationSummary.textContent = `Showing ${startIndex}-${endIndex} of ${filteredCount} records`;
+  paginationSummary.textContent = `Showing ${startIndex}-${endIndex} of ${filteredCount} matching records`;
 
   if (!paginationControls || !paginationPrevBtn || !paginationNextBtn) {
     return;
@@ -7238,7 +7238,7 @@ function renderTable({ refreshDashboards = true } = {}) {
     personCount.textContent =
       filteredCount === 1 ? "1 record" : `${filteredCount} records`;
   } else {
-    personCount.textContent = `Showing ${filteredCount} of ${totalCount} records`;
+    personCount.textContent = `Showing ${filteredCount} of ${totalCount} matching records`;
   }
 
   renderPagination(filteredCount, visibleCount);

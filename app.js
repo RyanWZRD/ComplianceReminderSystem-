@@ -865,9 +865,23 @@ function toggleHistoryRow(personId, recordId) {
   renderTable({ refreshDashboards: false });
 }
 
+function formatRenewalHistoryDescription(description) {
+  return description
+    .replace(/^Compliance renewed using /, "Renewal completed using ")
+    .replace(
+      /^Compliance renewed using custom expiry date: /,
+      "Renewal completed with custom New Expiry Date: "
+    )
+    .replace(/New expiry date:/g, "New Expiry Date:");
+}
+
 function formatHistoryDescription(entry) {
   if (entry.action === HISTORY_ACTIONS.DELETED && typeof entry.description === "string") {
     return entry.description.replace(/^Record deleted\b/, "Record archived");
+  }
+
+  if (entry.action === HISTORY_ACTIONS.RENEWED && typeof entry.description === "string") {
+    return formatRenewalHistoryDescription(entry.description);
   }
 
   return entry.description;
@@ -7053,7 +7067,7 @@ async function persistRenewal(newExpiryDate, mode) {
       closeRenewModal();
       showMessage(
         appMessage,
-        `Renewed: ${outcome.recordLabel}. New expiry date: ${outcome.newExpiryDisplay}.`,
+        `Renewal completed: ${outcome.recordLabel}. New Expiry Date: ${outcome.newExpiryDisplay}.`,
         "success"
       );
       renderTable();
@@ -7103,7 +7117,7 @@ async function persistRenewal(newExpiryDate, mode) {
     if (reason === "before_today") {
       showMessage(
         renewModalMessage,
-        "Expiry date must be today or later.",
+        "Renewal Date must be today or later.",
         "error"
       );
     } else {
@@ -7131,7 +7145,7 @@ async function persistRenewal(newExpiryDate, mode) {
 
   showMessage(
     appMessage,
-    `Renewed: ${recordLabel}. New expiry date: ${newExpiryDisplay}.`,
+    `Renewal completed: ${recordLabel}. New Expiry Date: ${newExpiryDisplay}.`,
     "success"
   );
 }
@@ -7149,7 +7163,7 @@ function handleRenewSaveCustom() {
   const validation = validateCustomRenewalDate(trimmed);
 
   if (validation.reason === "missing") {
-    showMessage(renewModalMessage, "Please enter an expiry date.", "error");
+    showMessage(renewModalMessage, "Please enter a Renewal Date.", "error");
     return;
   }
 
@@ -7165,7 +7179,7 @@ function handleRenewSaveCustom() {
   if (validation.reason === "before_today") {
     showMessage(
       renewModalMessage,
-      "Expiry date must be today or later.",
+      "Renewal Date must be today or later.",
       "error"
     );
     return;
@@ -7228,7 +7242,7 @@ function renderTable({ refreshDashboards = true } = {}) {
       <td class="${openActionsClass}">${actionSummary.activeCount}</td>
       <td class="table-action-cell"><button type="button" class="details-btn" data-person-id="${row.personId}" data-record-id="${row.recordId}">Details</button></td>
       <td class="table-action-cell"><button type="button" class="edit-btn" data-person-id="${row.personId}" data-record-id="${row.recordId}"${canEditComplianceRecord() ? "" : " disabled"}>Edit</button></td>
-      <td class="table-action-cell"><button type="button" class="renew-btn" data-person-id="${row.personId}" data-record-id="${row.recordId}"${canRenewCompliance() ? "" : " disabled"}>Renew</button></td>
+      <td class="table-action-cell"><button type="button" class="renew-btn" data-person-id="${row.personId}" data-record-id="${row.recordId}"${canRenewCompliance() ? "" : " disabled"}>Renew Compliance</button></td>
     `;
 
     tableBody.appendChild(tableRow);

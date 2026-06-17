@@ -82,7 +82,7 @@ const DRILLDOWN_META = {
     title: "Expired Records",
     emptyMessage: "No expired compliance records.",
     previewDescription:
-      "Records whose expiry date is in the past. Renew or update these records to restore compliance.",
+      "Records whose expiry date is in the past. Renew compliance on these records to restore compliance.",
     filename: "compliance-insight-expired_records.csv",
     itemLabel: "Records",
   },

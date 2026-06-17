@@ -761,7 +761,7 @@
               <th>Open Actions</th>
               <th>Details</th>
               <th>Edit</th>
-              <th>Renew</th>
+              <th>Renew Compliance</th>
             </tr>
           </thead>
           <tbody id="people-table-body">
@@ -785,10 +785,11 @@
         <button type="button" id="renew-modal-close-btn" class="renew-modal-close" aria-label="Close renewal dialog">&times;</button>
       </div>
       <p id="renew-modal-record-label" class="renew-modal-record"></p>
+      <p id="renew-modal-help" class="settings-hint">Set the New Expiry Date for this renewal. When a renewal cycle is configured, a suggested New Expiry Date is shown below.</p>
 
       <div class="renew-modal-details">
         <div class="renew-detail-block">
-          <span class="renew-detail-label">Current Expiry:</span>
+          <span class="renew-detail-label">Current Expiry Date:</span>
           <span id="renew-current-expiry" class="renew-detail-value"></span>
         </div>
         <div class="renew-detail-block" id="renew-cycle-row">
@@ -796,21 +797,22 @@
           <span id="renew-cycle-label" class="renew-detail-value"></span>
         </div>
         <div class="renew-detail-block renew-suggested-block" id="renew-suggested-section">
-          <span class="renew-detail-label">Suggested New Expiry:</span>
+          <span class="renew-detail-label">New Expiry Date:</span>
           <span id="renew-suggested-expiry" class="renew-detail-value renew-suggested-date"></span>
         </div>
       </div>
 
       <div class="form-row renew-custom-date-row">
-        <label for="renew-custom-date">Custom Expiry Date</label>
-        <input type="date" id="renew-custom-date" name="renew-custom-date">
+        <label for="renew-custom-date">Renewal Date</label>
+        <input type="date" id="renew-custom-date" name="renew-custom-date" aria-describedby="renew-custom-date-hint">
+        <p id="renew-custom-date-hint" class="settings-hint">Renewal Date must be today or later. It becomes the New Expiry Date for this record.</p>
       </div>
 
       <p id="renew-modal-message" class="form-message hidden"></p>
 
       <div class="modal-actions">
-        <button type="button" id="renew-use-suggested-btn" class="renew-primary-btn">Use Suggested Date</button>
-        <button type="button" id="renew-save-custom-btn" class="renew-secondary-btn">Save Custom Date</button>
+        <button type="button" id="renew-use-suggested-btn" class="renew-primary-btn">Use Suggested New Expiry Date</button>
+        <button type="button" id="renew-save-custom-btn" class="renew-secondary-btn">Confirm Renewal Date</button>
         <button type="button" id="renew-cancel-btn" class="cancel-btn">Cancel</button>
       </div>
     </div>
@@ -954,7 +956,7 @@
       </header>
       <div class="workspace-quick-actions">
         <button type="button" id="workspace-edit-btn" class="edit-btn">Edit</button>
-        <button type="button" id="workspace-renew-btn" class="renew-btn">Renew</button>
+        <button type="button" id="workspace-renew-btn" class="renew-btn">Renew Compliance</button>
       </div>
       <div id="workspace-content" class="workspace-content">
         <!-- Populated by JavaScript -->

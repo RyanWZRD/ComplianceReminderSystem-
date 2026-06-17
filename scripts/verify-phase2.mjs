@@ -75,6 +75,7 @@ const STEPS = [
   { label: "verify-terminology-rc004", script: "verify-terminology-rc004" },
   { label: "verify-terminology-rc006", script: "verify-terminology-rc006" },
   { label: "verify-terminology-rc007", script: "verify-terminology-rc007" },
+  { label: "verify-terminology-rc008", script: "verify-terminology-rc008" },
 ];
 
 console.log("v3.0.0 release verification (verify:phase2)\n");

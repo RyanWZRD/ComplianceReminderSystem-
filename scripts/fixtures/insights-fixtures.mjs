@@ -212,6 +212,166 @@ export const CLOUD_FIXTURE_ROWS = [
   },
 ];
 
+/** All-valid healthy rows for alpha hardening verification (asOfDate 2026-06-17). */
+export const HEALTHY_FIXTURE_ROWS = [
+  {
+    personId: 1,
+    recordId: 201,
+    name: "Healthy Volunteer",
+    role: "Volunteer",
+    complianceType: "DBS",
+    expiryDate: "2027-06-01",
+    renewalCycle: "3-years",
+    notes: "",
+    history: [],
+    evidence: [
+      {
+        id: 1,
+        name: "DBS Certificate",
+        documentType: "DBS Certificate",
+        addedDate: "2026-03-01",
+      },
+    ],
+    actions: [{ id: 1, title: "Annual review", status: "completed", completed: true }],
+  },
+  {
+    personId: 2,
+    recordId: 202,
+    name: "Healthy Coordinator",
+    role: "Coordinator",
+    complianceType: "Basic Awareness",
+    expiryDate: "2027-12-01",
+    renewalCycle: "3-years",
+    notes: "",
+    history: [],
+    evidence: [
+      {
+        id: 2,
+        name: "Training certificate",
+        documentType: "Training Certificate",
+        addedDate: "2026-05-01",
+      },
+    ],
+    actions: [],
+  },
+];
+
+/** Cloud-shaped healthy rows (metadata-only evidence, no file payloads). */
+export const HEALTHY_CLOUD_FIXTURE_ROWS = [
+  {
+    person_id: "22222222-2222-2222-2222-222222222211",
+    record_id: "33333333-3333-3333-3333-333333333311",
+    name: "Healthy Volunteer",
+    role: "Volunteer",
+    compliance_type: "DBS",
+    expiry_date: "2027-06-01",
+    renewal_cycle: "3-years",
+    notes: "",
+    history: [],
+    evidence: [
+      {
+        id: "55555555-5555-5555-5555-555555555511",
+        name: "DBS Certificate",
+        document_type: "DBS Certificate",
+        added_date: "2026-03-01",
+        file_name: "dbs-sample.pdf",
+        fileData: null,
+      },
+    ],
+    actions: [
+      {
+        id: "66666666-6666-6666-6666-666666666611",
+        title: "Annual review",
+        status: "completed",
+        completed: true,
+      },
+    ],
+  },
+  {
+    person_id: "22222222-2222-2222-2222-222222222212",
+    record_id: "33333333-3333-3333-3333-333333333312",
+    name: "Healthy Coordinator",
+    role: "Coordinator",
+    compliance_type: "Basic Awareness",
+    expiry_date: "2027-12-01",
+    renewal_cycle: "3-years",
+    notes: "",
+    history: [],
+    evidence: [
+      {
+        id: "55555555-5555-5555-5555-555555555512",
+        name: "Training certificate",
+        document_type: "Training Certificate",
+        added_date: "2026-05-01",
+      },
+    ],
+    actions: [],
+  },
+];
+
+export const EXPECTED_HEALTHY_INSIGHTS = {
+  recordCount: 2,
+  compositeHealthScore: 100,
+  expiryHealth: {
+    total: 2,
+    valid: 2,
+    dueSoon: 0,
+    expired: 0,
+    invalidDate: 0,
+    expiringWithin30: 0,
+    expiringWithin60: 0,
+    expiringWithin90: 0,
+    score: 100,
+  },
+  evidenceHealth: {
+    total: 2,
+    withEvidence: 2,
+    missingEvidence: 0,
+    staleEvidence: 0,
+    coveragePercent: 100,
+    score: 100,
+  },
+  actionHealth: {
+    totalRecords: 2,
+    openActions: 0,
+    inProgressActions: 0,
+    completedActions: 1,
+    overdueActions: 0,
+    dueThisWeekActions: 0,
+    recordsWithActiveActions: 0,
+    recordsWithoutActionRisk: 2,
+    expiredRecordsWithActiveActions: 0,
+    score: 100,
+  },
+  risk: {
+    expiredRecords: 0,
+    dueSoonRecords: 0,
+    invalidExpiryRecords: 0,
+    missingEvidenceRecords: 0,
+    staleEvidenceRecords: 0,
+    openActions: 0,
+    inProgressActions: 0,
+    overdueActions: 0,
+    expiredWithActiveActions: 0,
+    openActionsOnExpiredRecords: 0,
+    totalAtRiskRecords: 0,
+  },
+  forecast: {
+    expiringThisMonth: 0,
+    expiringNextMonth: 0,
+    expiringWithin30Days: 0,
+    expiringWithin60Days: 0,
+    expiringWithin90Days: 0,
+    renewalDueSoon: 0,
+    renewalOverdue: 0,
+    reminderWindows: {
+      days30: 0,
+      days14: 0,
+      days7: 0,
+    },
+  },
+};
+
 export const EXPECTED_INSIGHTS = {
   recordCount: 6,
   asOfDate: FIXTURE_AS_OF_DATE,

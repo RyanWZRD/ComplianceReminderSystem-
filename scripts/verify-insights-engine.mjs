@@ -1,7 +1,7 @@
 /**
  * Deterministic verification for the V4-0A Compliance Insights engine,
  * V4-0B dashboard metric mappings, V4-0D drilldown filters, V4-1A recommendations,
- * and V4-1B recommendation polish and thresholds.
+ * V4-1B recommendation polish and thresholds, and V4-1C alpha hardening.
  * Uses fixture rows only — no Supabase or browser required.
  */
 
@@ -23,10 +23,13 @@ import {
 } from "../js/app/insights/recommendations-engine.js";
 import {
   CLOUD_FIXTURE_ROWS,
+  EXPECTED_HEALTHY_INSIGHTS,
   EXPECTED_INSIGHTS,
   EXPECTED_RECOMMENDATIONS,
   FIXTURE_AS_OF_DATE,
   FIXTURE_SETTINGS,
+  HEALTHY_CLOUD_FIXTURE_ROWS,
+  HEALTHY_FIXTURE_ROWS,
   LOCAL_FIXTURE_ROWS,
 } from "./fixtures/insights-fixtures.mjs";
 import { ACTION_STATUSES } from "../js/data/constants.js";
@@ -358,8 +361,33 @@ function verifyRecommendationThresholds(label, rows) {
   assertEqual(getRecommendationPriorityLabel("high"), "High priority", `${label} priority label`);
 }
 
+function verifyHealthyFixture(label, rows) {
+  const insights = computeComplianceInsights(rows, FIXTURE_SETTINGS, FIXTURE_AS_OF_DATE);
+
+  assertEqual(insights.recordCount, EXPECTED_HEALTHY_INSIGHTS.recordCount, `${label} recordCount`);
+  assertEqual(
+    insights.compositeHealthScore,
+    EXPECTED_HEALTHY_INSIGHTS.compositeHealthScore,
+    `${label} compositeHealthScore`
+  );
+  assertDeepEqual(insights.expiryHealth, EXPECTED_HEALTHY_INSIGHTS.expiryHealth, `${label} expiryHealth`);
+  assertDeepEqual(
+    insights.evidenceHealth,
+    EXPECTED_HEALTHY_INSIGHTS.evidenceHealth,
+    `${label} evidenceHealth`
+  );
+  assertDeepEqual(insights.actionHealth, EXPECTED_HEALTHY_INSIGHTS.actionHealth, `${label} actionHealth`);
+  assertDeepEqual(insights.risk, EXPECTED_HEALTHY_INSIGHTS.risk, `${label} risk`);
+  assertDeepEqual(insights.forecast, EXPECTED_HEALTHY_INSIGHTS.forecast, `${label} forecast`);
+
+  const recommendations = generateComplianceRecommendations(insights, normalizeFixtureRows(rows));
+
+  assertEqual(recommendations.length, 0, `${label} recommendations`);
+  verifyDrilldownCounts(label, rows);
+}
+
 console.log(
-  "Compliance Insights engine verification (V4-0A + V4-0B + V4-0D + V4-1A + V4-1B)\n"
+  "Compliance Insights engine verification (V4-0A + V4-0B + V4-0D + V4-1A + V4-1B + V4-1C)\n"
 );
 
 verifyInsights("local fixture rows", LOCAL_FIXTURE_ROWS);
@@ -371,6 +399,8 @@ verifyDrilldownCounts("cloud-shaped fixture rows", CLOUD_FIXTURE_ROWS);
 verifyRecommendations("local fixture rows", LOCAL_FIXTURE_ROWS);
 verifyRecommendations("cloud-shaped fixture rows", CLOUD_FIXTURE_ROWS);
 verifyRecommendationThresholds("local fixture rows", LOCAL_FIXTURE_ROWS);
+verifyHealthyFixture("healthy local fixture rows", HEALTHY_FIXTURE_ROWS);
+verifyHealthyFixture("healthy cloud-shaped fixture rows", HEALTHY_CLOUD_FIXTURE_ROWS);
 
 const emptyInsights = computeComplianceInsights([], FIXTURE_SETTINGS, FIXTURE_AS_OF_DATE);
 
@@ -398,3 +428,4 @@ console.log("  dashboard summary/action/evidence mappings match legacy formulas"
 console.log("  compliance insight drilldown counts match risk/forecast tiles");
 console.log(`  recommendations generated=${EXPECTED_RECOMMENDATIONS.length}`);
 console.log("  recommendation thresholds and priority labels verified");
+console.log("  healthy local + cloud-shaped fixtures produce 100% scores and zero recommendations");

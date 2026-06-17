@@ -68,7 +68,10 @@ import {
   mapInsightsToGlobalActionMetrics,
   mapInsightsToSummaryCounts,
 } from "./js/app/insights/compliance-insights.js";
-import { createInsightsContext } from "./js/app/insights/insights-engine.js";
+import {
+  createInsightsContext,
+  normalizeComplianceRow,
+} from "./js/app/insights/insights-engine.js";
 import {
   filterComplianceInsightDrilldownRecords,
   flattenOverdueActionEntries,
@@ -2137,6 +2140,15 @@ function renderComplianceInsights() {
   }
 
   if (isEmpty) {
+    if (complianceInsightsRecommendationsList) {
+      complianceInsightsRecommendationsList.innerHTML = "";
+    }
+
+    if (complianceInsightsRecommendationsEmpty) {
+      complianceInsightsRecommendationsEmpty.classList.add("hidden");
+    }
+
+    clearComplianceInsightDrilldownPreview();
     return;
   }
 
@@ -2326,7 +2338,7 @@ function buildComplianceInsightDrilldownReport(drilldownType) {
   const ctx = getComplianceInsightsDrilldownContext();
   const meta = getComplianceInsightDrilldownMeta(drilldownType);
   const columns = getComplianceInsightDrilldownColumns(drilldownType);
-  const rows = getAllComplianceRows();
+  const rows = getAllComplianceRows().map(normalizeComplianceRow);
   let tableRows = [];
 
   if (isActionLevelDrilldown(drilldownType)) {
@@ -2435,6 +2447,10 @@ function renderComplianceInsightDrilldownPreview(report) {
 }
 
 function showComplianceInsightDrilldownPreview(drilldownType) {
+  if (!drilldownType || typeof drilldownType !== "string") {
+    return;
+  }
+
   renderComplianceInsightDrilldownPreview(buildComplianceInsightDrilldownReport(drilldownType));
 
   if (complianceInsightsPreview) {

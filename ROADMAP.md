@@ -39,11 +39,11 @@ See [Future Releases](#future-releases) below for full architecture and goals.
 
 # Future Releases
 
-## v4 — Compliance Insights (in development)
+## v4.0.0-alpha — Compliance Insights alpha · In development
 
 Read-only compliance insights on the dashboard: health score, risk summary, renewal forecast, and rule-based recommendations. See [`docs/compliance-insights.md`](docs/compliance-insights.md) and [Version Roadmap — v4](#v4--compliance-insights-in-development).
 
-Application version remains **v3.0.0** during V4 development.
+Application version: **v4.0.0-alpha** (Compliance Insights MVP complete; GA pending).
 
 ## v3.1.0 — Cloud platform follow-on · Planned
 
@@ -549,7 +549,7 @@ Tag: v3.0.0
 
 ## v4 — Compliance Insights (in development)
 
-V4 adds a read-only **Compliance Insights** layer on the existing dashboard. Application version stays **v3.0.0** until V4 is released as a tagged version.
+V4 adds a read-only **Compliance Insights** layer on the existing dashboard. Application version is **v4.0.0-alpha** for the Compliance Insights MVP alpha milestone.
 
 Documentation: [`docs/compliance-insights.md`](docs/compliance-insights.md)
 
@@ -563,8 +563,11 @@ Verification: `npm run verify-insights-engine`
 | V4-0D | **COMPLETE** | Drilldown filters, preview table, CSV export |
 | V4-1A | **COMPLETE** | Recommendations engine and Recommended Actions UI |
 | V4-1B | **COMPLETE** | Recommendation polish, threshold constants, documentation |
+| V4-1C | **COMPLETE** | Alpha hardening, version bump to v4.0.0-alpha |
 
 **Constraints (V4 to date):** No new CRUD, migrations, cloud-write changes, or AI/LLM dependency.
+
+Recommended tag: `v4.0.0-alpha` (after sign-off).
 
 ---
 

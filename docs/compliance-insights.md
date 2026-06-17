@@ -2,7 +2,7 @@
 
 The **Compliance Insights** dashboard section provides a read-only, rule-based view of register health. It runs entirely in the browser from loaded compliance rows — no AI/LLM, no Supabase RPC calls, and no cloud-write behaviour.
 
-Application version remains **v3.0.0** while V4 insights work ships incrementally behind the existing dashboard.
+Application version is **v4.0.0-alpha** for the Compliance Insights MVP alpha milestone.
 
 ## Overview
 
@@ -32,7 +32,7 @@ The **Compliance Insights** card on the dashboard shows:
 4. **Recommended Actions** — prioritized list linked to the same drilldowns
 5. **Preview table** — records or actions matching the selected tile or recommendation
 
-In cloud mode, evidence health uses metadata only (document name, type, dates) — file attachments are not uploaded to Storage in v3.0.0.
+In cloud mode, evidence health uses metadata only (document name, type, dates) — file attachments are not uploaded to Storage in v4.0.0-alpha.
 
 ## Health score
 

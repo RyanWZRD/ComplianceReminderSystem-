@@ -21306,7 +21306,7 @@ ${suffix}`;
   }
   var DATA_BACKEND = readBackendFromLocation() ?? (typeof process !== "undefined" && process.env?.DATA_BACKEND === "cloud" ? "cloud" : "local");
   var CLOUD_WRITES_ENABLED = readCloudWritesFromLocation() ?? (typeof process !== "undefined" && process.env?.CLOUD_WRITES_ENABLED === "true");
-  var APP_VERSION = "v3.0.0";
+  var APP_VERSION = "v4.0.0-alpha";
 
   // js/app/permissions.js
   function isCloudMode() {
@@ -26077,6 +26077,13 @@ This cannot be undone.`
       complianceInsightsCloudNote.classList.toggle("hidden", !isCloudMode());
     }
     if (isEmpty) {
+      if (complianceInsightsRecommendationsList) {
+        complianceInsightsRecommendationsList.innerHTML = "";
+      }
+      if (complianceInsightsRecommendationsEmpty) {
+        complianceInsightsRecommendationsEmpty.classList.add("hidden");
+      }
+      clearComplianceInsightDrilldownPreview();
       return;
     }
     const band = getComplianceHealthScoreBand(insights.compositeHealthScore);
@@ -26221,7 +26228,7 @@ This cannot be undone.`
     const ctx = getComplianceInsightsDrilldownContext();
     const meta = getComplianceInsightDrilldownMeta(drilldownType);
     const columns = getComplianceInsightDrilldownColumns(drilldownType);
-    const rows = getAllComplianceRows();
+    const rows = getAllComplianceRows().map(normalizeComplianceRow);
     let tableRows = [];
     if (isActionLevelDrilldown(drilldownType)) {
       const entries = flattenOverdueActionEntries(rows, ctx).sort((a, b) => {
@@ -26304,6 +26311,9 @@ This cannot be undone.`
     updateComplianceRecommendationActiveState();
   }
   function showComplianceInsightDrilldownPreview(drilldownType) {
+    if (!drilldownType || typeof drilldownType !== "string") {
+      return;
+    }
     renderComplianceInsightDrilldownPreview(buildComplianceInsightDrilldownReport(drilldownType));
     if (complianceInsightsPreview) {
       complianceInsightsPreview.scrollIntoView({ behavior: "smooth", block: "nearest" });

@@ -1,7 +1,8 @@
 /**
  * Deterministic verification for the V4-0A Compliance Insights engine,
  * V4-0B dashboard metric mappings, V4-0D drilldown filters, V4-1A recommendations,
- * V4-1B recommendation polish and thresholds, V4-1C alpha hardening, and V4-2A operational health.
+ * V4-1B recommendation polish and thresholds, V4-1C alpha hardening, V4-2A operational health,
+ * and V4-2B composite score including operational health.
  * Uses fixture rows only — no Supabase or browser required.
  */
 
@@ -480,7 +481,7 @@ function verifyOperationalHealthScenarios() {
 }
 
 console.log(
-  "Compliance Insights engine verification (V4-0A through V4-2A)\n"
+  "Compliance Insights engine verification (V4-0A through V4-2B)\n"
 );
 
 verifyInsights("local fixture rows", LOCAL_FIXTURE_ROWS);

@@ -171,14 +171,32 @@ export function computeActionHealth(rows, ctx) {
 }
 
 /**
- * Composite score = rounded average of expiry, evidence, and action dimension scores.
+ * Composite score = rounded average of expiry, evidence, action, and operational scores.
+ * Returns 0 when there are no records (recordCount === 0).
  *
  * @param {{ score: number }} expiryHealth
  * @param {{ score: number }} evidenceHealth
  * @param {{ score: number }} actionHealth
+ * @param {{ score?: number }} operationalHealth
+ * @param {number} [recordCount]
  */
-export function computeCompositeHealthScore(expiryHealth, evidenceHealth, actionHealth) {
+export function computeCompositeHealthScore(
+  expiryHealth,
+  evidenceHealth,
+  actionHealth,
+  operationalHealth,
+  recordCount
+) {
+  if (recordCount === 0) {
+    return 0;
+  }
+
+  const operationalScore =
+    typeof operationalHealth?.score === "number" && Number.isFinite(operationalHealth.score)
+      ? operationalHealth.score
+      : 0;
+
   return Math.round(
-    (expiryHealth.score + evidenceHealth.score + actionHealth.score) / 3
+    (expiryHealth.score + evidenceHealth.score + actionHealth.score + operationalScore) / 4
   );
 }

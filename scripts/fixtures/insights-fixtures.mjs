@@ -383,7 +383,7 @@ export const EXPECTED_HEALTHY_INSIGHTS = {
 export const EXPECTED_INSIGHTS = {
   recordCount: 6,
   asOfDate: FIXTURE_AS_OF_DATE,
-  compositeHealthScore: 51,
+  compositeHealthScore: 38,
   expiryHealth: {
     total: 6,
     valid: 1,

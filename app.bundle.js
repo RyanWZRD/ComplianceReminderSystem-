@@ -23748,9 +23748,13 @@ ${suffix}`;
     counts.score = counts.totalRecords === 0 ? 0 : Math.round(counts.recordsWithoutActionRisk / counts.totalRecords * 100);
     return counts;
   }
-  function computeCompositeHealthScore(expiryHealth, evidenceHealth, actionHealth) {
+  function computeCompositeHealthScore(expiryHealth, evidenceHealth, actionHealth, operationalHealth, recordCount) {
+    if (recordCount === 0) {
+      return 0;
+    }
+    const operationalScore = typeof operationalHealth?.score === "number" && Number.isFinite(operationalHealth.score) ? operationalHealth.score : 0;
     return Math.round(
-      (expiryHealth.score + evidenceHealth.score + actionHealth.score) / 3
+      (expiryHealth.score + evidenceHealth.score + actionHealth.score + operationalScore) / 4
     );
   }
 
@@ -24159,7 +24163,9 @@ ${suffix}`;
     const compositeHealthScore = computeCompositeHealthScore(
       expiryHealth,
       evidenceHealth,
-      actionHealth
+      actionHealth,
+      operationalHealth,
+      normalizedRows.length
     );
     const risk = computeRiskSummary(normalizedRows, ctx);
     const forecast = computeRenewalForecast(normalizedRows, ctx);

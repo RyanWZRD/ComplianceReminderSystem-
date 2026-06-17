@@ -303,7 +303,9 @@ export function computeComplianceInsights(rows, settings = DEFAULT_REMINDER_SETT
   const compositeHealthScore = computeCompositeHealthScore(
     expiryHealth,
     evidenceHealth,
-    actionHealth
+    actionHealth,
+    operationalHealth,
+    normalizedRows.length
   );
   const risk = computeRiskSummary(normalizedRows, ctx);
   const forecast = computeRenewalForecast(normalizedRows, ctx);

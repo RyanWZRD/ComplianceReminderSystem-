@@ -37,21 +37,24 @@ In cloud mode, evidence health uses metadata only (document name, type, dates) �
 
 ## Health score
 
-The composite **Compliance Health Score** is the rounded average of three dimension scores:
+The composite **Compliance Health Score** is the rounded average of four dimension scores:
+
+```
+compositeHealthScore = recordCount === 0 ? 0 : round((expiry + evidence + action + operational) / 4)
+```
+
+When the register is **empty** (`recordCount === 0`), the composite score is **0%** so the UI empty-state message is shown instead of a misleading partial average.
 
 | Dimension | Score formula |
 |-----------|---------------|
 | **Expiry health** | Valid records ÷ scorable records × 100 (invalid expiry dates excluded from the denominator) |
 | **Evidence health** | Records with at least one evidence item ÷ total records × 100 |
 | **Action health** | Records without action risk ÷ total records × 100 |
+| **Operational health** | Records with reminder follow-up ÷ records in active reminder windows × 100 |
 
 A record has **action risk** when it has overdue actions or active (open/in-progress) actions on an expired record.
 
 **Operational health** measures whether records in active reminder windows have recorded reminder follow-up. It uses the same window logic as the Action Required table (`getReminderForRecord` in `app.js`).
-
-| Dimension | Score formula |
-|-----------|---------------|
-| **Operational health** | Records with reminder follow-up ÷ records in active reminder windows × 100 |
 
 When **no records** are in active reminder windows, operational health is **100%** with the note: *No records are currently in 30-, 14-, or 7-day reminder windows (or expired).*
 
@@ -75,9 +78,7 @@ A record counts as having **reminder activity** for its current window when eith
 
 Only the **current** window’s reminder type is checked — a 30-day sent marker does not satisfy a record now in the 7-day window.
 
-Operational health is displayed in the Compliance Insights sub-score row. Hover or screen-reader users see the explanatory note via the element’s `title` and `aria-label`.
-
-The composite **Compliance Health Score** remains the average of expiry, evidence, and action scores only (operational health is shown separately in V4-2A).
+Operational health is displayed in the Compliance Insights sub-score row and included in the composite score. Hover or screen-reader users see the explanatory note via the element’s `title` and `aria-label`.
 
 ### Score bands (UI)
 

@@ -565,6 +565,7 @@ Verification: `npm run verify-insights-engine`
 | V4-1B | **COMPLETE** | Recommendation polish, threshold constants, documentation |
 | V4-1C | **COMPLETE** | Alpha hardening, version bump to v4.0.0-alpha |
 | V4-2A | **COMPLETE** | Operational health — reminder follow-up score and recommendation |
+| V4-2B | **COMPLETE** | Composite health score includes operational health (4-way average) |
 
 **Constraints (V4 to date):** No new CRUD, migrations, cloud-write changes, or AI/LLM dependency.
 

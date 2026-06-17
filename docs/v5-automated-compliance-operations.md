@@ -3,7 +3,7 @@
 **Theme:** Move from *knowing* what needs attention (V4 Compliance Insights) to *acting on it automatically* — scheduled reminders, orchestrated actions, escalations, and auditable operations.
 
 **Target:** v5.0.0 (major release)  
-**Current alpha:** v5.0.0-alpha.1 — V5-1A Contact Management (see [`docs/v5-1a-contact-management.md`](v5-1a-contact-management.md))  
+**Current alpha:** v5.0.0-alpha.2 — V5-1A Contact Management + V5-1B Reminder Template Preview (see [`docs/v5-0-0-alpha-2-release-notes.md`](v5-0-0-alpha-2-release-notes.md))  
 **Prerequisites:** v4.0.1 GA, v3.1.0 cloud follow-on (evidence Storage, restore/bulk ops, production cloud-writes policy)  
 **Date:** Planned — post v4.0.1 sign-off (June 2026+)
 
@@ -88,7 +88,7 @@ V5 adds a **server-side automation layer** on top of the existing RPC-only write
 
 ## Release slices
 
-Slices are ordered **V5-1A (contact foundation) → V5-0 → V5-1 automation → V5-2 → V5-4**. Contact Management ships first as **v5.0.0-alpha.1**; server automation follows once reminder preview and platform foundation are in place.
+Slices are ordered **V5-1A (contact foundation) → V5-1B (preview) → V5-0 → V5-1 automation → V5-2 → V5-4**. Contact Management shipped as **v5.0.0-alpha.1**; Reminder Template Preview as **v5.0.0-alpha.2**; server automation follows with **V5-0**.
 
 ### V5-1A — Contact Management · **COMPLETE (alpha)**
 
@@ -116,11 +116,11 @@ Slices are ordered **V5-1A (contact foundation) → V5-0 → V5-1 automation →
 
 ---
 
-### V5-1B — Reminder Template Preview · **IN PROGRESS (Phase 3 complete)**
+### V5-1B — Reminder Template Preview · **COMPLETE (alpha)**
 
 **Goal:** Preview reminder content and recipient context for records in reminder windows before automated delivery.
 
-**Status:** Phase 3 copy/export — modal copy and text-file export for generated reminder content. Full checklist: [`docs/v5-1b-reminder-template-preview.md`](v5-1b-reminder-template-preview.md).
+**Status:** COMPLETE — application version **v5.0.0-alpha.2**. Full checklist: [`docs/v5-1b-reminder-template-preview.md`](v5-1b-reminder-template-preview.md) · release notes: [`docs/v5-0-0-alpha-2-release-notes.md`](v5-0-0-alpha-2-release-notes.md).
 
 | Phase | Deliverable | Status |
 |-------|-------------|--------|
@@ -132,9 +132,15 @@ Slices are ordered **V5-1A (contact foundation) → V5-0 → V5-1 automation →
 | 2 | `npm run verify-reminder-template-preview-ui` | **COMPLETE** |
 | 3 | Copy subject/body/full email + export text file | **COMPLETE** |
 | 3 | `npm run verify-reminder-template-preview-actions` | **COMPLETE** |
-| 4+ | Release gate extension / delivery | Planned |
+| 4 | Reminder Preview Dashboard — cards, drilldown, export pack | **COMPLETE** |
+| 4 | `npm run verify-reminder-preview-dashboard` | **COMPLETE** |
+| 5 | Alpha release gate — docs, `verify-reminder-suite`, version bump | **COMPLETE** |
 
-**Constraints:** Read-only preview; no notification queue, SMTP, Edge Functions, migrations, or permission changes in Phases 1–3.
+**Verification:** `npm run verify-reminder-suite` (no Supabase).
+
+**Constraints:** Read-only preview; no notification queue, SMTP, Edge Functions, migrations, or permission changes in Phases 1–5.
+
+**Next slice:** V5-0 Automation Platform Foundation.
 
 ---
 
@@ -409,7 +415,7 @@ Secrets (SMTP API keys) live in Supabase Edge Function secrets only — never in
 | Slice | Status | Summary |
 |-------|--------|---------|
 | V5-1A | **COMPLETE** | Contact Management — email fields, insights, drilldown-to-edit; **v5.0.0-alpha.1** |
-| V5-1B | **IN PROGRESS** | Reminder Template Preview — Phase 3 copy/export complete |
+| V5-1B | **COMPLETE** | Reminder Template Preview — template, UI, copy/export, dashboard; **v5.0.0-alpha.2** |
 | V5-0 | **PLANNED** | Automation platform foundation |
 | V5-1 (automation) | **PLANNED** | Automated reminders & digests (post V5-0) |
 | V5-2 | **PLANNED** | Automated action orchestration |

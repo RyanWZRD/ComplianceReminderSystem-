@@ -3,7 +3,7 @@
 **Slice:** V5-1B Reminder Template Preview  
 **Phases:** 1 — Template foundation · 2 — Preview UI · 3 — Copy and export · 4 — Preview dashboard  
 **Date:** June 2026  
-**Prerequisite:** v5.0.0-alpha.1 (V5-1A Contact Management)
+**Prerequisite:** v5.0.0-alpha.1 (V5-1A Contact Management) · **Release:** v5.0.0-alpha.2 (Phase 5 complete)
 
 ---
 
@@ -226,6 +226,16 @@ When `navigator.clipboard` is unavailable or copy fails, the modal shows a clear
 
 ## Verification
 
+### Reminder suite (Phase 5 release gate)
+
+```powershell
+npm run verify-reminder-suite
+```
+
+Runs all four reminder verification scripts in order (see Phase 1–4 below).
+
+### Individual scripts
+
 ```powershell
 npm run verify-reminder-template-preview
 npm run verify-reminder-template-preview-ui
@@ -266,7 +276,7 @@ npm run verify-reminder-preview-dashboard
 
 ---
 
-## Deliberately out of scope (Phases 1–4)
+## Deliberately out of scope (Phases 1–5)
 
 | Item | Notes |
 |------|-------|
@@ -275,16 +285,46 @@ npm run verify-reminder-preview-dashboard
 | Automation / Edge Functions | No scheduled jobs |
 | `mark_reminder_sent` automation | Manual marking unchanged |
 | Migrations / RPC / permissions | None |
+| Application logic changes in Phase 5 | Docs, verification orchestration, version display only |
 
 ---
 
-## Next phases (indicative)
+## Phase 5 deliverables (alpha release gate)
 
-- **Phase 5+:** Combined V5-1B release gate; delivery queue (see [`docs/v5-automated-compliance-operations.md`](v5-automated-compliance-operations.md))
+| Item | Location |
+|------|----------|
+| Combined release notes | `docs/v5-0-0-alpha-2-release-notes.md` |
+| Verification suite | `npm run verify-reminder-suite` → `scripts/verify-reminder-suite.mjs` |
+| Roadmap update | `ROADMAP.md` — v5.0.0-alpha.2 current release |
+| Version strings | `js/data/config.js`, `index.html`, `app.bundle.js` → **v5.0.0-alpha.2** |
+
+### Alpha verification (required before tag)
+
+| Command | Scope |
+|---------|-------|
+| `npm run verify-reminder-suite` | V5-1B Phases 1–4 static checks |
+| `npm run verify-contact-management` | V5-1A + insights regression |
+| `npm run verify-insights-release` | Insights subset |
+| `npm run verify:phase2` | Cloud + V5-1A contact RPC smokes (requires `.env`) |
+
+### Manual browser acceptance
+
+See [`docs/v5-0-0-alpha-2-release-notes.md`](v5-0-0-alpha-2-release-notes.md) — header version, V5-1A contact regression, preview modal, dashboard drilldown/export, no automation UI.
+
+### Known limitations
+
+Preview-only (no delivery); dashboard counts require person email; manager email is reference-only; local CSV contact import only; clipboard fallback on restricted contexts; V5-0 automation platform not started.
+
+---
+
+## Next slice: V5-0 Automation Platform Foundation
+
+Schema, RPC contracts, daily scan skeleton, and `AUTOMATION_ENABLED` feature flag (off by default). No user-visible automation until V5-1. See [`docs/v5-automated-compliance-operations.md`](v5-automated-compliance-operations.md).
 
 ---
 
 ## Related docs
 
+- [`docs/v5-0-0-alpha-2-release-notes.md`](v5-0-0-alpha-2-release-notes.md) — alpha.2 release gate checklist
 - [`docs/v5-1a-contact-management.md`](v5-1a-contact-management.md) — person email fields and Contact Readiness
 - [`docs/v5-automated-compliance-operations.md`](v5-automated-compliance-operations.md) — broader v5 automation roadmap

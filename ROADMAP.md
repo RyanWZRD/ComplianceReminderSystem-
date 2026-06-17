@@ -6,28 +6,45 @@ A local-first safeguarding compliance tracker. Runs in the browser with localSto
 
 # Current Release
 
-## v5.0.0-alpha.1 — V5-1A Contact Management
+## v5.0.0-alpha.2 — V5-1A Contact Management + V5-1B Reminder Template Preview
 
 **Date:** June 2026
 
 ### Summary
 
-First v5 alpha checkpoint: optional person **email** and **manager email** across local/cloud data, add/edit forms, register and CSV, Compliance Insights **Contact Readiness**, and drilldown-to-edit workflow. No email delivery, automation, or permission changes.
+Second v5 alpha checkpoint: **V5-1A** optional person email and manager email (register, CSV, Contact Readiness, drilldown-to-edit) plus **V5-1B** read-only reminder template preview (modal, copy/export, operational preview dashboard). No email delivery, automation, or permission changes.
 
-**Documentation:** [`docs/v5-1a-contact-management.md`](docs/v5-1a-contact-management.md)
+**Documentation:**
+
+- [`docs/v5-0-0-alpha-2-release-notes.md`](docs/v5-0-0-alpha-2-release-notes.md) — alpha.2 release gate
+- [`docs/v5-1a-contact-management.md`](docs/v5-1a-contact-management.md) — V5-1A detail
+- [`docs/v5-1b-reminder-template-preview.md`](docs/v5-1b-reminder-template-preview.md) — V5-1B Phases 1–5
 
 **Release verification (required before tag):**
 
-- `npm run verify-contact-management` — contact CSV/workspace + insights release chain (no Supabase)
+- `npm run verify-reminder-suite` — V5-1B reminder preview chain (no Supabase)
+- `npm run verify-contact-management` — V5-1A contact CSV/workspace + insights release chain (no Supabase)
 - `npm run verify-insights-release` — insights regression subset
 - `npm run verify:phase2` — requires `.env` + staging Supabase (includes cloud contact RPC smokes)
 
-Application version: **v5.0.0-alpha.1**
+Application version: **v5.0.0-alpha.2**
 
-**Next slice:** V5-1B Reminder Template Preview — Phase 4 preview dashboard complete
+**Next slice:** V5-0 Automation Platform Foundation
 
-Status: Alpha checkpoint complete (Phase 7)  
+Status: Alpha checkpoint complete (V5-1B Phase 5)  
 Tag: not created unless explicitly requested
+
+---
+
+## v5.0.0-alpha.1 — V5-1A Contact Management
+
+**Date:** June 2026
+
+First v5 alpha checkpoint: optional person **email** and **manager email** across local/cloud data, add/edit forms, register and CSV, Compliance Insights **Contact Readiness**, and drilldown-to-edit workflow.
+
+**Documentation:** [`docs/v5-1a-contact-management.md`](docs/v5-1a-contact-management.md)
+
+Application version: **v5.0.0-alpha.1** (superseded by alpha.2)
 
 ---
 
@@ -79,6 +96,18 @@ Operational **Reminder Preview Dashboard** with card counts (30/14/7-day, expire
 
 ---
 
+## V5-1B Phase 5 — Alpha Release Gate · Complete
+
+**Date:** June 2026
+
+Documentation and verification checkpoint for **v5.0.0-alpha.2**. Combined release notes, `verify-reminder-suite`, version bump, browser acceptance checklist. No application logic changes.
+
+**Documentation:** [`docs/v5-0-0-alpha-2-release-notes.md`](docs/v5-0-0-alpha-2-release-notes.md) · [`docs/v5-1b-reminder-template-preview.md`](docs/v5-1b-reminder-template-preview.md)
+
+**Verification:** `npm run verify-reminder-suite` · `npm run verify-contact-management` · `npm run verify-insights-release` · `npm run verify:phase2`
+
+---
+
 ## v3.0.0 Released
 
 **Date:** June 2026
@@ -99,15 +128,13 @@ Tag: v3.0.0
 
 # Next Planned Release
 
-## V5-1B — Reminder Template Preview · Phase 4 complete
+## V5-0 — Automation Platform Foundation
 
-Read-only preview of reminder copy and recipient context for records in 30/14/7-day and expired windows. Phase 1 template module, Phase 2 preview UI, Phase 3 copy/export utilities, Phase 4 operational preview dashboard with drilldown and export pack. Delivery follows in later phases.
+Schema, RPC contracts, daily scan skeleton, and feature flags without user-visible automation yet. Prerequisite for V5-1 automated reminders and digests.
 
-**Documentation:** [`docs/v5-1b-reminder-template-preview.md`](docs/v5-1b-reminder-template-preview.md)
+**Documentation:** [`docs/v5-automated-compliance-operations.md`](docs/v5-automated-compliance-operations.md) (V5-0 section)
 
-**Verification:** `npm run verify-reminder-template-preview` · `npm run verify-reminder-template-preview-ui` · `npm run verify-reminder-template-preview-actions` · `npm run verify-reminder-preview-dashboard`
-
-See [`docs/v5-automated-compliance-operations.md`](docs/v5-automated-compliance-operations.md) and [Future Releases](#future-releases) for broader v5 automation and v3.1.0 cloud follow-on.
+**Prior alpha:** v5.0.0-alpha.2 — V5-1A + V5-1B complete; see [`docs/v5-0-0-alpha-2-release-notes.md`](docs/v5-0-0-alpha-2-release-notes.md)
 
 ---
 
@@ -115,22 +142,23 @@ See [`docs/v5-automated-compliance-operations.md`](docs/v5-automated-compliance-
 
 ## v5.0.0 — Automated Compliance Operations · In progress (alpha)
 
-Scheduled compliance operations: reminder delivery, action orchestration, escalations, and operations audit. **V5-1A Contact Management** shipped as **v5.0.0-alpha.1**. See [`docs/v5-automated-compliance-operations.md`](docs/v5-automated-compliance-operations.md) and [`docs/v5-1a-contact-management.md`](docs/v5-1a-contact-management.md).
+Scheduled compliance operations: reminder delivery, action orchestration, escalations, and operations audit. **V5-1A** shipped as **v5.0.0-alpha.1**; **V5-1B Reminder Template Preview** shipped as **v5.0.0-alpha.2**. See [`docs/v5-automated-compliance-operations.md`](docs/v5-automated-compliance-operations.md), [`docs/v5-1a-contact-management.md`](docs/v5-1a-contact-management.md), and [`docs/v5-0-0-alpha-2-release-notes.md`](docs/v5-0-0-alpha-2-release-notes.md).
 
 **Prerequisites:** v4.0.1 GA + v3.1.0 cloud follow-on.
 
 **Alpha verification:**
 
+- `npm run verify-reminder-suite` — V5-1B release gate (no Supabase)
 - `npm run verify-contact-management` — V5-1A release gate (no Supabase)
 - `npm run verify:phase2` — cloud regression including contact RPC smokes
 
-**Next slice:** V5-1B Reminder Template Preview
+**Next slice:** V5-0 Automation Platform Foundation
 
 ## v4.0.1 — Compliance Insights GA · RC hardening complete
 
 Read-only compliance insights on the dashboard: health score, risk summary, renewal forecast, and rule-based recommendations. See [`docs/compliance-insights.md`](docs/compliance-insights.md) and [Version Roadmap — v4](#v4--compliance-insights-release-candidate).
 
-Application version: **v5.0.0-alpha.1** in source (V5-1A Contact Management alpha); v4 GA target **v4.0.1**.
+Application version: **v5.0.0-alpha.2** in source (V5-1A + V5-1B alpha); v4 GA target **v4.0.1**.
 
 **RC hardening summary (June 2026):**
 
@@ -722,7 +750,7 @@ Tag: **v4.0.0-rc1** in source; GA target **v4.0.1** (pending sign-off and versio
 
 **Theme:** From insight to action — scheduled reminders, policy-driven action creation, escalations, and auditable operations on the existing cloud platform.
 
-V4 answers *what needs attention*. V5 **acts on it automatically** once the automation platform ships. **V5-1A Contact Management** (v5.0.0-alpha.1) establishes person email fields required for future reminder delivery.
+V4 answers *what needs attention*. V5 **acts on it automatically** once the automation platform ships. **V5-1A Contact Management** (v5.0.0-alpha.1) and **V5-1B Reminder Template Preview** (v5.0.0-alpha.2) establish contact fields and read-only reminder preview before delivery.
 
 **Full roadmap:** [`docs/v5-automated-compliance-operations.md`](docs/v5-automated-compliance-operations.md)  
 **V5-1A alpha:** [`docs/v5-1a-contact-management.md`](docs/v5-1a-contact-management.md)
@@ -732,7 +760,7 @@ V4 answers *what needs attention*. V5 **acts on it automatically** once the auto
 | Slice | Status | Summary |
 |-------|--------|---------|
 | V5-1A | **COMPLETE** | Contact Management — email fields, Contact Readiness insights, drilldown-to-edit; **v5.0.0-alpha.1** |
-| V5-1B | **IN PROGRESS** | Reminder Template Preview — Phase 4 preview dashboard complete |
+| V5-1B | **COMPLETE** | Reminder Template Preview — template, preview UI, copy/export, dashboard; **v5.0.0-alpha.2** |
 | V5-0 | **PLANNED** | Automation platform — schema, RPCs, daily scan skeleton, feature flags |
 | V5-1 | **PLANNED** | Automated reminders & digests — queue, email delivery, mark sent on delivery |
 | V5-2 | **PLANNED** | Automated action orchestration — policies map V4 recommendations → `add_default_actions` |
@@ -743,7 +771,7 @@ V4 answers *what needs attention*. V5 **acts on it automatically** once the auto
 
 **Non-goals:** AI/LLM, third-party DBS APIs, mobile apps, visual workflow builder.
 
-**Alpha tag in source:** v5.0.0-alpha.1  
+**Alpha tag in source:** v5.0.0-alpha.2  
 **GA tag target:** `v5.0.0`
 
 ---

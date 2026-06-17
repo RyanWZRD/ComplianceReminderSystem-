@@ -639,6 +639,46 @@ header h1 {
   padding: 0.85rem 1rem;
 }
 
+.compliance-insights-drilldown {
+  display: block;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.compliance-insights-drilldown:hover {
+  box-shadow: 0 2px 8px rgba(67, 97, 238, 0.12);
+}
+
+.compliance-insights-drilldown.active {
+  box-shadow: 0 2px 10px rgba(67, 97, 238, 0.18);
+}
+
+.compliance-insights-metric-risk.compliance-insights-drilldown:hover,
+.compliance-insights-metric-risk.compliance-insights-drilldown.active {
+  border-color: #ef4444;
+}
+
+.compliance-insights-metric-warning.compliance-insights-drilldown:hover,
+.compliance-insights-metric-warning.compliance-insights-drilldown.active {
+  border-color: #d97706;
+}
+
+.compliance-insights-forecast-card.compliance-insights-drilldown:hover,
+.compliance-insights-forecast-card.compliance-insights-drilldown.active {
+  border-color: #4361ee;
+}
+
+.compliance-insights-preview {
+  margin-top: 1.25rem;
+}
+
+.compliance-insights-preview-empty-hint {
+  margin-top: 1.25rem;
+  margin-bottom: 0;
+}
+
 .compliance-insights-metric-risk {
   border-top: 3px solid #c0392b;
 }

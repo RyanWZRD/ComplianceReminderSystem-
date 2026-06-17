@@ -1,15 +1,19 @@
 /**
- * Deterministic verification for the V4-0A Compliance Insights engine
- * and V4-0B dashboard metric mappings.
+ * Deterministic verification for the V4-0A Compliance Insights engine,
+ * V4-0B dashboard metric mappings, and V4-0D drilldown filters.
  * Uses fixture rows only — no Supabase or browser required.
  */
 
-import { computeComplianceInsights, normalizeComplianceRow } from "../js/app/insights/insights-engine.js";
+import { computeComplianceInsights, createInsightsContext, normalizeComplianceRow } from "../js/app/insights/insights-engine.js";
 import {
   mapInsightsToEvidenceMetrics,
   mapInsightsToGlobalActionMetrics,
   mapInsightsToSummaryCounts,
 } from "../js/app/insights/compliance-insights.js";
+import {
+  COMPLIANCE_INSIGHT_DRILLDOWN_TYPES,
+  getExpectedDrilldownCounts,
+} from "../js/app/insights/compliance-insights-drilldowns.js";
 import {
   CLOUD_FIXTURE_ROWS,
   EXPECTED_INSIGHTS,
@@ -234,12 +238,67 @@ function verifyDashboardMappings(label, rows) {
   );
 }
 
-console.log("Compliance Insights engine verification (V4-0A + V4-0B mappings)\n");
+function verifyDrilldownCounts(label, rows) {
+  const normalizedRows = normalizeFixtureRows(rows);
+  const ctx = createInsightsContext(FIXTURE_AS_OF_DATE, FIXTURE_SETTINGS);
+  const insights = computeComplianceInsights(rows, FIXTURE_SETTINGS, FIXTURE_AS_OF_DATE);
+  const drilldownCounts = getExpectedDrilldownCounts(normalizedRows, ctx);
+
+  assertEqual(
+    drilldownCounts[COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.EXPIRED],
+    insights.risk.expiredRecords,
+    `${label} drilldown expired records`
+  );
+  assertEqual(
+    drilldownCounts[COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.MISSING_EVIDENCE],
+    insights.risk.missingEvidenceRecords,
+    `${label} drilldown missing evidence`
+  );
+  assertEqual(
+    drilldownCounts[COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.STALE_EVIDENCE],
+    insights.risk.staleEvidenceRecords,
+    `${label} drilldown stale evidence`
+  );
+  assertEqual(
+    drilldownCounts[COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.OVERDUE_ACTIONS],
+    insights.risk.overdueActions,
+    `${label} drilldown overdue actions`
+  );
+  assertEqual(
+    drilldownCounts[COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.EXPIRED_ACTIVE_ACTIONS],
+    insights.risk.expiredWithActiveActions,
+    `${label} drilldown expired with active actions`
+  );
+  assertEqual(
+    drilldownCounts[COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.EXPIRING_THIS_MONTH],
+    insights.forecast.expiringThisMonth,
+    `${label} drilldown expiring this month`
+  );
+  assertEqual(
+    drilldownCounts[COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.EXPIRING_NEXT_MONTH],
+    insights.forecast.expiringNextMonth,
+    `${label} drilldown expiring next month`
+  );
+  assertEqual(
+    drilldownCounts[COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.EXPIRING_30_DAYS],
+    insights.forecast.expiringWithin30Days,
+    `${label} drilldown expiring within 30 days`
+  );
+  assertEqual(
+    drilldownCounts[COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.EXPIRING_90_DAYS],
+    insights.forecast.expiringWithin90Days,
+    `${label} drilldown expiring within 90 days`
+  );
+}
+
+console.log("Compliance Insights engine verification (V4-0A + V4-0B mappings + V4-0D drilldowns)\n");
 
 verifyInsights("local fixture rows", LOCAL_FIXTURE_ROWS);
 verifyInsights("cloud-shaped fixture rows", CLOUD_FIXTURE_ROWS);
 verifyDashboardMappings("local fixture rows", LOCAL_FIXTURE_ROWS);
 verifyDashboardMappings("cloud-shaped fixture rows", CLOUD_FIXTURE_ROWS);
+verifyDrilldownCounts("local fixture rows", LOCAL_FIXTURE_ROWS);
+verifyDrilldownCounts("cloud-shaped fixture rows", CLOUD_FIXTURE_ROWS);
 
 const emptyInsights = computeComplianceInsights([], FIXTURE_SETTINGS, FIXTURE_AS_OF_DATE);
 
@@ -260,3 +319,4 @@ console.log(`  recordCount=${EXPECTED_INSIGHTS.recordCount}`);
 console.log(`  compositeHealthScore=${EXPECTED_INSIGHTS.compositeHealthScore}`);
 console.log("  local + cloud-shaped fixtures produce identical metrics");
 console.log("  dashboard summary/action/evidence mappings match legacy formulas");
+console.log("  compliance insight drilldown counts match risk/forecast tiles");

@@ -24121,6 +24121,175 @@ ${suffix}`;
     };
   }
 
+  // js/app/insights/compliance-insights-drilldowns.js
+  var COMPLIANCE_INSIGHT_DRILLDOWN_TYPES = {
+    EXPIRED: "expired-records",
+    MISSING_EVIDENCE: "missing-evidence",
+    STALE_EVIDENCE: "stale-evidence",
+    OVERDUE_ACTIONS: "overdue-actions",
+    EXPIRED_ACTIVE_ACTIONS: "expired-active-actions",
+    EXPIRING_THIS_MONTH: "expiring-this-month",
+    EXPIRING_NEXT_MONTH: "expiring-next-month",
+    EXPIRING_30_DAYS: "expiring-within-30-days",
+    EXPIRING_90_DAYS: "expiring-within-90-days"
+  };
+  var COMPLIANCE_INSIGHT_RECORD_PREVIEW_COLUMNS = [
+    { key: "name", label: "Name" },
+    { key: "role", label: "Role" },
+    { key: "complianceType", label: "Compliance Type" },
+    { key: "expiryDate", label: "Expiry Date" },
+    { key: "status", label: "Status" },
+    { key: "evidenceCount", label: "Evidence Count" }
+  ];
+  var COMPLIANCE_INSIGHT_RECORD_WITH_ACTIONS_PREVIEW_COLUMNS = [
+    { key: "name", label: "Name" },
+    { key: "role", label: "Role" },
+    { key: "complianceType", label: "Compliance Type" },
+    { key: "expiryDate", label: "Expiry Date" },
+    { key: "status", label: "Status" },
+    { key: "evidenceCount", label: "Evidence Count" },
+    { key: "activeActionCount", label: "Active Actions" }
+  ];
+  var COMPLIANCE_INSIGHT_ACTION_PREVIEW_COLUMNS = [
+    { key: "name", label: "Name" },
+    { key: "role", label: "Role" },
+    { key: "complianceType", label: "Compliance Type" },
+    { key: "actionTitle", label: "Action Title" },
+    { key: "status", label: "Status" },
+    { key: "dueDate", label: "Due Date" },
+    { key: "expiryDate", label: "Expiry Date" }
+  ];
+  var DRILLDOWN_META = {
+    [COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.EXPIRED]: {
+      title: "Expired Records",
+      emptyMessage: "No expired compliance records.",
+      filename: "compliance-insight-expired_records.csv",
+      itemLabel: "Records"
+    },
+    [COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.MISSING_EVIDENCE]: {
+      title: "Records Missing Evidence",
+      emptyMessage: "All records have at least one evidence item attached.",
+      filename: "compliance-insight-missing_evidence.csv",
+      itemLabel: "Records"
+    },
+    [COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.STALE_EVIDENCE]: {
+      title: "Records With Stale Evidence",
+      emptyMessage: "No records have evidence older than 12 months.",
+      filename: "compliance-insight-stale_evidence.csv",
+      itemLabel: "Records"
+    },
+    [COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.OVERDUE_ACTIONS]: {
+      title: "Overdue Actions",
+      emptyMessage: "No actions are past their due date.",
+      filename: "compliance-insight-overdue_actions.csv",
+      itemLabel: "Actions"
+    },
+    [COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.EXPIRED_ACTIVE_ACTIONS]: {
+      title: "Expired Records With Active Actions",
+      emptyMessage: "No expired records have open or in-progress actions.",
+      filename: "compliance-insight-expired_active_actions.csv",
+      itemLabel: "Records"
+    },
+    [COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.EXPIRING_THIS_MONTH]: {
+      title: "Expiring This Month",
+      emptyMessage: "No non-expired records expire in the current calendar month.",
+      filename: "compliance-insight-expiring_this_month.csv",
+      itemLabel: "Records"
+    },
+    [COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.EXPIRING_NEXT_MONTH]: {
+      title: "Expiring Next Month",
+      emptyMessage: "No records expire in the next calendar month.",
+      filename: "compliance-insight-expiring_next_month.csv",
+      itemLabel: "Records"
+    },
+    [COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.EXPIRING_30_DAYS]: {
+      title: "Expiring Within 30 Days",
+      emptyMessage: "No records expire within the next 30 days.",
+      filename: "compliance-insight-expiring_within_30_days.csv",
+      itemLabel: "Records"
+    },
+    [COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.EXPIRING_90_DAYS]: {
+      title: "Expiring Within 90 Days",
+      emptyMessage: "No records expire within the next 90 days.",
+      filename: "compliance-insight-expiring_within_90_days.csv",
+      itemLabel: "Records"
+    }
+  };
+  function isActionLevelDrilldown(drilldownType) {
+    return drilldownType === COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.OVERDUE_ACTIONS;
+  }
+  function getActiveActionCount(row, ctx) {
+    const actions = Array.isArray(row.actions) ? row.actions : [];
+    return actions.filter((action) => {
+      const status = ctx.getActionStatus(action);
+      return status === ACTION_STATUSES.OPEN || status === ACTION_STATUSES.IN_PROGRESS;
+    }).length;
+  }
+  function filterComplianceInsightDrilldownRecords(drilldownType, rows, ctx) {
+    if (isActionLevelDrilldown(drilldownType)) {
+      return [];
+    }
+    return rows.filter((row) => {
+      const status = ctx.getExpiryStatus(row.expiryDate);
+      const evidenceItems = Array.isArray(row.evidence) ? row.evidence : [];
+      const daysRemaining = ctx.getDaysUntilExpiry(row.expiryDate);
+      if (drilldownType === COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.EXPIRED) {
+        return status.key === "expired";
+      }
+      if (drilldownType === COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.MISSING_EVIDENCE) {
+        return evidenceItems.length === 0;
+      }
+      if (drilldownType === COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.STALE_EVIDENCE) {
+        return evidenceItems.length > 0 && evidenceItems.some((item) => ctx.isEvidenceStale(item.addedDate));
+      }
+      if (drilldownType === COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.EXPIRED_ACTIVE_ACTIONS) {
+        return status.key === "expired" && getActiveActionCount(row, ctx) > 0;
+      }
+      if (drilldownType === COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.EXPIRING_THIS_MONTH) {
+        return status.key !== "expired" && ctx.isExpiryInMonthRange(row.expiryDate, 0);
+      }
+      if (drilldownType === COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.EXPIRING_NEXT_MONTH) {
+        return ctx.isExpiryInMonthRange(row.expiryDate, 1);
+      }
+      if (drilldownType === COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.EXPIRING_30_DAYS) {
+        return !Number.isNaN(daysRemaining) && daysRemaining >= 0 && daysRemaining <= 30;
+      }
+      if (drilldownType === COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.EXPIRING_90_DAYS) {
+        return !Number.isNaN(daysRemaining) && daysRemaining >= 0 && daysRemaining <= 90;
+      }
+      return false;
+    });
+  }
+  function flattenOverdueActionEntries(rows, ctx) {
+    const entries = [];
+    rows.forEach((row) => {
+      const actions = Array.isArray(row.actions) ? row.actions : [];
+      actions.forEach((action) => {
+        if (ctx.isActionOverdue(action)) {
+          entries.push({ row, action });
+        }
+      });
+    });
+    return entries;
+  }
+  function getComplianceInsightDrilldownColumns(drilldownType) {
+    if (isActionLevelDrilldown(drilldownType)) {
+      return COMPLIANCE_INSIGHT_ACTION_PREVIEW_COLUMNS;
+    }
+    if (drilldownType === COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.EXPIRED_ACTIVE_ACTIONS) {
+      return COMPLIANCE_INSIGHT_RECORD_WITH_ACTIONS_PREVIEW_COLUMNS;
+    }
+    return COMPLIANCE_INSIGHT_RECORD_PREVIEW_COLUMNS;
+  }
+  function getComplianceInsightDrilldownMeta(drilldownType) {
+    return DRILLDOWN_META[drilldownType] || {
+      title: "Compliance Insight",
+      emptyMessage: "No matching records.",
+      filename: "compliance-insight-preview.csv",
+      itemLabel: "Records"
+    };
+  }
+
   // app.js
   console.log(
     `Compliance Reminder System v${APP_VERSION} \u2014 app.js loaded (${DATA_BACKEND} data, ${AUTH_MODE} auth)`
@@ -24337,6 +24506,27 @@ ${suffix}`;
   );
   var complianceInsightsForecast30Days = document.getElementById("compliance-insights-forecast-30-days");
   var complianceInsightsForecast90Days = document.getElementById("compliance-insights-forecast-90-days");
+  var complianceInsightsPreviewEmptyHint = document.getElementById(
+    "compliance-insights-preview-empty-hint"
+  );
+  var complianceInsightsPreview = document.getElementById("compliance-insights-preview");
+  var complianceInsightsPreviewTitle = document.getElementById("compliance-insights-preview-title");
+  var complianceInsightsPreviewMeta = document.getElementById("compliance-insights-preview-meta");
+  var complianceInsightsPreviewTableHead = document.getElementById(
+    "compliance-insights-preview-table-head"
+  );
+  var complianceInsightsPreviewTableBody = document.getElementById(
+    "compliance-insights-preview-table-body"
+  );
+  var exportComplianceInsightsPreviewCsvBtn = document.getElementById(
+    "export-compliance-insights-preview-csv-btn"
+  );
+  var clearComplianceInsightsPreviewBtn = document.getElementById(
+    "clear-compliance-insights-preview-btn"
+  );
+  var complianceInsightDrilldownTiles = document.querySelectorAll(
+    "[data-compliance-insight-drilldown]"
+  );
   var insightHealthScore = document.getElementById("insight-health-score");
   var insightOpenActions = document.getElementById("insight-open-actions");
   var insightExpiredLinkedActions = document.getElementById("insight-expired-linked-actions");
@@ -24428,6 +24618,7 @@ ${suffix}`;
     { key: "evidenceCount", label: "Evidence Count" }
   ];
   var currentInsight = null;
+  var currentComplianceInsightDrilldown = null;
   var STATUS_FILTER_LABELS = {
     valid: "Valid",
     dueSoon: "Due Soon",
@@ -25763,6 +25954,189 @@ This cannot be undone.`
     if (complianceInsightsForecast90Days) {
       complianceInsightsForecast90Days.textContent = insights.forecast.expiringWithin90Days;
     }
+  }
+  function getComplianceInsightsDrilldownContext() {
+    return createInsightsContext(getTodayAtMidnight(), reminderSettings, {
+      dueSoonDays: DUE_SOON_DAYS2
+    });
+  }
+  function buildComplianceInsightDrilldownRecordRow(row, drilldownType) {
+    const status = getStatus(row.expiryDate);
+    const evidenceSummary = getEvidenceSummary(row.evidence);
+    const actionSummary = getActionSummary(row.actions);
+    const previewRow = {
+      name: row.name,
+      role: row.role,
+      complianceType: row.complianceType,
+      expiryDate: formatDate(row.expiryDate),
+      status: getStatusBadgeLabel(status.key),
+      evidenceCount: String(evidenceSummary.count)
+    };
+    if (drilldownType === "expired-active-actions") {
+      previewRow.activeActionCount = String(actionSummary.activeCount);
+    }
+    return previewRow;
+  }
+  function buildComplianceInsightDrilldownActionRow(entry) {
+    return {
+      name: entry.row.name,
+      role: entry.row.role,
+      complianceType: entry.row.complianceType,
+      actionTitle: entry.action.title,
+      status: getActionStatusLabel(entry.action),
+      dueDate: formatActionDueDate(entry.action.dueDate),
+      expiryDate: formatDate(entry.row.expiryDate)
+    };
+  }
+  function buildComplianceInsightDrilldownReport(drilldownType) {
+    const generatedAt = /* @__PURE__ */ new Date();
+    const ctx = getComplianceInsightsDrilldownContext();
+    const meta = getComplianceInsightDrilldownMeta(drilldownType);
+    const columns = getComplianceInsightDrilldownColumns(drilldownType);
+    const rows = getAllComplianceRows();
+    let tableRows = [];
+    if (isActionLevelDrilldown(drilldownType)) {
+      const entries = flattenOverdueActionEntries(rows, ctx).sort((a, b) => {
+        const dueCompare = (a.action.dueDate || "9999").localeCompare(b.action.dueDate || "9999");
+        if (dueCompare !== 0) {
+          return dueCompare;
+        }
+        return a.row.name.localeCompare(b.row.name);
+      });
+      tableRows = entries.map(buildComplianceInsightDrilldownActionRow);
+    } else {
+      const matchedRows = filterComplianceInsightDrilldownRecords(drilldownType, rows, ctx).sort(
+        (a, b) => a.expiryDate.localeCompare(b.expiryDate) || a.name.localeCompare(b.name)
+      );
+      tableRows = matchedRows.map(
+        (row) => buildComplianceInsightDrilldownRecordRow(row, drilldownType)
+      );
+    }
+    return {
+      type: drilldownType,
+      title: meta.title,
+      emptyMessage: meta.emptyMessage,
+      itemLabel: meta.itemLabel,
+      generatedAt: generatedAt.toISOString(),
+      generatedDisplay: generatedAt.toLocaleString("en-GB", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit"
+      }),
+      totalCount: tableRows.length,
+      columns,
+      tableRows,
+      filename: meta.filename
+    };
+  }
+  function updateComplianceInsightDrilldownTileActiveState() {
+    complianceInsightDrilldownTiles.forEach((tile) => {
+      tile.classList.toggle(
+        "active",
+        Boolean(
+          currentComplianceInsightDrilldown && tile.dataset.complianceInsightDrilldown === currentComplianceInsightDrilldown.type
+        )
+      );
+    });
+  }
+  function renderComplianceInsightDrilldownPreview(report) {
+    if (!complianceInsightsPreview || !complianceInsightsPreviewTitle || !complianceInsightsPreviewMeta || !complianceInsightsPreviewTableHead || !complianceInsightsPreviewTableBody) {
+      return;
+    }
+    currentComplianceInsightDrilldown = report;
+    complianceInsightsPreviewTitle.textContent = report.title;
+    complianceInsightsPreviewMeta.textContent = `Generated: ${report.generatedDisplay} \xB7 ${report.itemLabel} included: ${report.totalCount}`;
+    complianceInsightsPreviewTableHead.innerHTML = `
+    <tr>
+      ${report.columns.map((column) => `<th>${escapeHtml(column.label)}</th>`).join("")}
+    </tr>
+  `;
+    if (report.tableRows.length === 0) {
+      complianceInsightsPreviewTableBody.innerHTML = `
+      <tr>
+        <td colspan="${report.columns.length}" class="insight-empty-cell">${escapeHtml(report.emptyMessage)}</td>
+      </tr>
+    `;
+    } else {
+      complianceInsightsPreviewTableBody.innerHTML = report.tableRows.map(
+        (row) => `
+          <tr>
+            ${report.columns.map((column) => `<td>${escapeHtml(row[column.key] ?? "")}</td>`).join("")}
+          </tr>
+        `
+      ).join("");
+    }
+    complianceInsightsPreview.classList.remove("hidden");
+    if (complianceInsightsPreviewEmptyHint) {
+      complianceInsightsPreviewEmptyHint.classList.add("hidden");
+    }
+    updateComplianceInsightDrilldownTileActiveState();
+  }
+  function showComplianceInsightDrilldownPreview(drilldownType) {
+    renderComplianceInsightDrilldownPreview(buildComplianceInsightDrilldownReport(drilldownType));
+    if (complianceInsightsPreview) {
+      complianceInsightsPreview.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+  }
+  function clearComplianceInsightDrilldownPreview() {
+    currentComplianceInsightDrilldown = null;
+    if (complianceInsightsPreview) {
+      complianceInsightsPreview.classList.add("hidden");
+    }
+    if (complianceInsightsPreviewTableHead) {
+      complianceInsightsPreviewTableHead.innerHTML = "";
+    }
+    if (complianceInsightsPreviewTableBody) {
+      complianceInsightsPreviewTableBody.innerHTML = "";
+    }
+    if (complianceInsightsPreviewEmptyHint) {
+      complianceInsightsPreviewEmptyHint.classList.remove("hidden");
+    }
+    updateComplianceInsightDrilldownTileActiveState();
+  }
+  function exportComplianceInsightDrilldownCsv() {
+    if (!currentComplianceInsightDrilldown) {
+      showMessage(appMessage, "Select a compliance insight tile to preview first.", "error");
+      return;
+    }
+    const headerRow = currentComplianceInsightDrilldown.columns.map((column) => escapeCsvValue(column.label)).join(",");
+    const dataRows = currentComplianceInsightDrilldown.tableRows.map(
+      (row) => currentComplianceInsightDrilldown.columns.map((column) => escapeCsvValue(row[column.key] ?? "")).join(",")
+    );
+    const summaryLines = [
+      `"Insight","${escapeCsvValue(currentComplianceInsightDrilldown.title)}"`,
+      `"Generated","${escapeCsvValue(currentComplianceInsightDrilldown.generatedDisplay)}"`,
+      `"${escapeCsvValue(currentComplianceInsightDrilldown.itemLabel)} included","${currentComplianceInsightDrilldown.totalCount}"`,
+      ""
+    ];
+    const csvContent = [...summaryLines, headerRow, ...dataRows].join("\n");
+    downloadFile(csvContent, currentComplianceInsightDrilldown.filename, "text/csv");
+    showMessage(appMessage, "Compliance insight preview CSV downloaded.", "success");
+  }
+  function refreshActiveComplianceInsightDrilldownPreview() {
+    if (!currentComplianceInsightDrilldown?.type || !complianceInsightsPreview || complianceInsightsPreview.classList.contains("hidden")) {
+      return;
+    }
+    renderComplianceInsightDrilldownPreview(
+      buildComplianceInsightDrilldownReport(currentComplianceInsightDrilldown.type)
+    );
+  }
+  function setupComplianceInsightsDrilldownListeners() {
+    complianceInsightDrilldownTiles.forEach((tile) => {
+      tile.addEventListener("click", () => {
+        showComplianceInsightDrilldownPreview(tile.dataset.complianceInsightDrilldown);
+      });
+    });
+    exportComplianceInsightsPreviewCsvBtn?.addEventListener(
+      "click",
+      exportComplianceInsightDrilldownCsv
+    );
+    clearComplianceInsightsPreviewBtn?.addEventListener(
+      "click",
+      clearComplianceInsightDrilldownPreview
+    );
   }
   function updateInsightCardActiveState() {
     insightCards.forEach((card) => {
@@ -29062,6 +29436,7 @@ ${auditLine}` : auditLine;
     refreshActiveReportPreview();
     refreshActiveInsightPreview();
     refreshActiveActionDashboardPreview();
+    refreshActiveComplianceInsightDrilldownPreview();
     renderBulkSelectionToolbar();
     updateSelectAllPageCheckbox(pageRows);
   }
@@ -30482,6 +30857,7 @@ Your current data will be overwritten. Continue?`
     setupBulkActionModalListeners();
     setupBulkSelectionListeners();
     setupManagementInsightListeners();
+    setupComplianceInsightsDrilldownListeners();
     setupVisualInsightsListeners();
     setupActionDashboardListeners();
     setupRecordWorkspaceListeners();

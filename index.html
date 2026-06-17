@@ -331,7 +331,7 @@
 
     <section class="card compliance-insights-section" id="compliance-insights-section" aria-labelledby="compliance-insights-heading">
       <h2 id="compliance-insights-heading">Compliance Insights</h2>
-      <p class="settings-hint">Composite health view from expiry, evidence, and action dimensions across all records.</p>
+      <p class="settings-hint">Composite health view from expiry, evidence, and action dimensions across all records. Click a risk or forecast tile to preview matching records.</p>
       <p id="compliance-insights-cloud-note" class="settings-hint compliance-insights-cloud-note hidden">In cloud mode, evidence health is based on metadata only (document name, type, and dates).</p>
       <p id="compliance-insights-empty" class="settings-hint compliance-insights-empty hidden">No compliance records yet. Add records to see compliance insights.</p>
 
@@ -367,48 +367,67 @@
         <div class="compliance-insights-risk">
           <h3 class="compliance-insights-subheading">Risk Summary</h3>
           <div class="compliance-insights-risk-strip">
-            <div class="compliance-insights-metric compliance-insights-metric-risk">
+            <button type="button" class="compliance-insights-metric compliance-insights-metric-risk compliance-insights-drilldown" data-compliance-insight-drilldown="expired-records" aria-label="Expired records. Click to preview.">
               <span class="compliance-insights-metric-label">Expired records</span>
               <span id="compliance-insights-risk-expired" class="compliance-insights-metric-value">0</span>
-            </div>
-            <div class="compliance-insights-metric compliance-insights-metric-warning">
+            </button>
+            <button type="button" class="compliance-insights-metric compliance-insights-metric-warning compliance-insights-drilldown" data-compliance-insight-drilldown="missing-evidence" aria-label="Missing evidence. Click to preview.">
               <span class="compliance-insights-metric-label">Missing evidence</span>
               <span id="compliance-insights-risk-missing-evidence" class="compliance-insights-metric-value">0</span>
-            </div>
-            <div class="compliance-insights-metric compliance-insights-metric-warning">
+            </button>
+            <button type="button" class="compliance-insights-metric compliance-insights-metric-warning compliance-insights-drilldown" data-compliance-insight-drilldown="stale-evidence" aria-label="Stale evidence. Click to preview.">
               <span class="compliance-insights-metric-label">Stale evidence</span>
               <span id="compliance-insights-risk-stale-evidence" class="compliance-insights-metric-value">0</span>
-            </div>
-            <div class="compliance-insights-metric compliance-insights-metric-risk">
+            </button>
+            <button type="button" class="compliance-insights-metric compliance-insights-metric-risk compliance-insights-drilldown" data-compliance-insight-drilldown="overdue-actions" aria-label="Overdue actions. Click to preview.">
               <span class="compliance-insights-metric-label">Overdue actions</span>
               <span id="compliance-insights-risk-overdue-actions" class="compliance-insights-metric-value">0</span>
-            </div>
-            <div class="compliance-insights-metric compliance-insights-metric-risk">
+            </button>
+            <button type="button" class="compliance-insights-metric compliance-insights-metric-risk compliance-insights-drilldown" data-compliance-insight-drilldown="expired-active-actions" aria-label="Expired records with active actions. Click to preview.">
               <span class="compliance-insights-metric-label">Expired records with active actions</span>
               <span id="compliance-insights-risk-expired-active-actions" class="compliance-insights-metric-value">0</span>
-            </div>
+            </button>
           </div>
         </div>
 
         <div class="compliance-insights-forecast">
           <h3 class="compliance-insights-subheading">Renewal Forecast</h3>
           <div class="compliance-insights-forecast-cards">
-            <div class="compliance-insights-forecast-card">
+            <button type="button" class="compliance-insights-forecast-card compliance-insights-drilldown" data-compliance-insight-drilldown="expiring-this-month" aria-label="Expiring this month. Click to preview.">
               <span class="compliance-insights-metric-label">Expiring this month</span>
               <span id="compliance-insights-forecast-this-month" class="compliance-insights-metric-value">0</span>
-            </div>
-            <div class="compliance-insights-forecast-card">
+            </button>
+            <button type="button" class="compliance-insights-forecast-card compliance-insights-drilldown" data-compliance-insight-drilldown="expiring-next-month" aria-label="Expiring next month. Click to preview.">
               <span class="compliance-insights-metric-label">Expiring next month</span>
               <span id="compliance-insights-forecast-next-month" class="compliance-insights-metric-value">0</span>
-            </div>
-            <div class="compliance-insights-forecast-card">
+            </button>
+            <button type="button" class="compliance-insights-forecast-card compliance-insights-drilldown" data-compliance-insight-drilldown="expiring-within-30-days" aria-label="Expiring within 30 days. Click to preview.">
               <span class="compliance-insights-metric-label">Expiring within 30 days</span>
               <span id="compliance-insights-forecast-30-days" class="compliance-insights-metric-value">0</span>
-            </div>
-            <div class="compliance-insights-forecast-card">
+            </button>
+            <button type="button" class="compliance-insights-forecast-card compliance-insights-drilldown" data-compliance-insight-drilldown="expiring-within-90-days" aria-label="Expiring within 90 days. Click to preview.">
               <span class="compliance-insights-metric-label">Expiring within 90 days</span>
               <span id="compliance-insights-forecast-90-days" class="compliance-insights-metric-value">0</span>
-            </div>
+            </button>
+          </div>
+        </div>
+
+        <p id="compliance-insights-preview-empty-hint" class="settings-hint compliance-insights-preview-empty-hint">Select a risk or forecast tile above to preview records.</p>
+
+        <div id="compliance-insights-preview" class="insight-preview compliance-insights-preview hidden">
+          <div class="insight-preview-header">
+            <h3 id="compliance-insights-preview-title" class="insight-preview-title"></h3>
+            <p id="compliance-insights-preview-meta" class="insight-preview-meta"></p>
+          </div>
+          <div class="table-wrapper insight-table-wrapper">
+            <table class="insight-table">
+              <thead id="compliance-insights-preview-table-head"></thead>
+              <tbody id="compliance-insights-preview-table-body"></tbody>
+            </table>
+          </div>
+          <div class="insight-preview-actions no-print">
+            <button type="button" id="export-compliance-insights-preview-csv-btn" class="export-btn">Export Preview CSV</button>
+            <button type="button" id="clear-compliance-insights-preview-btn" class="quick-action-btn">Clear Preview</button>
           </div>
         </div>
       </div>

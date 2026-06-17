@@ -61,6 +61,13 @@ import {
   normalizeExpiryDate,
   parseDateAtMidnight,
 } from "./js/data/dates.js";
+import {
+  clearComplianceInsightsCache,
+  getComplianceInsights,
+  mapInsightsToEvidenceMetrics,
+  mapInsightsToGlobalActionMetrics,
+  mapInsightsToSummaryCounts,
+} from "./js/app/insights/compliance-insights.js";
 
 console.log(
   `Compliance Reminder System v${APP_VERSION} — app.js loaded (${DATA_BACKEND} data, ${AUTH_MODE} auth)`
@@ -1619,44 +1626,8 @@ function getFlattenedActionEntries() {
 }
 
 function getGlobalActionMetrics() {
-  let openActions = 0;
-  let inProgressActions = 0;
-  let dueThisWeek = 0;
-  let overdueActions = 0;
-  let completedActions = 0;
-  let expiredWithOpenActions = 0;
-
-  getAllComplianceRows().forEach((row) => {
-    const summary = getActionSummary(row.actions);
-    const status = getStatus(row.expiryDate);
-
-    openActions += summary.openCount;
-    inProgressActions += summary.inProgressCount;
-    completedActions += summary.completedCount;
-
-    if (summary.activeCount > 0 && status.key === "expired") {
-      expiredWithOpenActions += 1;
-    }
-
-    (row.actions || []).forEach((action) => {
-      if (isActionDueThisWeek(action)) {
-        dueThisWeek += 1;
-      }
-
-      if (isActionOverdue(action)) {
-        overdueActions += 1;
-      }
-    });
-  });
-
-  return {
-    openActions,
-    inProgressActions,
-    dueThisWeek,
-    overdueActions,
-    completedActions,
-    expiredWithOpenActions,
-  };
+  const insights = getComplianceInsights(getAllComplianceRows(), reminderSettings);
+  return mapInsightsToGlobalActionMetrics(insights);
 }
 
 function getGlobalActionCounts() {
@@ -1691,39 +1662,18 @@ function isExpiryInMonthRange(expiryDate, monthOffset) {
 
 function getManagementInsightMetrics() {
   const rows = getAllComplianceRows();
-  let totalOpenActions = 0;
+  const insights = getComplianceInsights(rows, reminderSettings);
+  const evidenceMetrics = mapInsightsToEvidenceMetrics(insights);
   let expiredLinkedOpenActions = 0;
-  let missingEvidenceRecords = 0;
-  let expiringThisMonth = 0;
-  let expiringNextMonth = 0;
   let validWithEvidence = 0;
-  let staleEvidenceRecords = 0;
 
   rows.forEach((row) => {
     const actionSummary = getActionSummary(row.actions);
     const evidenceCount = getEvidenceSummary(row.evidence).count;
     const status = getStatus(row.expiryDate);
 
-    totalOpenActions += actionSummary.activeCount;
-
     if (status.key === "expired") {
       expiredLinkedOpenActions += actionSummary.activeCount;
-    }
-
-    if (evidenceCount === 0) {
-      missingEvidenceRecords += 1;
-    }
-
-    if (recordHasStaleEvidence(row.evidence)) {
-      staleEvidenceRecords += 1;
-    }
-
-    if (status.key !== "expired" && isExpiryInMonthRange(row.expiryDate, 0)) {
-      expiringThisMonth += 1;
-    }
-
-    if (isExpiryInMonthRange(row.expiryDate, 1)) {
-      expiringNextMonth += 1;
     }
 
     if (status.key === "valid" && evidenceCount > 0) {
@@ -1736,15 +1686,16 @@ function getManagementInsightMetrics() {
     totalRecords === 0 ? 0 : Math.round((validWithEvidence / totalRecords) * 100);
 
   return {
-    totalOpenActions,
+    totalOpenActions:
+      insights.actionHealth.openActions + insights.actionHealth.inProgressActions,
     expiredLinkedOpenActions,
-    missingEvidenceRecords,
-    expiringThisMonth,
-    expiringNextMonth,
+    missingEvidenceRecords: evidenceMetrics.missingEvidenceRecords,
+    expiringThisMonth: insights.forecast.expiringThisMonth,
+    expiringNextMonth: insights.forecast.expiringNextMonth,
     healthScore,
     validWithEvidence,
     totalRecords,
-    staleEvidenceRecords,
+    staleEvidenceRecords: evidenceMetrics.staleEvidenceRecords,
   };
 }
 
@@ -5311,15 +5262,8 @@ function sortComplianceRows(list) {
 
 // Count compliance records in each status group
 function getSummaryCounts() {
-  const counts = { total: 0, valid: 0, dueSoon: 0, expired: 0 };
-
-  getAllComplianceRows().forEach((row) => {
-    counts.total += 1;
-    const status = getStatus(row.expiryDate);
-    counts[status.key] += 1;
-  });
-
-  return counts;
+  const insights = getComplianceInsights(getAllComplianceRows(), reminderSettings);
+  return mapInsightsToSummaryCounts(insights);
 }
 
 // Count compliance records for the analytics dashboard
@@ -6480,6 +6424,7 @@ function renderTable({ refreshDashboards = true } = {}) {
   renderActiveFilters();
 
   if (refreshDashboards) {
+    clearComplianceInsightsCache();
     renderSummary();
     renderAnalytics();
     renderDashboard();

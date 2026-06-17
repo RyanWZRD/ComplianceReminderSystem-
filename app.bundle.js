@@ -23619,6 +23619,508 @@ ${suffix}`;
   var repository = createComplianceStore();
   var settingsRepository = createSettingsStore();
 
+  // js/app/insights/metrics-health.js
+  function computeExpiryHealth(rows, ctx) {
+    const counts = {
+      total: rows.length,
+      valid: 0,
+      dueSoon: 0,
+      expired: 0,
+      invalidDate: 0,
+      expiringWithin30: 0,
+      expiringWithin60: 0,
+      expiringWithin90: 0
+    };
+    rows.forEach((row) => {
+      const status = ctx.getExpiryStatus(row.expiryDate);
+      if (status.key === "invalid") {
+        counts.invalidDate += 1;
+        return;
+      }
+      counts[status.key] += 1;
+      const daysRemaining = ctx.getDaysUntilExpiry(row.expiryDate);
+      if (daysRemaining >= 0 && daysRemaining <= 30) {
+        counts.expiringWithin30 += 1;
+      }
+      if (daysRemaining >= 0 && daysRemaining <= 60) {
+        counts.expiringWithin60 += 1;
+      }
+      if (daysRemaining >= 0 && daysRemaining <= 90) {
+        counts.expiringWithin90 += 1;
+      }
+    });
+    const scorableTotal = rows.length - counts.invalidDate;
+    counts.score = scorableTotal === 0 ? 0 : Math.round(counts.valid / scorableTotal * 100);
+    return counts;
+  }
+  function computeEvidenceHealth(rows, ctx) {
+    const counts = {
+      total: rows.length,
+      withEvidence: 0,
+      missingEvidence: 0,
+      staleEvidence: 0
+    };
+    rows.forEach((row) => {
+      const evidenceItems = Array.isArray(row.evidence) ? row.evidence : [];
+      if (evidenceItems.length === 0) {
+        counts.missingEvidence += 1;
+        return;
+      }
+      counts.withEvidence += 1;
+      if (evidenceItems.some((item) => ctx.isEvidenceStale(item.addedDate))) {
+        counts.staleEvidence += 1;
+      }
+    });
+    counts.coveragePercent = counts.total === 0 ? 0 : Math.round(counts.withEvidence / counts.total * 100);
+    counts.score = counts.coveragePercent;
+    return counts;
+  }
+  function summarizeActions(actions, ctx) {
+    const items = Array.isArray(actions) ? actions : [];
+    let openCount = 0;
+    let inProgressCount = 0;
+    let completedCount = 0;
+    let overdueCount = 0;
+    let dueThisWeekCount = 0;
+    items.forEach((item) => {
+      const status = ctx.getActionStatus(item);
+      if (status === ACTION_STATUSES.COMPLETED) {
+        completedCount += 1;
+      } else if (status === ACTION_STATUSES.IN_PROGRESS) {
+        inProgressCount += 1;
+      } else {
+        openCount += 1;
+      }
+      if (ctx.isActionOverdue(item)) {
+        overdueCount += 1;
+      }
+      if (ctx.isActionDueThisWeek(item)) {
+        dueThisWeekCount += 1;
+      }
+    });
+    return {
+      openCount,
+      inProgressCount,
+      completedCount,
+      activeCount: openCount + inProgressCount,
+      overdueCount,
+      dueThisWeekCount
+    };
+  }
+  function computeActionHealth(rows, ctx) {
+    const counts = {
+      totalRecords: rows.length,
+      openActions: 0,
+      inProgressActions: 0,
+      completedActions: 0,
+      overdueActions: 0,
+      dueThisWeekActions: 0,
+      recordsWithActiveActions: 0,
+      recordsWithoutActionRisk: 0,
+      expiredRecordsWithActiveActions: 0
+    };
+    rows.forEach((row) => {
+      const summary = summarizeActions(row.actions, ctx);
+      const status = ctx.getExpiryStatus(row.expiryDate);
+      counts.openActions += summary.openCount;
+      counts.inProgressActions += summary.inProgressCount;
+      counts.completedActions += summary.completedCount;
+      counts.overdueActions += summary.overdueCount;
+      counts.dueThisWeekActions += summary.dueThisWeekCount;
+      if (summary.activeCount > 0) {
+        counts.recordsWithActiveActions += 1;
+      }
+      if (summary.activeCount > 0 && status.key === "expired") {
+        counts.expiredRecordsWithActiveActions += 1;
+      }
+      const hasActionRisk = summary.overdueCount > 0 || summary.activeCount > 0 && status.key === "expired";
+      if (!hasActionRisk) {
+        counts.recordsWithoutActionRisk += 1;
+      }
+    });
+    counts.score = counts.totalRecords === 0 ? 0 : Math.round(counts.recordsWithoutActionRisk / counts.totalRecords * 100);
+    return counts;
+  }
+  function computeOperationalHealth() {
+    return {
+      available: false,
+      score: null,
+      note: "Operational health metrics are not implemented in V4-0A."
+    };
+  }
+  function computeCompositeHealthScore(expiryHealth, evidenceHealth, actionHealth) {
+    return Math.round(
+      (expiryHealth.score + evidenceHealth.score + actionHealth.score) / 3
+    );
+  }
+
+  // js/app/insights/metrics-risk.js
+  function computeRiskSummary(rows, ctx) {
+    let expiredRecords = 0;
+    let dueSoonRecords = 0;
+    let invalidExpiryRecords = 0;
+    let missingEvidenceRecords = 0;
+    let staleEvidenceRecords = 0;
+    let openActions = 0;
+    let inProgressActions = 0;
+    let overdueActions = 0;
+    let expiredWithActiveActions = 0;
+    let openActionsOnExpiredRecords = 0;
+    rows.forEach((row) => {
+      const status = ctx.getExpiryStatus(row.expiryDate);
+      const evidenceItems = Array.isArray(row.evidence) ? row.evidence : [];
+      const actions = Array.isArray(row.actions) ? row.actions : [];
+      if (status.key === "expired") {
+        expiredRecords += 1;
+      } else if (status.key === "dueSoon") {
+        dueSoonRecords += 1;
+      } else if (status.key === "invalid") {
+        invalidExpiryRecords += 1;
+      }
+      if (evidenceItems.length === 0) {
+        missingEvidenceRecords += 1;
+      } else if (evidenceItems.some((item) => ctx.isEvidenceStale(item.addedDate))) {
+        staleEvidenceRecords += 1;
+      }
+      let activeCount = 0;
+      actions.forEach((action) => {
+        const actionStatus = ctx.getActionStatus(action);
+        if (actionStatus === "open") {
+          openActions += 1;
+          activeCount += 1;
+        } else if (actionStatus === "in_progress") {
+          inProgressActions += 1;
+          activeCount += 1;
+        }
+        if (ctx.isActionOverdue(action)) {
+          overdueActions += 1;
+        }
+      });
+      if (activeCount > 0 && status.key === "expired") {
+        expiredWithActiveActions += 1;
+        openActionsOnExpiredRecords += actions.filter(
+          (action) => ctx.getActionStatus(action) === "open"
+        ).length;
+      }
+    });
+    return {
+      expiredRecords,
+      dueSoonRecords,
+      invalidExpiryRecords,
+      missingEvidenceRecords,
+      staleEvidenceRecords,
+      openActions,
+      inProgressActions,
+      overdueActions,
+      expiredWithActiveActions,
+      openActionsOnExpiredRecords,
+      totalAtRiskRecords: expiredRecords + missingEvidenceRecords + staleEvidenceRecords + expiredWithActiveActions
+    };
+  }
+
+  // js/app/insights/metrics-forecast.js
+  function computeRenewalForecast(rows, ctx) {
+    let expiringThisMonth = 0;
+    let expiringNextMonth = 0;
+    let expiringWithin30Days = 0;
+    let expiringWithin60Days = 0;
+    let expiringWithin90Days = 0;
+    let renewalDueSoon = 0;
+    let renewalOverdue = 0;
+    let reminderWindow30 = 0;
+    let reminderWindow14 = 0;
+    let reminderWindow7 = 0;
+    rows.forEach((row) => {
+      const status = ctx.getExpiryStatus(row.expiryDate);
+      const daysRemaining = ctx.getDaysUntilExpiry(row.expiryDate);
+      if (status.key === "expired") {
+        renewalOverdue += 1;
+      } else if (status.key === "dueSoon") {
+        renewalDueSoon += 1;
+      }
+      if (status.key !== "expired" && ctx.isExpiryInMonthRange(row.expiryDate, 0)) {
+        expiringThisMonth += 1;
+      }
+      if (ctx.isExpiryInMonthRange(row.expiryDate, 1)) {
+        expiringNextMonth += 1;
+      }
+      if (Number.isNaN(daysRemaining) || daysRemaining < 0) {
+        return;
+      }
+      if (daysRemaining <= 30) {
+        expiringWithin30Days += 1;
+      }
+      if (daysRemaining <= 60) {
+        expiringWithin60Days += 1;
+      }
+      if (daysRemaining <= 90) {
+        expiringWithin90Days += 1;
+      }
+      if (ctx.settings.days30 && daysRemaining <= 30) {
+        reminderWindow30 += 1;
+      }
+      if (ctx.settings.days14 && daysRemaining <= 14) {
+        reminderWindow14 += 1;
+      }
+      if (ctx.settings.days7 && daysRemaining <= 7) {
+        reminderWindow7 += 1;
+      }
+    });
+    return {
+      expiringThisMonth,
+      expiringNextMonth,
+      expiringWithin30Days,
+      expiringWithin60Days,
+      expiringWithin90Days,
+      renewalDueSoon,
+      renewalOverdue,
+      reminderWindows: {
+        days30: reminderWindow30,
+        days14: reminderWindow14,
+        days7: reminderWindow7
+      }
+    };
+  }
+
+  // js/app/insights/insights-engine.js
+  var DUE_SOON_DAYS = 90;
+  var STALE_EVIDENCE_DAYS = 365;
+  function normalizeEvidenceItem(item) {
+    if (!item || typeof item !== "object") {
+      return item;
+    }
+    return {
+      ...item,
+      addedDate: normalizeExpiryDate(item.addedDate ?? item.added_date ?? ""),
+      documentType: item.documentType ?? item.document_type ?? "",
+      fileName: item.fileName ?? item.file_name ?? ""
+    };
+  }
+  function normalizeActionItem(item) {
+    if (!item || typeof item !== "object") {
+      return item;
+    }
+    return {
+      ...item,
+      dueDate: item.dueDate ?? item.due_date ?? null,
+      createdAt: item.createdAt ?? item.created_at ?? null,
+      completedAt: item.completedAt ?? item.completed_at ?? null,
+      status: item.status,
+      completed: Boolean(item.completed)
+    };
+  }
+  function normalizeComplianceRow(row) {
+    if (!row || typeof row !== "object") {
+      throw new TypeError("Expected a compliance row object.");
+    }
+    const evidence = Array.isArray(row.evidence) ? row.evidence.map(normalizeEvidenceItem) : [];
+    const actions = Array.isArray(row.actions) ? row.actions.map(normalizeActionItem) : [];
+    return {
+      personId: row.personId ?? row.person_id,
+      recordId: row.recordId ?? row.record_id,
+      name: row.name ?? "",
+      role: row.role ?? "",
+      complianceType: row.complianceType ?? row.compliance_type ?? "",
+      expiryDate: normalizeExpiryDate(row.expiryDate ?? row.expiry_date ?? ""),
+      renewalCycle: row.renewalCycle ?? row.renewal_cycle ?? "manual",
+      notes: row.notes ?? "",
+      history: Array.isArray(row.history) ? row.history : [],
+      evidence,
+      actions
+    };
+  }
+  function normalizeReminderSettings(settings) {
+    const source = settings && typeof settings === "object" ? settings : {};
+    return {
+      days30: source.days30 ?? source.days_30 ?? DEFAULT_REMINDER_SETTINGS.days30,
+      days14: source.days14 ?? source.days_14 ?? DEFAULT_REMINDER_SETTINGS.days14,
+      days7: source.days7 ?? source.days_7 ?? DEFAULT_REMINDER_SETTINGS.days7,
+      hideSentReminders: source.hideSentReminders ?? source.hide_sent_reminders ?? DEFAULT_REMINDER_SETTINGS.hideSentReminders
+    };
+  }
+  function resolveAsOfDate(asOfDate) {
+    if (asOfDate instanceof Date && !Number.isNaN(asOfDate.getTime())) {
+      return new Date(asOfDate.getFullYear(), asOfDate.getMonth(), asOfDate.getDate());
+    }
+    if (typeof asOfDate === "string" && asOfDate.trim()) {
+      const parsed = parseDateAtMidnight(asOfDate);
+      if (!Number.isNaN(parsed.getTime())) {
+        return parsed;
+      }
+    }
+    const now = /* @__PURE__ */ new Date();
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  }
+  function createInsightsContext(referenceDate, settings, options = {}) {
+    const asOfDate = resolveAsOfDate(referenceDate);
+    const normalizedSettings = normalizeReminderSettings(settings);
+    const dueSoonDays = options.dueSoonDays ?? DUE_SOON_DAYS;
+    const staleEvidenceDays = options.staleEvidenceDays ?? STALE_EVIDENCE_DAYS;
+    function getDaysUntilExpiry2(expiryDate) {
+      const expiry = parseDateAtMidnight(expiryDate);
+      if (Number.isNaN(expiry.getTime())) {
+        return NaN;
+      }
+      const diffMs = expiry.getTime() - asOfDate.getTime();
+      return Math.round(diffMs / (1e3 * 60 * 60 * 24));
+    }
+    function getExpiryStatus(expiryDate) {
+      const daysUntilExpiry = getDaysUntilExpiry2(expiryDate);
+      if (Number.isNaN(daysUntilExpiry)) {
+        return { key: "invalid", label: "Invalid date" };
+      }
+      if (daysUntilExpiry < 0) {
+        return { key: "expired", label: "Expired" };
+      }
+      if (daysUntilExpiry <= dueSoonDays) {
+        return { key: "dueSoon", label: "Due soon" };
+      }
+      return { key: "valid", label: "Valid" };
+    }
+    function isEvidenceStale2(addedDate) {
+      const added = parseDateAtMidnight(addedDate);
+      if (Number.isNaN(added.getTime())) {
+        return false;
+      }
+      const ageDays = Math.floor((asOfDate.getTime() - added.getTime()) / (1e3 * 60 * 60 * 24));
+      return ageDays > staleEvidenceDays;
+    }
+    function getActionStatus2(actionItem) {
+      if (!actionItem || typeof actionItem !== "object") {
+        return ACTION_STATUSES.OPEN;
+      }
+      if (actionItem.status === ACTION_STATUSES.IN_PROGRESS || actionItem.status === ACTION_STATUSES.COMPLETED || actionItem.status === ACTION_STATUSES.OPEN) {
+        return actionItem.status;
+      }
+      return actionItem.completed ? ACTION_STATUSES.COMPLETED : ACTION_STATUSES.OPEN;
+    }
+    function isActionOverdue2(actionItem) {
+      if (getActionStatus2(actionItem) === ACTION_STATUSES.COMPLETED || !actionItem.dueDate) {
+        return false;
+      }
+      const due = parseDateAtMidnight(actionItem.dueDate);
+      return !Number.isNaN(due.getTime()) && due < asOfDate;
+    }
+    function getWeekDateRange2() {
+      const date = new Date(asOfDate);
+      const day = date.getDay();
+      const diffToMonday = day === 0 ? -6 : 1 - day;
+      const start = new Date(date);
+      start.setDate(date.getDate() + diffToMonday);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(start);
+      end.setDate(start.getDate() + 6);
+      end.setHours(23, 59, 59, 999);
+      return { start, end };
+    }
+    function isActionDueThisWeek2(actionItem) {
+      if (getActionStatus2(actionItem) === ACTION_STATUSES.COMPLETED || !actionItem.dueDate) {
+        return false;
+      }
+      const due = parseDateAtMidnight(actionItem.dueDate);
+      if (Number.isNaN(due.getTime())) {
+        return false;
+      }
+      const { start, end } = getWeekDateRange2();
+      return due >= start && due <= end;
+    }
+    function getMonthDateRange2(monthOffset = 0) {
+      const start = new Date(asOfDate.getFullYear(), asOfDate.getMonth() + monthOffset, 1);
+      const end = new Date(asOfDate.getFullYear(), asOfDate.getMonth() + monthOffset + 1, 0);
+      start.setHours(0, 0, 0, 0);
+      end.setHours(23, 59, 59, 999);
+      return { start, end };
+    }
+    function isExpiryInMonthRange2(expiryDate, monthOffset) {
+      const expiry = parseDateAtMidnight(expiryDate);
+      if (Number.isNaN(expiry.getTime())) {
+        return false;
+      }
+      const { start, end } = getMonthDateRange2(monthOffset);
+      return expiry >= start && expiry <= end;
+    }
+    return {
+      asOfDate,
+      asOfDateISO: dateToISOString(asOfDate),
+      settings: normalizedSettings,
+      dueSoonDays,
+      staleEvidenceDays,
+      getDaysUntilExpiry: getDaysUntilExpiry2,
+      getExpiryStatus,
+      isEvidenceStale: isEvidenceStale2,
+      getActionStatus: getActionStatus2,
+      isActionOverdue: isActionOverdue2,
+      isActionDueThisWeek: isActionDueThisWeek2,
+      getMonthDateRange: getMonthDateRange2,
+      isExpiryInMonthRange: isExpiryInMonthRange2
+    };
+  }
+  function computeComplianceInsights(rows, settings = DEFAULT_REMINDER_SETTINGS, asOfDate) {
+    const inputRows = Array.isArray(rows) ? rows : [];
+    const normalizedRows = inputRows.map(normalizeComplianceRow);
+    const ctx = createInsightsContext(asOfDate, settings);
+    const expiryHealth = computeExpiryHealth(normalizedRows, ctx);
+    const evidenceHealth = computeEvidenceHealth(normalizedRows, ctx);
+    const actionHealth = computeActionHealth(normalizedRows, ctx);
+    const operationalHealth = computeOperationalHealth();
+    const compositeHealthScore = computeCompositeHealthScore(
+      expiryHealth,
+      evidenceHealth,
+      actionHealth
+    );
+    const risk = computeRiskSummary(normalizedRows, ctx);
+    const forecast = computeRenewalForecast(normalizedRows, ctx);
+    return {
+      recordCount: normalizedRows.length,
+      asOfDate: ctx.asOfDateISO,
+      expiryHealth,
+      evidenceHealth,
+      actionHealth,
+      operationalHealth,
+      compositeHealthScore,
+      risk,
+      forecast
+    };
+  }
+
+  // js/app/insights/compliance-insights.js
+  var cachedInsights = null;
+  function clearComplianceInsightsCache() {
+    cachedInsights = null;
+  }
+  function getComplianceInsights(rows, settings) {
+    if (!cachedInsights) {
+      cachedInsights = computeComplianceInsights(rows, settings);
+    }
+    return cachedInsights;
+  }
+  function mapInsightsToSummaryCounts(insights) {
+    const expiry = insights.expiryHealth;
+    return {
+      total: insights.recordCount,
+      valid: expiry.valid + expiry.invalidDate,
+      dueSoon: expiry.dueSoon,
+      expired: expiry.expired
+    };
+  }
+  function mapInsightsToGlobalActionMetrics(insights) {
+    const action = insights.actionHealth;
+    return {
+      openActions: action.openActions,
+      inProgressActions: action.inProgressActions,
+      dueThisWeek: action.dueThisWeekActions,
+      overdueActions: action.overdueActions,
+      completedActions: action.completedActions,
+      expiredWithOpenActions: action.expiredRecordsWithActiveActions
+    };
+  }
+  function mapInsightsToEvidenceMetrics(insights) {
+    return {
+      missingEvidenceRecords: insights.evidenceHealth.missingEvidence,
+      staleEvidenceRecords: insights.evidenceHealth.staleEvidence
+    };
+  }
+
   // app.js
   console.log(
     `Compliance Reminder System v${APP_VERSION} \u2014 app.js loaded (${DATA_BACKEND} data, ${AUTH_MODE} auth)`
@@ -23649,7 +24151,7 @@ ${suffix}`;
   var expandedEvidenceRows = /* @__PURE__ */ new Set();
   var expandedActionRows = /* @__PURE__ */ new Set();
   var selectedRecordKeys = /* @__PURE__ */ new Set();
-  var DUE_SOON_DAYS = 90;
+  var DUE_SOON_DAYS2 = 90;
   var RECORDS_PER_PAGE = 25;
   var REMINDER_LABELS = REMINDER_UI_LABELS;
   var REMINDER_URGENCY = { expired: 0, 7: 1, 14: 2, 30: 3 };
@@ -24828,38 +25330,8 @@ This cannot be undone.`
     return entries;
   }
   function getGlobalActionMetrics() {
-    let openActions = 0;
-    let inProgressActions = 0;
-    let dueThisWeek = 0;
-    let overdueActions = 0;
-    let completedActions = 0;
-    let expiredWithOpenActions = 0;
-    getAllComplianceRows().forEach((row) => {
-      const summary = getActionSummary(row.actions);
-      const status = getStatus(row.expiryDate);
-      openActions += summary.openCount;
-      inProgressActions += summary.inProgressCount;
-      completedActions += summary.completedCount;
-      if (summary.activeCount > 0 && status.key === "expired") {
-        expiredWithOpenActions += 1;
-      }
-      (row.actions || []).forEach((action) => {
-        if (isActionDueThisWeek(action)) {
-          dueThisWeek += 1;
-        }
-        if (isActionOverdue(action)) {
-          overdueActions += 1;
-        }
-      });
-    });
-    return {
-      openActions,
-      inProgressActions,
-      dueThisWeek,
-      overdueActions,
-      completedActions,
-      expiredWithOpenActions
-    };
+    const insights = getComplianceInsights(getAllComplianceRows(), reminderSettings);
+    return mapInsightsToGlobalActionMetrics(insights);
   }
   function getMonthDateRange(monthOffset = 0) {
     const now = /* @__PURE__ */ new Date();
@@ -24879,32 +25351,16 @@ This cannot be undone.`
   }
   function getManagementInsightMetrics() {
     const rows = getAllComplianceRows();
-    let totalOpenActions = 0;
+    const insights = getComplianceInsights(rows, reminderSettings);
+    const evidenceMetrics = mapInsightsToEvidenceMetrics(insights);
     let expiredLinkedOpenActions = 0;
-    let missingEvidenceRecords = 0;
-    let expiringThisMonth = 0;
-    let expiringNextMonth = 0;
     let validWithEvidence = 0;
-    let staleEvidenceRecords = 0;
     rows.forEach((row) => {
       const actionSummary = getActionSummary(row.actions);
       const evidenceCount = getEvidenceSummary(row.evidence).count;
       const status = getStatus(row.expiryDate);
-      totalOpenActions += actionSummary.activeCount;
       if (status.key === "expired") {
         expiredLinkedOpenActions += actionSummary.activeCount;
-      }
-      if (evidenceCount === 0) {
-        missingEvidenceRecords += 1;
-      }
-      if (recordHasStaleEvidence(row.evidence)) {
-        staleEvidenceRecords += 1;
-      }
-      if (status.key !== "expired" && isExpiryInMonthRange(row.expiryDate, 0)) {
-        expiringThisMonth += 1;
-      }
-      if (isExpiryInMonthRange(row.expiryDate, 1)) {
-        expiringNextMonth += 1;
       }
       if (status.key === "valid" && evidenceCount > 0) {
         validWithEvidence += 1;
@@ -24913,15 +25369,15 @@ This cannot be undone.`
     const totalRecords = rows.length;
     const healthScore = totalRecords === 0 ? 0 : Math.round(validWithEvidence / totalRecords * 100);
     return {
-      totalOpenActions,
+      totalOpenActions: insights.actionHealth.openActions + insights.actionHealth.inProgressActions,
       expiredLinkedOpenActions,
-      missingEvidenceRecords,
-      expiringThisMonth,
-      expiringNextMonth,
+      missingEvidenceRecords: evidenceMetrics.missingEvidenceRecords,
+      expiringThisMonth: insights.forecast.expiringThisMonth,
+      expiringNextMonth: insights.forecast.expiringNextMonth,
       healthScore,
       validWithEvidence,
       totalRecords,
-      staleEvidenceRecords
+      staleEvidenceRecords: evidenceMetrics.staleEvidenceRecords
     };
   }
   function getMonthChartLabel(monthOffset) {
@@ -27129,7 +27585,7 @@ This cannot be undone.`
     if (daysUntilExpiry < 0) {
       return { label: "Expired", className: "status-expired", key: "expired" };
     }
-    if (daysUntilExpiry <= DUE_SOON_DAYS) {
+    if (daysUntilExpiry <= DUE_SOON_DAYS2) {
       return { label: "Due Soon", className: "status-due-soon", key: "dueSoon" };
     }
     return { label: "Valid", className: "status-valid", key: "valid" };
@@ -27622,13 +28078,8 @@ ${auditLine}` : auditLine;
     return sorted;
   }
   function getSummaryCounts() {
-    const counts = { total: 0, valid: 0, dueSoon: 0, expired: 0 };
-    getAllComplianceRows().forEach((row) => {
-      counts.total += 1;
-      const status = getStatus(row.expiryDate);
-      counts[status.key] += 1;
-    });
-    return counts;
+    const insights = getComplianceInsights(getAllComplianceRows(), reminderSettings);
+    return mapInsightsToSummaryCounts(insights);
   }
   function getAnalyticsCounts() {
     const counts = {
@@ -28488,6 +28939,7 @@ ${auditLine}` : auditLine;
     noResultsMessage.classList.toggle("hidden", filteredCount > 0 || totalCount === 0);
     renderActiveFilters();
     if (refreshDashboards) {
+      clearComplianceInsightsCache();
       renderSummary();
       renderAnalytics();
       renderDashboard();

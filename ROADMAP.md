@@ -567,6 +567,7 @@ Verification: `npm run verify-insights-engine`
 | V4-2A | **COMPLETE** | Operational health — reminder follow-up score and recommendation |
 | V4-2B | **COMPLETE** | Composite health score includes operational health (4-way average) |
 | V4-2C | **COMPLETE** | Operational health drilldown columns, preview explanation, sub-score summary |
+| V4-3A | **COMPLETE** | Evidence gap tiers — critical/high/stale classification, cards, drilldowns, tier-based recommendations |
 
 **Constraints (V4 to date):** No new CRUD, migrations, cloud-write changes, or AI/LLM dependency.
 

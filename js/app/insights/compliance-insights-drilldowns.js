@@ -1,5 +1,11 @@
 import { ACTION_STATUSES } from "../../data/constants.js";
 import { filterRecordsMissingReminderActivity, getActiveReminderType, hasReminderActivityForType } from "./metrics-operational.js";
+import {
+  EVIDENCE_GAP_TIERS,
+  getNewestEvidenceDate,
+  getEvidenceGapRecommendedAction,
+  classifyEvidenceGapTier,
+} from "./metrics-evidence-gaps.js";
 
 /** @typedef {import("./insights-engine.js").NormalizedComplianceRow} NormalizedComplianceRow */
 /** @typedef {import("./insights-engine.js").InsightsContext} InsightsContext */
@@ -15,6 +21,9 @@ export const COMPLIANCE_INSIGHT_DRILLDOWN_TYPES = {
   EXPIRING_30_DAYS: "expiring-within-30-days",
   EXPIRING_90_DAYS: "expiring-within-90-days",
   MISSING_REMINDER_ACTIVITY: "missing-reminder-activity",
+  CRITICAL_EVIDENCE_GAPS: "critical-evidence-gaps",
+  HIGH_EVIDENCE_GAPS: "high-evidence-gaps",
+  STALE_EVIDENCE_RECORDS: "stale-evidence-records",
 };
 
 export const COMPLIANCE_INSIGHT_REMINDER_ACTIVITY_PREVIEW_COLUMNS = [
@@ -25,6 +34,18 @@ export const COMPLIANCE_INSIGHT_REMINDER_ACTIVITY_PREVIEW_COLUMNS = [
   { key: "status", label: "Status" },
   { key: "reminderWindow", label: "Reminder Window" },
   { key: "reminderActivityStatus", label: "Reminder Activity Status" },
+];
+
+export const COMPLIANCE_INSIGHT_EVIDENCE_GAP_PREVIEW_COLUMNS = [
+  { key: "name", label: "Name" },
+  { key: "role", label: "Role" },
+  { key: "complianceType", label: "Compliance Type" },
+  { key: "expiryDate", label: "Expiry Date" },
+  { key: "status", label: "Status" },
+  { key: "evidenceCount", label: "Evidence Count" },
+  { key: "newestEvidenceDate", label: "Newest Evidence" },
+  { key: "gapTier", label: "Gap Tier" },
+  { key: "recommendedAction", label: "Recommended Action" },
 ];
 
 export const COMPLIANCE_INSIGHT_RECORD_PREVIEW_COLUMNS = [
@@ -119,6 +140,30 @@ const DRILLDOWN_META = {
     filename: "compliance-insight-missing_reminder_activity.csv",
     itemLabel: "Records",
   },
+  [COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.CRITICAL_EVIDENCE_GAPS]: {
+    title: "Critical Evidence Gaps",
+    emptyMessage: "No records have critical evidence gaps.",
+    previewDescription:
+      "Records that are expired or expire within 30 days with no evidence, or where all evidence is stale.",
+    filename: "compliance-insight-critical_evidence_gaps.csv",
+    itemLabel: "Records",
+  },
+  [COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.HIGH_EVIDENCE_GAPS]: {
+    title: "High Evidence Gaps",
+    emptyMessage: "No records have high-priority evidence gaps.",
+    previewDescription:
+      "Records expiring within 31–90 days that have no evidence on file.",
+    filename: "compliance-insight-high_evidence_gaps.csv",
+    itemLabel: "Records",
+  },
+  [COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.STALE_EVIDENCE_RECORDS]: {
+    title: "Stale Evidence Records",
+    emptyMessage: "No records have stale evidence outside critical or high tiers.",
+    previewDescription:
+      "Records with evidence on file where the newest item is older than 12 months. Excludes records already classified as critical or high evidence gaps.",
+    filename: "compliance-insight-stale_evidence_records.csv",
+    itemLabel: "Records",
+  },
 };
 
 /**
@@ -198,6 +243,18 @@ export function filterComplianceInsightDrilldownRecords(drilldownType, rows, ctx
       return filterRecordsMissingReminderActivity([row], ctx).length > 0;
     }
 
+    if (drilldownType === COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.CRITICAL_EVIDENCE_GAPS) {
+      return classifyEvidenceGapTier(row, ctx) === EVIDENCE_GAP_TIERS.CRITICAL;
+    }
+
+    if (drilldownType === COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.HIGH_EVIDENCE_GAPS) {
+      return classifyEvidenceGapTier(row, ctx) === EVIDENCE_GAP_TIERS.HIGH;
+    }
+
+    if (drilldownType === COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.STALE_EVIDENCE_RECORDS) {
+      return classifyEvidenceGapTier(row, ctx) === EVIDENCE_GAP_TIERS.STALE;
+    }
+
     return false;
   });
 }
@@ -247,6 +304,24 @@ export function mapMissingReminderActivityPreviewRow(row, ctx) {
   };
 }
 
+export function mapEvidenceGapPreviewRow(row, ctx) {
+  const status = ctx.getExpiryStatus(row.expiryDate);
+  const evidenceItems = Array.isArray(row.evidence) ? row.evidence : [];
+  const tier = classifyEvidenceGapTier(row, ctx);
+
+  return {
+    name: row.name,
+    role: row.role,
+    complianceType: row.complianceType,
+    expiryDate: row.expiryDate,
+    status: status.label,
+    evidenceCount: String(evidenceItems.length),
+    newestEvidenceDate: getNewestEvidenceDate(evidenceItems) || "—",
+    gapTier: tier || "—",
+    recommendedAction: tier ? getEvidenceGapRecommendedAction(tier) : "—",
+  };
+}
+
 /**
  * @param {string} drilldownType
  * @returns {Array<{ key: string, label: string }>}
@@ -262,6 +337,14 @@ export function getComplianceInsightDrilldownColumns(drilldownType) {
 
   if (drilldownType === COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.MISSING_REMINDER_ACTIVITY) {
     return COMPLIANCE_INSIGHT_REMINDER_ACTIVITY_PREVIEW_COLUMNS;
+  }
+
+  if (
+    drilldownType === COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.CRITICAL_EVIDENCE_GAPS ||
+    drilldownType === COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.HIGH_EVIDENCE_GAPS ||
+    drilldownType === COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.STALE_EVIDENCE_RECORDS
+  ) {
+    return COMPLIANCE_INSIGHT_EVIDENCE_GAP_PREVIEW_COLUMNS;
   }
 
   return COMPLIANCE_INSIGHT_RECORD_PREVIEW_COLUMNS;
@@ -357,6 +440,24 @@ export function getExpectedDrilldownCounts(rows, ctx) {
     [COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.MISSING_REMINDER_ACTIVITY]:
       countComplianceInsightDrilldownMatches(
         COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.MISSING_REMINDER_ACTIVITY,
+        rows,
+        ctx
+      ),
+    [COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.CRITICAL_EVIDENCE_GAPS]:
+      countComplianceInsightDrilldownMatches(
+        COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.CRITICAL_EVIDENCE_GAPS,
+        rows,
+        ctx
+      ),
+    [COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.HIGH_EVIDENCE_GAPS]:
+      countComplianceInsightDrilldownMatches(
+        COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.HIGH_EVIDENCE_GAPS,
+        rows,
+        ctx
+      ),
+    [COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.STALE_EVIDENCE_RECORDS]:
+      countComplianceInsightDrilldownMatches(
+        COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.STALE_EVIDENCE_RECORDS,
         rows,
         ctx
       ),

@@ -2,7 +2,8 @@
  * Deterministic verification for the V4-0A Compliance Insights engine,
  * V4-0B dashboard metric mappings, V4-0D drilldown filters, V4-1A recommendations,
  * V4-1B recommendation polish and thresholds, V4-1C alpha hardening, V4-2A operational health,
- * and V4-2B composite score including operational health, and V4-2C operational drilldown polish.
+ * and V4-2B composite score including operational health, and V4-2C operational drilldown polish,
+ * and V4-3A evidence gap tiers.
  * Uses fixture rows only — no Supabase or browser required.
  */
 
@@ -19,6 +20,7 @@ import {
   getComplianceInsightDrilldownMeta,
   getExpectedDrilldownCounts,
   mapMissingReminderActivityPreviewRow,
+  mapEvidenceGapPreviewRow,
 } from "../js/app/insights/compliance-insights-drilldowns.js";
 import { formatOperationalHealthSummary } from "../js/app/insights/metrics-operational.js";
 import {
@@ -83,6 +85,7 @@ function verifyInsights(label, rows) {
   );
   assertDeepEqual(insights.risk, EXPECTED_INSIGHTS.risk, `${label} risk`);
   assertDeepEqual(insights.forecast, EXPECTED_INSIGHTS.forecast, `${label} forecast`);
+  assertDeepEqual(insights.evidenceGaps, EXPECTED_INSIGHTS.evidenceGaps, `${label} evidenceGaps`);
 }
 
 function getLegacyStatus(expiryDate, asOfDate) {
@@ -311,6 +314,21 @@ function verifyDrilldownCounts(label, rows) {
     insights.operationalHealth.recordsMissingReminderActivity,
     `${label} drilldown missing reminder activity`
   );
+  assertEqual(
+    drilldownCounts[COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.CRITICAL_EVIDENCE_GAPS],
+    insights.evidenceGaps.byTier.critical,
+    `${label} drilldown critical evidence gaps`
+  );
+  assertEqual(
+    drilldownCounts[COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.HIGH_EVIDENCE_GAPS],
+    insights.evidenceGaps.byTier.high,
+    `${label} drilldown high evidence gaps`
+  );
+  assertEqual(
+    drilldownCounts[COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.STALE_EVIDENCE_RECORDS],
+    insights.evidenceGaps.byTier.stale,
+    `${label} drilldown stale evidence records`
+  );
 }
 
 function verifyRecommendations(label, rows) {
@@ -326,7 +344,7 @@ function verifyRecommendations(label, rows) {
   assertDeepEqual(recommendations, EXPECTED_RECOMMENDATIONS, `${label} recommendations`);
   assertDeepEqual(
     getRecommendationPriorityOrder(recommendations),
-    ["critical", "critical", "high", "high", "high", "high", "medium", "medium"],
+    ["critical", "critical", "critical", "high", "high", "high", "medium"],
     `${label} recommendation priority order`
   );
 
@@ -395,6 +413,11 @@ function verifyHealthyFixture(label, rows) {
   );
   assertDeepEqual(insights.risk, EXPECTED_HEALTHY_INSIGHTS.risk, `${label} risk`);
   assertDeepEqual(insights.forecast, EXPECTED_HEALTHY_INSIGHTS.forecast, `${label} forecast`);
+  assertDeepEqual(
+    insights.evidenceGaps,
+    EXPECTED_HEALTHY_INSIGHTS.evidenceGaps,
+    `${label} evidenceGaps`
+  );
 
   const recommendations = generateComplianceRecommendations(insights, normalizeFixtureRows(rows));
 
@@ -568,8 +591,80 @@ function verifyOperationalHealthDrilldownPolish() {
   );
 }
 
+function verifyEvidenceGapDrilldownPolish() {
+  const meta = getComplianceInsightDrilldownMeta(
+    COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.CRITICAL_EVIDENCE_GAPS
+  );
+
+  assertEqual(
+    meta.title,
+    "Critical Evidence Gaps",
+    "critical evidence gaps drilldown title"
+  );
+  assertEqual(Boolean(meta.previewDescription), true, "critical evidence gaps preview description");
+
+  const columns = getComplianceInsightDrilldownColumns(
+    COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.CRITICAL_EVIDENCE_GAPS
+  );
+
+  assertDeepEqual(
+    columns.map((column) => column.key),
+    [
+      "name",
+      "role",
+      "complianceType",
+      "expiryDate",
+      "status",
+      "evidenceCount",
+      "newestEvidenceDate",
+      "gapTier",
+      "recommendedAction",
+    ],
+    "evidence gap preview columns"
+  );
+
+  const ctx = createInsightsContext(FIXTURE_AS_OF_DATE, FIXTURE_SETTINGS);
+  const normalizedRows = normalizeFixtureRows(LOCAL_FIXTURE_ROWS);
+  const criticalRows = filterComplianceInsightDrilldownRecords(
+    COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.CRITICAL_EVIDENCE_GAPS,
+    normalizedRows,
+    ctx
+  );
+
+  assertEqual(criticalRows.length, 3, "critical evidence gaps drilldown row count");
+
+  const samPriest = criticalRows.find((row) => row.name === "Sam Priest");
+
+  assertEqual(Boolean(samPriest), true, "Sam Priest in critical evidence gaps drilldown");
+
+  const previewRow = mapEvidenceGapPreviewRow(samPriest, ctx);
+
+  assertEqual(previewRow.gapTier, "critical", "Sam Priest evidence gap tier");
+  assertEqual(previewRow.newestEvidenceDate, "2024-01-01", "Sam Priest newest evidence date");
+
+  const insights = computeComplianceInsights(LOCAL_FIXTURE_ROWS, FIXTURE_SETTINGS, FIXTURE_AS_OF_DATE);
+  const recommendations = generateComplianceRecommendations(insights, normalizedRows);
+  const criticalRecommendation = recommendations.find((item) => item.id === "evidence-critical-gaps");
+
+  assertEqual(
+    criticalRecommendation?.drilldownKey,
+    COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.CRITICAL_EVIDENCE_GAPS,
+    "critical evidence gaps recommendation drilldown key"
+  );
+  assertEqual(
+    recommendations.some((item) => item.id === "evidence-missing-evidence"),
+    false,
+    "legacy missing evidence recommendation replaced by tier recommendations"
+  );
+  assertEqual(
+    recommendations.some((item) => item.id === "evidence-stale-evidence"),
+    false,
+    "legacy stale evidence recommendation replaced when stale tier count is zero"
+  );
+}
+
 console.log(
-  "Compliance Insights engine verification (V4-0A through V4-2C)\n"
+  "Compliance Insights engine verification (V4-0A through V4-3A)\n"
 );
 
 verifyInsights("local fixture rows", LOCAL_FIXTURE_ROWS);
@@ -585,6 +680,7 @@ verifyHealthyFixture("healthy local fixture rows", HEALTHY_FIXTURE_ROWS);
 verifyHealthyFixture("healthy cloud-shaped fixture rows", HEALTHY_CLOUD_FIXTURE_ROWS);
 verifyOperationalHealthScenarios();
 verifyOperationalHealthDrilldownPolish();
+verifyEvidenceGapDrilldownPolish();
 
 const emptyInsights = computeComplianceInsights([], FIXTURE_SETTINGS, FIXTURE_AS_OF_DATE);
 
@@ -621,3 +717,4 @@ console.log("  recommendation thresholds and priority labels verified");
 console.log("  healthy local + cloud-shaped fixtures produce 100% scores and zero recommendations");
 console.log("  operational health scenarios (notes, history, empty windows) verified");
 console.log("  operational health drilldown polish (columns, preview, summary) verified");
+console.log("  evidence gap tiers, drilldowns, and recommendations verified");

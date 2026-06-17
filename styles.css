@@ -625,6 +625,7 @@ header h1 {
 }
 
 .compliance-insights-risk-strip,
+.compliance-insights-evidence-gaps-strip,
 .compliance-insights-forecast-cards {
   display: grid;
   grid-template-columns: 1fr;
@@ -636,6 +637,10 @@ header h1 {
     grid-template-columns: repeat(2, 1fr);
   }
 
+  .compliance-insights-evidence-gaps-strip {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
   .compliance-insights-forecast-cards {
     grid-template-columns: repeat(2, 1fr);
   }
@@ -644,6 +649,10 @@ header h1 {
 @media (min-width: 960px) {
   .compliance-insights-risk-strip {
     grid-template-columns: repeat(5, 1fr);
+  }
+
+  .compliance-insights-evidence-gaps-strip {
+    grid-template-columns: repeat(3, 1fr);
   }
 
   .compliance-insights-forecast-cards {

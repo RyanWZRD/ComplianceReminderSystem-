@@ -378,6 +378,38 @@ export const EXPECTED_HEALTHY_INSIGHTS = {
       days7: 0,
     },
   },
+  evidenceGaps: {
+    byTier: {
+      critical: 0,
+      high: 0,
+      stale: 0,
+      ok: 2,
+    },
+    records: [
+      {
+        name: "Healthy Coordinator",
+        role: "Coordinator",
+        complianceType: "Basic Awareness",
+        expiryDate: "2027-12-01",
+        status: "Valid",
+        evidenceCount: 1,
+        newestEvidenceDate: "2026-05-01",
+        gapTier: "ok",
+        recommendedAction: "No action required — evidence is current.",
+      },
+      {
+        name: "Healthy Volunteer",
+        role: "Volunteer",
+        complianceType: "DBS",
+        expiryDate: "2027-06-01",
+        status: "Valid",
+        evidenceCount: 1,
+        newestEvidenceDate: "2026-03-01",
+        gapTier: "ok",
+        recommendedAction: "No action required — evidence is current.",
+      },
+    ],
+  },
 };
 
 export const EXPECTED_INSIGHTS = {
@@ -450,6 +482,74 @@ export const EXPECTED_INSIGHTS = {
       days7: 0,
     },
   },
+  evidenceGaps: {
+    byTier: {
+      critical: 3,
+      high: 0,
+      stale: 0,
+      ok: 2,
+    },
+    records: [
+      {
+        name: "Jordan Coordinator",
+        role: "Coordinator",
+        complianceType: "Basic Awareness",
+        expiryDate: "2026-06-25",
+        status: "Due soon",
+        evidenceCount: 0,
+        newestEvidenceDate: "",
+        gapTier: "critical",
+        recommendedAction:
+          "Upload evidence immediately — renewal is due within 30 days or overdue.",
+      },
+      {
+        name: "Riley Safeguarding",
+        role: "Safeguarding Officer",
+        complianceType: "Foundations",
+        expiryDate: "2026-07-10",
+        status: "Due soon",
+        evidenceCount: 0,
+        newestEvidenceDate: "",
+        gapTier: "critical",
+        recommendedAction:
+          "Upload evidence immediately — renewal is due within 30 days or overdue.",
+      },
+      {
+        name: "Sam Priest",
+        role: "Clergy",
+        complianceType: "Leadership",
+        expiryDate: "2026-04-01",
+        status: "Expired",
+        evidenceCount: 1,
+        newestEvidenceDate: "2024-01-01",
+        gapTier: "critical",
+        recommendedAction:
+          "Upload evidence immediately — renewal is due within 30 days or overdue.",
+      },
+      {
+        name: "Alex Volunteer",
+        role: "Volunteer",
+        complianceType: "DBS",
+        expiryDate: "2026-12-01",
+        status: "Valid",
+        evidenceCount: 1,
+        newestEvidenceDate: "2026-01-01",
+        gapTier: "ok",
+        recommendedAction: "No action required — evidence is current.",
+      },
+      {
+        name: "Taylor Warden",
+        role: "Church Warden",
+        complianceType: "DBS",
+        expiryDate: "2026-08-01",
+        status: "Due soon",
+        evidenceCount: 1,
+        newestEvidenceDate: "2026-05-01",
+        gapTier: "ok",
+        recommendedAction: "No action required — evidence is current.",
+      },
+    ],
+  },
 };
 
 export const EXPECTED_RECOMMENDATIONS = [
@@ -462,6 +562,17 @@ export const EXPECTED_RECOMMENDATIONS = [
     affectedCount: 1,
     drilldownKey: "expired-records",
     sortOrder: 10,
+  },
+  {
+    id: "evidence-critical-gaps",
+    priority: "critical",
+    category: "evidence",
+    title: "Close critical evidence gaps",
+    description:
+      "3 records have a critical evidence gap — expired or due within 30 days with no valid evidence.",
+    affectedCount: 3,
+    drilldownKey: "critical-evidence-gaps",
+    sortOrder: 15,
   },
   {
     id: "actions-expired-active-actions",
@@ -484,16 +595,6 @@ export const EXPECTED_RECOMMENDATIONS = [
     sortOrder: 30,
   },
   {
-    id: "evidence-missing-evidence",
-    priority: "high",
-    category: "evidence",
-    title: "Add missing evidence",
-    description: "3 records have no evidence on file.",
-    affectedCount: 3,
-    drilldownKey: "missing-evidence",
-    sortOrder: 40,
-  },
-  {
     id: "operational-missing-reminder-activity",
     priority: "high",
     category: "operational",
@@ -512,16 +613,6 @@ export const EXPECTED_RECOMMENDATIONS = [
     affectedCount: 1,
     drilldownKey: "overdue-actions",
     sortOrder: 50,
-  },
-  {
-    id: "evidence-stale-evidence",
-    priority: "medium",
-    category: "evidence",
-    title: "Update stale evidence",
-    description: "1 record has evidence older than 12 months.",
-    affectedCount: 1,
-    drilldownKey: "stale-evidence",
-    sortOrder: 60,
   },
   {
     id: "forecast-expiring-next-month",

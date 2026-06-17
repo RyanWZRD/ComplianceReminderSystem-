@@ -13,6 +13,7 @@ import {
 import { computeOperationalHealth } from "./metrics-operational.js";
 import { computeRiskSummary } from "./metrics-risk.js";
 import { computeRenewalForecast } from "./metrics-forecast.js";
+import { computeEvidenceGaps } from "./metrics-evidence-gaps.js";
 
 export const DUE_SOON_DAYS = 90;
 export const STALE_EVIDENCE_DAYS = 365;
@@ -309,6 +310,7 @@ export function computeComplianceInsights(rows, settings = DEFAULT_REMINDER_SETT
   );
   const risk = computeRiskSummary(normalizedRows, ctx);
   const forecast = computeRenewalForecast(normalizedRows, ctx);
+  const evidenceGaps = computeEvidenceGaps(normalizedRows, ctx);
 
   return {
     recordCount: normalizedRows.length,
@@ -320,5 +322,6 @@ export function computeComplianceInsights(rows, settings = DEFAULT_REMINDER_SETT
     compositeHealthScore,
     risk,
     forecast,
+    evidenceGaps,
   };
 }

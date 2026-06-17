@@ -79,6 +79,7 @@ import {
   getComplianceInsightDrilldownMeta,
   isActionLevelDrilldown,
   mapMissingReminderActivityPreviewRow,
+  mapEvidenceGapPreviewRow,
   COMPLIANCE_INSIGHT_DRILLDOWN_TYPES,
 } from "./js/app/insights/compliance-insights-drilldowns.js";
 import { formatOperationalHealthSummary } from "./js/app/insights/metrics-operational.js";
@@ -314,6 +315,15 @@ const complianceInsightsRiskOverdueActions = document.getElementById(
 );
 const complianceInsightsRiskExpiredActiveActions = document.getElementById(
   "compliance-insights-risk-expired-active-actions"
+);
+const complianceInsightsEvidenceGapCritical = document.getElementById(
+  "compliance-insights-evidence-gap-critical"
+);
+const complianceInsightsEvidenceGapHigh = document.getElementById(
+  "compliance-insights-evidence-gap-high"
+);
+const complianceInsightsEvidenceGapStale = document.getElementById(
+  "compliance-insights-evidence-gap-stale"
 );
 const complianceInsightsForecastThisMonth = document.getElementById(
   "compliance-insights-forecast-this-month"
@@ -2234,6 +2244,19 @@ function renderComplianceInsights() {
       insights.risk.expiredWithActiveActions;
   }
 
+  if (complianceInsightsEvidenceGapCritical) {
+    complianceInsightsEvidenceGapCritical.textContent =
+      insights.evidenceGaps?.byTier?.critical ?? 0;
+  }
+
+  if (complianceInsightsEvidenceGapHigh) {
+    complianceInsightsEvidenceGapHigh.textContent = insights.evidenceGaps?.byTier?.high ?? 0;
+  }
+
+  if (complianceInsightsEvidenceGapStale) {
+    complianceInsightsEvidenceGapStale.textContent = insights.evidenceGaps?.byTier?.stale ?? 0;
+  }
+
   if (complianceInsightsForecastThisMonth) {
     complianceInsightsForecastThisMonth.textContent = insights.forecast.expiringThisMonth;
   }
@@ -2337,6 +2360,24 @@ function buildComplianceInsightDrilldownRecordRow(row, drilldownType, ctx) {
       ...previewRow,
       expiryDate: formatDate(row.expiryDate),
       status: getStatusBadgeLabel(getStatus(row.expiryDate).key),
+    };
+  }
+
+  if (
+    drilldownType === COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.CRITICAL_EVIDENCE_GAPS ||
+    drilldownType === COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.HIGH_EVIDENCE_GAPS ||
+    drilldownType === COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.STALE_EVIDENCE_RECORDS
+  ) {
+    const previewRow = mapEvidenceGapPreviewRow(row, ctx);
+
+    return {
+      ...previewRow,
+      expiryDate: formatDate(row.expiryDate),
+      status: getStatusBadgeLabel(getStatus(row.expiryDate).key),
+      newestEvidenceDate:
+        previewRow.newestEvidenceDate === "—"
+          ? "—"
+          : formatDate(previewRow.newestEvidenceDate),
     };
   }
 

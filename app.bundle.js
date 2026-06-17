@@ -24010,6 +24010,123 @@ ${suffix}`;
     };
   }
 
+  // js/app/insights/metrics-evidence-gaps.js
+  var EVIDENCE_GAP_TIERS = {
+    CRITICAL: "critical",
+    HIGH: "high",
+    STALE: "stale",
+    OK: "ok"
+  };
+  var EVIDENCE_GAP_CRITICAL_DAYS = 30;
+  var EVIDENCE_GAP_HIGH_MIN_DAYS = 31;
+  var EVIDENCE_GAP_HIGH_MAX_DAYS = 90;
+  var RECOMMENDED_ACTIONS = {
+    [EVIDENCE_GAP_TIERS.CRITICAL]: "Upload evidence immediately \u2014 renewal is due within 30 days or overdue.",
+    [EVIDENCE_GAP_TIERS.HIGH]: "Add evidence before renewal \u2014 record expires within 90 days with nothing on file.",
+    [EVIDENCE_GAP_TIERS.STALE]: "Refresh evidence \u2014 newest documentation is more than 12 months old.",
+    [EVIDENCE_GAP_TIERS.OK]: "No action required \u2014 evidence is current."
+  };
+  var TIER_SORT_ORDER = {
+    [EVIDENCE_GAP_TIERS.CRITICAL]: 0,
+    [EVIDENCE_GAP_TIERS.HIGH]: 1,
+    [EVIDENCE_GAP_TIERS.STALE]: 2,
+    [EVIDENCE_GAP_TIERS.OK]: 3
+  };
+  function getEvidenceItems(row) {
+    return Array.isArray(row.evidence) ? row.evidence : [];
+  }
+  function getNewestEvidenceDate(evidenceItems) {
+    let newestDate = "";
+    evidenceItems.forEach((item) => {
+      const parsed = parseDateAtMidnight(item.addedDate);
+      if (Number.isNaN(parsed.getTime())) {
+        return;
+      }
+      if (!newestDate) {
+        newestDate = item.addedDate;
+        return;
+      }
+      const currentNewest = parseDateAtMidnight(newestDate);
+      if (!Number.isNaN(currentNewest.getTime()) && parsed.getTime() > currentNewest.getTime()) {
+        newestDate = item.addedDate;
+      }
+    });
+    return newestDate;
+  }
+  function hasNonStaleEvidence(evidenceItems, ctx) {
+    return evidenceItems.some((item) => !ctx.isEvidenceStale(item.addedDate));
+  }
+  function allEvidenceStale(evidenceItems, ctx) {
+    return evidenceItems.length > 0 && evidenceItems.every((item) => ctx.isEvidenceStale(item.addedDate));
+  }
+  function classifyEvidenceGapTier(row, ctx) {
+    const evidenceItems = getEvidenceItems(row);
+    if (hasNonStaleEvidence(evidenceItems, ctx)) {
+      return EVIDENCE_GAP_TIERS.OK;
+    }
+    const daysUntilExpiry = ctx.getDaysUntilExpiry(row.expiryDate);
+    const noEvidence = evidenceItems.length === 0;
+    const isExpiredOrWithin30 = !Number.isNaN(daysUntilExpiry) && daysUntilExpiry <= EVIDENCE_GAP_CRITICAL_DAYS;
+    const isWithin31to90 = !Number.isNaN(daysUntilExpiry) && daysUntilExpiry >= EVIDENCE_GAP_HIGH_MIN_DAYS && daysUntilExpiry <= EVIDENCE_GAP_HIGH_MAX_DAYS;
+    if (isExpiredOrWithin30 && (noEvidence || allEvidenceStale(evidenceItems, ctx))) {
+      return EVIDENCE_GAP_TIERS.CRITICAL;
+    }
+    if (isWithin31to90 && noEvidence) {
+      return EVIDENCE_GAP_TIERS.HIGH;
+    }
+    if (evidenceItems.length > 0) {
+      const newestDate = getNewestEvidenceDate(evidenceItems);
+      if (newestDate && ctx.isEvidenceStale(newestDate)) {
+        return EVIDENCE_GAP_TIERS.STALE;
+      }
+    }
+    return null;
+  }
+  function getEvidenceGapRecommendedAction(tier) {
+    return RECOMMENDED_ACTIONS[tier] || "";
+  }
+  function mapEvidenceGapRecord(row, ctx) {
+    const tier = classifyEvidenceGapTier(row, ctx);
+    const evidenceItems = getEvidenceItems(row);
+    const status = ctx.getExpiryStatus(row.expiryDate);
+    return {
+      name: row.name,
+      role: row.role,
+      complianceType: row.complianceType,
+      expiryDate: row.expiryDate,
+      status: status.label,
+      evidenceCount: evidenceItems.length,
+      newestEvidenceDate: getNewestEvidenceDate(evidenceItems),
+      gapTier: tier,
+      recommendedAction: tier ? getEvidenceGapRecommendedAction(tier) : ""
+    };
+  }
+  function computeEvidenceGaps(rows, ctx) {
+    const byTier = {
+      [EVIDENCE_GAP_TIERS.CRITICAL]: 0,
+      [EVIDENCE_GAP_TIERS.HIGH]: 0,
+      [EVIDENCE_GAP_TIERS.STALE]: 0,
+      [EVIDENCE_GAP_TIERS.OK]: 0
+    };
+    const records = [];
+    rows.forEach((row) => {
+      const mapped = mapEvidenceGapRecord(row, ctx);
+      if (!mapped.gapTier) {
+        return;
+      }
+      byTier[mapped.gapTier] += 1;
+      records.push(mapped);
+    });
+    records.sort((left, right) => {
+      const tierCompare = TIER_SORT_ORDER[left.gapTier] - TIER_SORT_ORDER[right.gapTier];
+      if (tierCompare !== 0) {
+        return tierCompare;
+      }
+      return left.name.localeCompare(right.name);
+    });
+    return { byTier, records };
+  }
+
   // js/app/insights/insights-engine.js
   var DUE_SOON_DAYS = 90;
   var STALE_EVIDENCE_DAYS = 365;
@@ -24200,6 +24317,7 @@ ${suffix}`;
     );
     const risk = computeRiskSummary(normalizedRows, ctx);
     const forecast = computeRenewalForecast(normalizedRows, ctx);
+    const evidenceGaps = computeEvidenceGaps(normalizedRows, ctx);
     return {
       recordCount: normalizedRows.length,
       asOfDate: ctx.asOfDateISO,
@@ -24209,7 +24327,8 @@ ${suffix}`;
       operationalHealth,
       compositeHealthScore,
       risk,
-      forecast
+      forecast,
+      evidenceGaps
     };
   }
 
@@ -24262,7 +24381,10 @@ ${suffix}`;
     EXPIRING_NEXT_MONTH: "expiring-next-month",
     EXPIRING_30_DAYS: "expiring-within-30-days",
     EXPIRING_90_DAYS: "expiring-within-90-days",
-    MISSING_REMINDER_ACTIVITY: "missing-reminder-activity"
+    MISSING_REMINDER_ACTIVITY: "missing-reminder-activity",
+    CRITICAL_EVIDENCE_GAPS: "critical-evidence-gaps",
+    HIGH_EVIDENCE_GAPS: "high-evidence-gaps",
+    STALE_EVIDENCE_RECORDS: "stale-evidence-records"
   };
   var COMPLIANCE_INSIGHT_REMINDER_ACTIVITY_PREVIEW_COLUMNS = [
     { key: "name", label: "Name" },
@@ -24272,6 +24394,17 @@ ${suffix}`;
     { key: "status", label: "Status" },
     { key: "reminderWindow", label: "Reminder Window" },
     { key: "reminderActivityStatus", label: "Reminder Activity Status" }
+  ];
+  var COMPLIANCE_INSIGHT_EVIDENCE_GAP_PREVIEW_COLUMNS = [
+    { key: "name", label: "Name" },
+    { key: "role", label: "Role" },
+    { key: "complianceType", label: "Compliance Type" },
+    { key: "expiryDate", label: "Expiry Date" },
+    { key: "status", label: "Status" },
+    { key: "evidenceCount", label: "Evidence Count" },
+    { key: "newestEvidenceDate", label: "Newest Evidence" },
+    { key: "gapTier", label: "Gap Tier" },
+    { key: "recommendedAction", label: "Recommended Action" }
   ];
   var COMPLIANCE_INSIGHT_RECORD_PREVIEW_COLUMNS = [
     { key: "name", label: "Name" },
@@ -24360,6 +24493,27 @@ ${suffix}`;
       previewDescription: "These records are in an active reminder window (expired, 7-, 14-, or 30-day) but have no reminder sent marker in notes or reminder_sent history for that window.",
       filename: "compliance-insight-missing_reminder_activity.csv",
       itemLabel: "Records"
+    },
+    [COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.CRITICAL_EVIDENCE_GAPS]: {
+      title: "Critical Evidence Gaps",
+      emptyMessage: "No records have critical evidence gaps.",
+      previewDescription: "Records that are expired or expire within 30 days with no evidence, or where all evidence is stale.",
+      filename: "compliance-insight-critical_evidence_gaps.csv",
+      itemLabel: "Records"
+    },
+    [COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.HIGH_EVIDENCE_GAPS]: {
+      title: "High Evidence Gaps",
+      emptyMessage: "No records have high-priority evidence gaps.",
+      previewDescription: "Records expiring within 31\u201390 days that have no evidence on file.",
+      filename: "compliance-insight-high_evidence_gaps.csv",
+      itemLabel: "Records"
+    },
+    [COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.STALE_EVIDENCE_RECORDS]: {
+      title: "Stale Evidence Records",
+      emptyMessage: "No records have stale evidence outside critical or high tiers.",
+      previewDescription: "Records with evidence on file where the newest item is older than 12 months. Excludes records already classified as critical or high evidence gaps.",
+      filename: "compliance-insight-stale_evidence_records.csv",
+      itemLabel: "Records"
     }
   };
   function isActionLevelDrilldown(drilldownType) {
@@ -24407,6 +24561,15 @@ ${suffix}`;
       if (drilldownType === COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.MISSING_REMINDER_ACTIVITY) {
         return filterRecordsMissingReminderActivity([row], ctx).length > 0;
       }
+      if (drilldownType === COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.CRITICAL_EVIDENCE_GAPS) {
+        return classifyEvidenceGapTier(row, ctx) === EVIDENCE_GAP_TIERS.CRITICAL;
+      }
+      if (drilldownType === COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.HIGH_EVIDENCE_GAPS) {
+        return classifyEvidenceGapTier(row, ctx) === EVIDENCE_GAP_TIERS.HIGH;
+      }
+      if (drilldownType === COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.STALE_EVIDENCE_RECORDS) {
+        return classifyEvidenceGapTier(row, ctx) === EVIDENCE_GAP_TIERS.STALE;
+      }
       return false;
     });
   }
@@ -24436,6 +24599,22 @@ ${suffix}`;
       reminderActivityStatus: hasActivity ? "Recorded" : "Missing"
     };
   }
+  function mapEvidenceGapPreviewRow(row, ctx) {
+    const status = ctx.getExpiryStatus(row.expiryDate);
+    const evidenceItems = Array.isArray(row.evidence) ? row.evidence : [];
+    const tier = classifyEvidenceGapTier(row, ctx);
+    return {
+      name: row.name,
+      role: row.role,
+      complianceType: row.complianceType,
+      expiryDate: row.expiryDate,
+      status: status.label,
+      evidenceCount: String(evidenceItems.length),
+      newestEvidenceDate: getNewestEvidenceDate(evidenceItems) || "\u2014",
+      gapTier: tier || "\u2014",
+      recommendedAction: tier ? getEvidenceGapRecommendedAction(tier) : "\u2014"
+    };
+  }
   function getComplianceInsightDrilldownColumns(drilldownType) {
     if (isActionLevelDrilldown(drilldownType)) {
       return COMPLIANCE_INSIGHT_ACTION_PREVIEW_COLUMNS;
@@ -24445,6 +24624,9 @@ ${suffix}`;
     }
     if (drilldownType === COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.MISSING_REMINDER_ACTIVITY) {
       return COMPLIANCE_INSIGHT_REMINDER_ACTIVITY_PREVIEW_COLUMNS;
+    }
+    if (drilldownType === COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.CRITICAL_EVIDENCE_GAPS || drilldownType === COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.HIGH_EVIDENCE_GAPS || drilldownType === COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.STALE_EVIDENCE_RECORDS) {
+      return COMPLIANCE_INSIGHT_EVIDENCE_GAP_PREVIEW_COLUMNS;
     }
     return COMPLIANCE_INSIGHT_RECORD_PREVIEW_COLUMNS;
   }
@@ -24536,6 +24718,21 @@ ${suffix}`;
         })
       );
     }
+    const evidenceGaps = insights.evidenceGaps?.byTier;
+    if (evidenceGaps?.critical > 0) {
+      recommendations.push(
+        finalizeRecommendation({
+          id: "evidence-critical-gaps",
+          priority: RECOMMENDATION_PRIORITIES.CRITICAL,
+          category: RECOMMENDATION_CATEGORIES.EVIDENCE,
+          title: "Close critical evidence gaps",
+          description: `${countLabel(evidenceGaps.critical, "record")} ${evidenceGaps.critical === 1 ? "has" : "have"} a critical evidence gap \u2014 expired or due within 30 days with no valid evidence.`,
+          affectedCount: evidenceGaps.critical,
+          drilldownKey: COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.CRITICAL_EVIDENCE_GAPS,
+          sortOrder: 15
+        })
+      );
+    }
     if (forecast.expiringWithin30Days > thresholds.expiringWithin30Days) {
       recommendations.push(
         finalizeRecommendation({
@@ -24550,17 +24747,17 @@ ${suffix}`;
         })
       );
     }
-    if (risk.missingEvidenceRecords > 0) {
+    if (evidenceGaps?.high > 0) {
       recommendations.push(
         finalizeRecommendation({
-          id: "evidence-missing-evidence",
+          id: "evidence-high-gaps",
           priority: RECOMMENDATION_PRIORITIES.HIGH,
           category: RECOMMENDATION_CATEGORIES.EVIDENCE,
-          title: "Add missing evidence",
-          description: `${countLabel(risk.missingEvidenceRecords, "record")} ${risk.missingEvidenceRecords === 1 ? "has" : "have"} no evidence on file.`,
-          affectedCount: risk.missingEvidenceRecords,
-          drilldownKey: COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.MISSING_EVIDENCE,
-          sortOrder: 40
+          title: "Add evidence for upcoming renewals",
+          description: `${countLabel(evidenceGaps.high, "record")} expiring within 31\u201390 days ${evidenceGaps.high === 1 ? "has" : "have"} no evidence on file.`,
+          affectedCount: evidenceGaps.high,
+          drilldownKey: COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.HIGH_EVIDENCE_GAPS,
+          sortOrder: 35
         })
       );
     }
@@ -24593,16 +24790,16 @@ ${suffix}`;
         })
       );
     }
-    if (risk.staleEvidenceRecords > 0) {
+    if (evidenceGaps?.stale > 0) {
       recommendations.push(
         finalizeRecommendation({
-          id: "evidence-stale-evidence",
+          id: "evidence-stale-records",
           priority: RECOMMENDATION_PRIORITIES.MEDIUM,
           category: RECOMMENDATION_CATEGORIES.EVIDENCE,
           title: "Update stale evidence",
-          description: `${countLabel(risk.staleEvidenceRecords, "record")} ${risk.staleEvidenceRecords === 1 ? "has" : "have"} evidence older than ${staleAge}.`,
-          affectedCount: risk.staleEvidenceRecords,
-          drilldownKey: COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.STALE_EVIDENCE,
+          description: `${countLabel(evidenceGaps.stale, "record")} ${evidenceGaps.stale === 1 ? "has" : "have"} evidence older than ${staleAge}.`,
+          affectedCount: evidenceGaps.stale,
+          drilldownKey: COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.STALE_EVIDENCE_RECORDS,
           sortOrder: 60
         })
       );
@@ -24858,6 +25055,15 @@ ${suffix}`;
   );
   var complianceInsightsRiskExpiredActiveActions = document.getElementById(
     "compliance-insights-risk-expired-active-actions"
+  );
+  var complianceInsightsEvidenceGapCritical = document.getElementById(
+    "compliance-insights-evidence-gap-critical"
+  );
+  var complianceInsightsEvidenceGapHigh = document.getElementById(
+    "compliance-insights-evidence-gap-high"
+  );
+  var complianceInsightsEvidenceGapStale = document.getElementById(
+    "compliance-insights-evidence-gap-stale"
   );
   var complianceInsightsForecastThisMonth = document.getElementById(
     "compliance-insights-forecast-this-month"
@@ -26332,6 +26538,15 @@ This cannot be undone.`
     if (complianceInsightsRiskExpiredActiveActions) {
       complianceInsightsRiskExpiredActiveActions.textContent = insights.risk.expiredWithActiveActions;
     }
+    if (complianceInsightsEvidenceGapCritical) {
+      complianceInsightsEvidenceGapCritical.textContent = insights.evidenceGaps?.byTier?.critical ?? 0;
+    }
+    if (complianceInsightsEvidenceGapHigh) {
+      complianceInsightsEvidenceGapHigh.textContent = insights.evidenceGaps?.byTier?.high ?? 0;
+    }
+    if (complianceInsightsEvidenceGapStale) {
+      complianceInsightsEvidenceGapStale.textContent = insights.evidenceGaps?.byTier?.stale ?? 0;
+    }
     if (complianceInsightsForecastThisMonth) {
       complianceInsightsForecastThisMonth.textContent = insights.forecast.expiringThisMonth;
     }
@@ -26408,6 +26623,15 @@ This cannot be undone.`
         ...previewRow2,
         expiryDate: formatDate(row.expiryDate),
         status: getStatusBadgeLabel(getStatus(row.expiryDate).key)
+      };
+    }
+    if (drilldownType === COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.CRITICAL_EVIDENCE_GAPS || drilldownType === COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.HIGH_EVIDENCE_GAPS || drilldownType === COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.STALE_EVIDENCE_RECORDS) {
+      const previewRow2 = mapEvidenceGapPreviewRow(row, ctx);
+      return {
+        ...previewRow2,
+        expiryDate: formatDate(row.expiryDate),
+        status: getStatusBadgeLabel(getStatus(row.expiryDate).key),
+        newestEvidenceDate: previewRow2.newestEvidenceDate === "\u2014" ? "\u2014" : formatDate(previewRow2.newestEvidenceDate)
       };
     }
     const status = getStatus(row.expiryDate);

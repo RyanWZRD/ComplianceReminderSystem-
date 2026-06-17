@@ -12,6 +12,7 @@ Application version is **v4.0.0-alpha** for the Compliance Insights MVP alpha mi
 | Health metrics | `js/app/insights/metrics-health.js` | Expiry, evidence, action, and composite scores |
 | Operational health | `js/app/insights/metrics-operational.js` | Reminder follow-up score for active reminder windows |
 | Risk summary | `js/app/insights/metrics-risk.js` | At-risk counts for drilldown tiles |
+| Evidence gaps | `js/app/insights/metrics-evidence-gaps.js` | Tiered evidence gap analysis |
 | Renewal forecast | `js/app/insights/metrics-forecast.js` | Expiry windows and reminder counts |
 | Recommendations | `js/app/insights/recommendations-engine.js` | Prioritized suggested actions |
 | Drilldowns | `js/app/insights/compliance-insights-drilldowns.js` | Filters and preview tables |
@@ -29,9 +30,10 @@ The **Compliance Insights** card on the dashboard shows:
 
 1. **Compliance Health Score** — composite score with sub-scores
 2. **Risk Summary** — clickable tiles for current problems
-3. **Renewal Forecast** — clickable tiles for upcoming expiries
-4. **Recommended Actions** — prioritized list linked to the same drilldowns
-5. **Preview table** — records or actions matching the selected tile or recommendation
+3. **Evidence Gaps** — tiered evidence gap cards (critical, high, stale)
+4. **Renewal Forecast** — clickable tiles for upcoming expiries
+5. **Recommended Actions** — prioritized list linked to the same drilldowns
+6. **Preview table** — records or actions matching the selected tile or recommendation
 
 In cloud mode, evidence health uses metadata only (document name, type, dates) — file attachments are not uploaded to Storage in v4.0.0-alpha.
 
@@ -106,6 +108,57 @@ The preview includes a short explanation of what “missing reminder activity”
 |----------|---------|----------|
 | `DUE_SOON_DAYS` | 90 | Expiry “due soon” status and legacy register mapping |
 | `STALE_EVIDENCE_DAYS` | 365 | Evidence considered stale after this many days |
+| `EVIDENCE_GAP_CRITICAL_DAYS` | 30 | Expired or expiring within this window triggers critical tier |
+| `EVIDENCE_GAP_HIGH_MIN_DAYS` | 31 | Lower bound for high-tier missing-evidence window |
+| `EVIDENCE_GAP_HIGH_MAX_DAYS` | 90 | Upper bound for high-tier missing-evidence window |
+
+## Evidence gap tiers
+
+Evidence gaps classify records by urgency using expiry proximity and evidence freshness. Each record is assigned exactly one tier (priority order: critical → high → stale → ok). Records with an invalid expiry date and no evidence are excluded from tier counts when they do not match any rule.
+
+| Tier | Criteria |
+|------|----------|
+| **Critical** | Record is expired or expires within 30 days, and has no evidence or all evidence is stale |
+| **High** | Record expires within 31–90 days and has no evidence |
+| **Stale** | Record has evidence but the newest item is older than `STALE_EVIDENCE_DAYS` (and is not already critical or high) |
+| **Ok** | Record has at least one non-stale evidence item |
+
+`computeComplianceInsights()` returns an `evidenceGaps` object:
+
+```javascript
+{
+  byTier: { critical, high, stale, ok },
+  records: [
+    {
+      name, role, complianceType, expiryDate, status,
+      evidenceCount, newestEvidenceDate, gapTier, recommendedAction
+    }
+  ]
+}
+```
+
+### Evidence gap cards
+
+Three clickable tiles appear in the **Evidence Gaps** section:
+
+| Tile | Drilldown key | Count source |
+|------|---------------|--------------|
+| Critical evidence gaps | `critical-evidence-gaps` | `evidenceGaps.byTier.critical` |
+| High evidence gaps | `high-evidence-gaps` | `evidenceGaps.byTier.high` |
+| Stale evidence records | `stale-evidence-records` | `evidenceGaps.byTier.stale` |
+
+Preview tables include evidence count, newest evidence date, gap tier, and recommended action.
+
+### Legacy risk tiles (unchanged)
+
+The **Missing evidence** and **Stale evidence** risk tiles in Risk Summary are unchanged. They use broader counts from `metrics-risk.js`:
+
+| Tile | Counts | Relation to tiers |
+|------|--------|-------------------|
+| Missing evidence | Records with zero evidence items | Includes records outside critical/high expiry windows (e.g. invalid expiry) |
+| Stale evidence | Records where any evidence is older than `STALE_EVIDENCE_DAYS` | Includes records also classified as critical (e.g. expired with all stale evidence) |
+
+Tier-based recommendations replace the former generic missing/stale evidence recommendations.
 
 ## Risk summary
 
@@ -148,9 +201,9 @@ Recommendations are **rule-based only**. There is no AI, LLM, or external API de
 
 | Priority | Rules (when count > 0, unless threshold applies) |
 |----------|--------------------------------------------------|
-| **Critical** | Expired records; expired records with active actions |
-| **High priority** | Expiring within 30 days (if above threshold); missing evidence; missing reminder follow-up; overdue actions |
-| **Medium** | Stale evidence; expiring next month (if above threshold) |
+| **Critical** | Expired records; critical evidence gaps; expired records with active actions |
+| **High priority** | Expiring within 30 days (if above threshold); high evidence gaps; missing reminder follow-up; overdue actions |
+| **Medium** | Stale evidence records (tier); expiring next month (if above threshold) |
 
 ### Threshold constants (`recommendations-engine.js`)
 
@@ -187,4 +240,4 @@ Some older dashboard cards intentionally use different formulas. See comments in
 
 ## V4 development status
 
-See [ROADMAP.md](../ROADMAP.md#v4--compliance-insights-in-development) for slice progress (V4-0A through V4-1B and beyond).
+See [ROADMAP.md](../ROADMAP.md#v4--compliance-insights-in-development) for slice progress (V4-0A through V4-3A and beyond).

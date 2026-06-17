@@ -144,6 +144,23 @@ function buildRecommendationRules(insights, thresholds) {
     );
   }
 
+  const evidenceGaps = insights.evidenceGaps?.byTier;
+
+  if (evidenceGaps?.critical > 0) {
+    recommendations.push(
+      finalizeRecommendation({
+        id: "evidence-critical-gaps",
+        priority: RECOMMENDATION_PRIORITIES.CRITICAL,
+        category: RECOMMENDATION_CATEGORIES.EVIDENCE,
+        title: "Close critical evidence gaps",
+        description: `${countLabel(evidenceGaps.critical, "record")} ${evidenceGaps.critical === 1 ? "has" : "have"} a critical evidence gap — expired or due within 30 days with no valid evidence.`,
+        affectedCount: evidenceGaps.critical,
+        drilldownKey: COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.CRITICAL_EVIDENCE_GAPS,
+        sortOrder: 15,
+      })
+    );
+  }
+
   if (forecast.expiringWithin30Days > thresholds.expiringWithin30Days) {
     recommendations.push(
       finalizeRecommendation({
@@ -159,17 +176,17 @@ function buildRecommendationRules(insights, thresholds) {
     );
   }
 
-  if (risk.missingEvidenceRecords > 0) {
+  if (evidenceGaps?.high > 0) {
     recommendations.push(
       finalizeRecommendation({
-        id: "evidence-missing-evidence",
+        id: "evidence-high-gaps",
         priority: RECOMMENDATION_PRIORITIES.HIGH,
         category: RECOMMENDATION_CATEGORIES.EVIDENCE,
-        title: "Add missing evidence",
-        description: `${countLabel(risk.missingEvidenceRecords, "record")} ${risk.missingEvidenceRecords === 1 ? "has" : "have"} no evidence on file.`,
-        affectedCount: risk.missingEvidenceRecords,
-        drilldownKey: COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.MISSING_EVIDENCE,
-        sortOrder: 40,
+        title: "Add evidence for upcoming renewals",
+        description: `${countLabel(evidenceGaps.high, "record")} expiring within 31–90 days ${evidenceGaps.high === 1 ? "has" : "have"} no evidence on file.`,
+        affectedCount: evidenceGaps.high,
+        drilldownKey: COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.HIGH_EVIDENCE_GAPS,
+        sortOrder: 35,
       })
     );
   }
@@ -209,16 +226,16 @@ function buildRecommendationRules(insights, thresholds) {
     );
   }
 
-  if (risk.staleEvidenceRecords > 0) {
+  if (evidenceGaps?.stale > 0) {
     recommendations.push(
       finalizeRecommendation({
-        id: "evidence-stale-evidence",
+        id: "evidence-stale-records",
         priority: RECOMMENDATION_PRIORITIES.MEDIUM,
         category: RECOMMENDATION_CATEGORIES.EVIDENCE,
         title: "Update stale evidence",
-        description: `${countLabel(risk.staleEvidenceRecords, "record")} ${risk.staleEvidenceRecords === 1 ? "has" : "have"} evidence older than ${staleAge}.`,
-        affectedCount: risk.staleEvidenceRecords,
-        drilldownKey: COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.STALE_EVIDENCE,
+        description: `${countLabel(evidenceGaps.stale, "record")} ${evidenceGaps.stale === 1 ? "has" : "have"} evidence older than ${staleAge}.`,
+        affectedCount: evidenceGaps.stale,
+        drilldownKey: COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.STALE_EVIDENCE_RECORDS,
         sortOrder: 60,
       })
     );

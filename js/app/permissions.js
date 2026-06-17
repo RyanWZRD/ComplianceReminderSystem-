@@ -147,3 +147,25 @@ export function canMutateReminderSettings() {
 
   return canAdmin();
 }
+
+/** @returns {boolean} */
+export function canReadAutomationPolicies() {
+  if (!isCloudMode()) {
+    return false;
+  }
+
+  return canEdit();
+}
+
+/** @returns {boolean} */
+export function canMutateAutomationPolicies() {
+  if (!isCloudMode()) {
+    return false;
+  }
+
+  if (!CLOUD_WRITES_ENABLED) {
+    return false;
+  }
+
+  return canAdmin();
+}

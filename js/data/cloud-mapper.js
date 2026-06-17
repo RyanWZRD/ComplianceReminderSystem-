@@ -84,7 +84,12 @@ import { normalizePersonContactFields } from "./email.js";
  */
 
 /**
+ * @typedef {'reminder_digest' | 'action_orchestration' | 'escalation'} AutomationPolicyType
+ */
+
+/**
  * @typedef {Object} AutomationPolicyDocument
+ * @property {AutomationPolicyType} type
  * @property {number} version
  * @property {string} name
  * @property {boolean} [enabled]
@@ -96,6 +101,7 @@ import { normalizePersonContactFields } from "./email.js";
  * @typedef {Object} AutomationPolicyRow
  * @property {string} id
  * @property {string} organisation_id
+ * @property {AutomationPolicyType} policy_type
  * @property {AutomationPolicyDocument | object} policy
  * @property {boolean} enabled
  * @property {number} version

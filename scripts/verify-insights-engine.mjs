@@ -1,7 +1,7 @@
 /**
  * Deterministic verification for the V4-0A Compliance Insights engine,
  * V4-0B dashboard metric mappings, V4-0D drilldown filters, V4-1A recommendations,
- * V4-1B recommendation polish and thresholds, and V4-1C alpha hardening.
+ * V4-1B recommendation polish and thresholds, V4-1C alpha hardening, and V4-2A operational health.
  * Uses fixture rows only — no Supabase or browser required.
  */
 
@@ -32,7 +32,7 @@ import {
   HEALTHY_FIXTURE_ROWS,
   LOCAL_FIXTURE_ROWS,
 } from "./fixtures/insights-fixtures.mjs";
-import { ACTION_STATUSES } from "../js/data/constants.js";
+import { ACTION_STATUSES, HISTORY_ACTIONS } from "../js/data/constants.js";
 import { parseDateAtMidnight } from "../js/data/dates.js";
 
 const DUE_SOON_DAYS = 90;
@@ -300,6 +300,11 @@ function verifyDrilldownCounts(label, rows) {
     insights.forecast.expiringWithin90Days,
     `${label} drilldown expiring within 90 days`
   );
+  assertEqual(
+    drilldownCounts[COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.MISSING_REMINDER_ACTIVITY],
+    insights.operationalHealth.recordsMissingReminderActivity,
+    `${label} drilldown missing reminder activity`
+  );
 }
 
 function verifyRecommendations(label, rows) {
@@ -315,7 +320,7 @@ function verifyRecommendations(label, rows) {
   assertDeepEqual(recommendations, EXPECTED_RECOMMENDATIONS, `${label} recommendations`);
   assertDeepEqual(
     getRecommendationPriorityOrder(recommendations),
-    ["critical", "critical", "high", "high", "high", "medium", "medium"],
+    ["critical", "critical", "high", "high", "high", "high", "medium", "medium"],
     `${label} recommendation priority order`
   );
 
@@ -377,6 +382,11 @@ function verifyHealthyFixture(label, rows) {
     `${label} evidenceHealth`
   );
   assertDeepEqual(insights.actionHealth, EXPECTED_HEALTHY_INSIGHTS.actionHealth, `${label} actionHealth`);
+  assertDeepEqual(
+    insights.operationalHealth,
+    EXPECTED_HEALTHY_INSIGHTS.operationalHealth,
+    `${label} operationalHealth`
+  );
   assertDeepEqual(insights.risk, EXPECTED_HEALTHY_INSIGHTS.risk, `${label} risk`);
   assertDeepEqual(insights.forecast, EXPECTED_HEALTHY_INSIGHTS.forecast, `${label} forecast`);
 
@@ -386,8 +396,91 @@ function verifyHealthyFixture(label, rows) {
   verifyDrilldownCounts(label, rows);
 }
 
+function verifyOperationalHealthScenarios() {
+  const partialRows = [
+    {
+      personId: 1,
+      recordId: 1,
+      name: "Followed Up",
+      role: "Volunteer",
+      complianceType: "DBS",
+      expiryDate: "2026-06-20",
+      renewalCycle: "3-years",
+      notes: "17/06/2026 - 7 Day Reminder Sent",
+      history: [],
+      evidence: [],
+      actions: [],
+    },
+    {
+      personId: 2,
+      recordId: 2,
+      name: "Not Followed Up",
+      role: "Volunteer",
+      complianceType: "DBS",
+      expiryDate: "2026-06-25",
+      renewalCycle: "3-years",
+      notes: "",
+      history: [],
+      evidence: [],
+      actions: [],
+    },
+  ];
+
+  const partialInsights = computeComplianceInsights(
+    partialRows,
+    FIXTURE_SETTINGS,
+    FIXTURE_AS_OF_DATE
+  );
+
+  assertEqual(
+    partialInsights.operationalHealth.recordsInReminderWindows,
+    2,
+    "operational partial recordsInReminderWindows"
+  );
+  assertEqual(
+    partialInsights.operationalHealth.recordsWithReminderActivity,
+    1,
+    "operational partial recordsWithReminderActivity"
+  );
+  assertEqual(partialInsights.operationalHealth.score, 50, "operational partial score");
+
+  const historyRows = [
+    {
+      personId: 3,
+      recordId: 3,
+      name: "History Follow-up",
+      role: "Volunteer",
+      complianceType: "DBS",
+      expiryDate: "2026-06-20",
+      renewalCycle: "3-years",
+      notes: "",
+      history: [
+        {
+          action: HISTORY_ACTIONS.REMINDER_SENT,
+          description: "7 Day Reminder Sent recorded.",
+        },
+      ],
+      evidence: [],
+      actions: [],
+    },
+  ];
+
+  const historyInsights = computeComplianceInsights(
+    historyRows,
+    FIXTURE_SETTINGS,
+    FIXTURE_AS_OF_DATE
+  );
+
+  assertEqual(
+    historyInsights.operationalHealth.recordsWithReminderActivity,
+    1,
+    "operational history recordsWithReminderActivity"
+  );
+  assertEqual(historyInsights.operationalHealth.score, 100, "operational history score");
+}
+
 console.log(
-  "Compliance Insights engine verification (V4-0A + V4-0B + V4-0D + V4-1A + V4-1B + V4-1C)\n"
+  "Compliance Insights engine verification (V4-0A through V4-2A)\n"
 );
 
 verifyInsights("local fixture rows", LOCAL_FIXTURE_ROWS);
@@ -401,6 +494,7 @@ verifyRecommendations("cloud-shaped fixture rows", CLOUD_FIXTURE_ROWS);
 verifyRecommendationThresholds("local fixture rows", LOCAL_FIXTURE_ROWS);
 verifyHealthyFixture("healthy local fixture rows", HEALTHY_FIXTURE_ROWS);
 verifyHealthyFixture("healthy cloud-shaped fixture rows", HEALTHY_CLOUD_FIXTURE_ROWS);
+verifyOperationalHealthScenarios();
 
 const emptyInsights = computeComplianceInsights([], FIXTURE_SETTINGS, FIXTURE_AS_OF_DATE);
 
@@ -409,6 +503,12 @@ assertEqual(emptyInsights.compositeHealthScore, 0, "empty compositeHealthScore")
 assertEqual(emptyInsights.expiryHealth.score, 0, "empty expiry score");
 assertEqual(emptyInsights.evidenceHealth.score, 0, "empty evidence score");
 assertEqual(emptyInsights.actionHealth.score, 0, "empty action score");
+assertEqual(emptyInsights.operationalHealth.score, 100, "empty operational score");
+assertEqual(
+  emptyInsights.operationalHealth.recordsInReminderWindows,
+  0,
+  "empty operational recordsInReminderWindows"
+);
 assertDeepEqual(
   mapInsightsToSummaryCounts(emptyInsights),
   { total: 0, valid: 0, dueSoon: 0, expired: 0 },
@@ -429,3 +529,4 @@ console.log("  compliance insight drilldown counts match risk/forecast tiles");
 console.log(`  recommendations generated=${EXPECTED_RECOMMENDATIONS.length}`);
 console.log("  recommendation thresholds and priority labels verified");
 console.log("  healthy local + cloud-shaped fixtures produce 100% scores and zero recommendations");
+console.log("  operational health scenarios (notes, history, empty windows) verified");

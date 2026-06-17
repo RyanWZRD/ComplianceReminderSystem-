@@ -49,6 +49,7 @@ export const RECOMMENDATION_CATEGORIES = {
   EVIDENCE: "evidence",
   ACTIONS: "actions",
   FORECAST: "forecast",
+  OPERATIONAL: "operational",
 };
 
 /** Default recommendation count thresholds (override via `generateComplianceRecommendations`). */
@@ -184,6 +185,26 @@ function buildRecommendationRules(insights, thresholds) {
         affectedCount: risk.overdueActions,
         drilldownKey: COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.OVERDUE_ACTIONS,
         sortOrder: 50,
+      })
+    );
+  }
+
+  const operational = insights.operationalHealth;
+
+  if (
+    operational?.available &&
+    operational.recordsMissingReminderActivity > 0
+  ) {
+    recommendations.push(
+      finalizeRecommendation({
+        id: "operational-missing-reminder-activity",
+        priority: RECOMMENDATION_PRIORITIES.HIGH,
+        category: RECOMMENDATION_CATEGORIES.OPERATIONAL,
+        title: "Record reminder follow-up",
+        description: `${countLabel(operational.recordsMissingReminderActivity, "record")} in active reminder windows ${operational.recordsMissingReminderActivity === 1 ? "has" : "have"} no recorded reminder follow-up.`,
+        affectedCount: operational.recordsMissingReminderActivity,
+        drilldownKey: COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.MISSING_REMINDER_ACTIVITY,
+        sortOrder: 45,
       })
     );
   }

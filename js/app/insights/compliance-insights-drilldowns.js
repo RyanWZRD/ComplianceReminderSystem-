@@ -1,4 +1,5 @@
 import { ACTION_STATUSES } from "../../data/constants.js";
+import { filterRecordsMissingReminderActivity } from "./metrics-operational.js";
 
 /** @typedef {import("./insights-engine.js").NormalizedComplianceRow} NormalizedComplianceRow */
 /** @typedef {import("./insights-engine.js").InsightsContext} InsightsContext */
@@ -13,6 +14,7 @@ export const COMPLIANCE_INSIGHT_DRILLDOWN_TYPES = {
   EXPIRING_NEXT_MONTH: "expiring-next-month",
   EXPIRING_30_DAYS: "expiring-within-30-days",
   EXPIRING_90_DAYS: "expiring-within-90-days",
+  MISSING_REMINDER_ACTIVITY: "missing-reminder-activity",
 };
 
 export const COMPLIANCE_INSIGHT_RECORD_PREVIEW_COLUMNS = [
@@ -99,6 +101,12 @@ const DRILLDOWN_META = {
     filename: "compliance-insight-expiring_within_90_days.csv",
     itemLabel: "Records",
   },
+  [COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.MISSING_REMINDER_ACTIVITY]: {
+    title: "Records Missing Reminder Follow-up",
+    emptyMessage: "All records in active reminder windows have recorded reminder follow-up.",
+    filename: "compliance-insight-missing_reminder_activity.csv",
+    itemLabel: "Records",
+  },
 };
 
 /**
@@ -172,6 +180,10 @@ export function filterComplianceInsightDrilldownRecords(drilldownType, rows, ctx
 
     if (drilldownType === COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.EXPIRING_90_DAYS) {
       return !Number.isNaN(daysRemaining) && daysRemaining >= 0 && daysRemaining <= 90;
+    }
+
+    if (drilldownType === COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.MISSING_REMINDER_ACTIVITY) {
+      return filterRecordsMissingReminderActivity([row], ctx).length > 0;
     }
 
     return false;
@@ -302,5 +314,11 @@ export function getExpectedDrilldownCounts(rows, ctx) {
       rows,
       ctx
     ),
+    [COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.MISSING_REMINDER_ACTIVITY]:
+      countComplianceInsightDrilldownMatches(
+        COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.MISSING_REMINDER_ACTIVITY,
+        rows,
+        ctx
+      ),
   };
 }

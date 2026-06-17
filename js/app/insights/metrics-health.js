@@ -170,15 +170,6 @@ export function computeActionHealth(rows, ctx) {
   return counts;
 }
 
-/** Operational metrics reserved for a later phase. */
-export function computeOperationalHealth() {
-  return {
-    available: false,
-    score: null,
-    note: "Operational health metrics are not implemented in V4-0A.",
-  };
-}
-
 /**
  * Composite score = rounded average of expiry, evidence, and action dimension scores.
  *

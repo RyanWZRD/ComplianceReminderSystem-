@@ -343,6 +343,14 @@ export const EXPECTED_HEALTHY_INSIGHTS = {
     expiredRecordsWithActiveActions: 0,
     score: 100,
   },
+  operationalHealth: {
+    available: true,
+    score: 100,
+    recordsInReminderWindows: 0,
+    recordsWithReminderActivity: 0,
+    recordsMissingReminderActivity: 0,
+    note: "No records are currently in 30-, 14-, or 7-day reminder windows (or expired).",
+  },
   risk: {
     expiredRecords: 0,
     dueSoonRecords: 0,
@@ -408,9 +416,12 @@ export const EXPECTED_INSIGHTS = {
     score: 83,
   },
   operationalHealth: {
-    available: false,
-    score: null,
-    note: "Operational health metrics are not implemented in V4-0A.",
+    available: true,
+    score: 0,
+    recordsInReminderWindows: 3,
+    recordsWithReminderActivity: 0,
+    recordsMissingReminderActivity: 3,
+    note: "3 of 3 records in active reminder windows lack recorded reminder follow-up (notes or history).",
   },
   risk: {
     expiredRecords: 1,
@@ -481,6 +492,16 @@ export const EXPECTED_RECOMMENDATIONS = [
     affectedCount: 3,
     drilldownKey: "missing-evidence",
     sortOrder: 40,
+  },
+  {
+    id: "operational-missing-reminder-activity",
+    priority: "high",
+    category: "operational",
+    title: "Record reminder follow-up",
+    description: "3 records in active reminder windows have no recorded reminder follow-up.",
+    affectedCount: 3,
+    drilldownKey: "missing-reminder-activity",
+    sortOrder: 45,
   },
   {
     id: "actions-overdue-actions",

@@ -2179,9 +2179,16 @@ function renderComplianceInsights() {
   if (complianceInsightsOperational) {
     if (insights.operationalHealth.available) {
       complianceInsightsOperational.textContent = `${insights.operationalHealth.score}%`;
+      complianceInsightsOperational.title = insights.operationalHealth.note || "";
+      complianceInsightsOperational.setAttribute(
+        "aria-label",
+        `Operational Health ${insights.operationalHealth.score}%. ${insights.operationalHealth.note || ""}`
+      );
     } else {
       complianceInsightsOperational.textContent =
         insights.operationalHealth.note || "Not available";
+      complianceInsightsOperational.removeAttribute("title");
+      complianceInsightsOperational.removeAttribute("aria-label");
     }
   }
 

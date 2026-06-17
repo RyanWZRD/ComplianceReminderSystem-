@@ -9,8 +9,8 @@ import {
   computeCompositeHealthScore,
   computeEvidenceHealth,
   computeExpiryHealth,
-  computeOperationalHealth,
 } from "./metrics-health.js";
+import { computeOperationalHealth } from "./metrics-operational.js";
 import { computeRiskSummary } from "./metrics-risk.js";
 import { computeRenewalForecast } from "./metrics-forecast.js";
 
@@ -299,7 +299,7 @@ export function computeComplianceInsights(rows, settings = DEFAULT_REMINDER_SETT
   const expiryHealth = computeExpiryHealth(normalizedRows, ctx);
   const evidenceHealth = computeEvidenceHealth(normalizedRows, ctx);
   const actionHealth = computeActionHealth(normalizedRows, ctx);
-  const operationalHealth = computeOperationalHealth();
+  const operationalHealth = computeOperationalHealth(normalizedRows, ctx);
   const compositeHealthScore = computeCompositeHealthScore(
     expiryHealth,
     evidenceHealth,

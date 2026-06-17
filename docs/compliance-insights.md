@@ -10,6 +10,7 @@ Application version is **v4.0.0-alpha** for the Compliance Insights MVP alpha mi
 |------|--------|---------|
 | Insights engine | `js/app/insights/insights-engine.js` | Normalizes rows and computes all metrics |
 | Health metrics | `js/app/insights/metrics-health.js` | Expiry, evidence, action, and composite scores |
+| Operational health | `js/app/insights/metrics-operational.js` | Reminder follow-up score for active reminder windows |
 | Risk summary | `js/app/insights/metrics-risk.js` | At-risk counts for drilldown tiles |
 | Renewal forecast | `js/app/insights/metrics-forecast.js` | Expiry windows and reminder counts |
 | Recommendations | `js/app/insights/recommendations-engine.js` | Prioritized suggested actions |
@@ -46,7 +47,37 @@ The composite **Compliance Health Score** is the rounded average of three dimens
 
 A record has **action risk** when it has overdue actions or active (open/in-progress) actions on an expired record.
 
-**Operational health** is reserved for a later V4 phase and displays “Not available”.
+**Operational health** measures whether records in active reminder windows have recorded reminder follow-up. It uses the same window logic as the Action Required table (`getReminderForRecord` in `app.js`).
+
+| Dimension | Score formula |
+|-----------|---------------|
+| **Operational health** | Records with reminder follow-up ÷ records in active reminder windows × 100 |
+
+When **no records** are in active reminder windows, operational health is **100%** with the note: *No records are currently in 30-, 14-, or 7-day reminder windows (or expired).*
+
+### Active reminder windows
+
+For each record with a valid expiry date, the engine picks the **most urgent** enabled window (same priority as the reminders table):
+
+1. **Expired** — expiry date is in the past
+2. **7-day** — `days7` enabled and ≤ 7 days remaining
+3. **14-day** — `days14` enabled and ≤ 14 days remaining
+4. **30-day** — `days30` enabled and ≤ 30 days remaining
+
+If none apply, the record is not in an active reminder window.
+
+### Reminder follow-up detection
+
+A record counts as having **reminder activity** for its current window when either:
+
+- **Notes** contain the sent label for that window (via `isReminderTypeMarkedSent` in `js/data/reminder-sent.js`), e.g. `17/06/2026 - 14 Day Reminder Sent`, or
+- **History** includes a `reminder_sent` entry whose description contains the sent label, e.g. `14 Day Reminder Sent recorded.`
+
+Only the **current** window’s reminder type is checked — a 30-day sent marker does not satisfy a record now in the 7-day window.
+
+Operational health is displayed in the Compliance Insights sub-score row. Hover or screen-reader users see the explanatory note via the element’s `title` and `aria-label`.
+
+The composite **Compliance Health Score** remains the average of expiry, evidence, and action scores only (operational health is shown separately in V4-2A).
 
 ### Score bands (UI)
 
@@ -105,7 +136,7 @@ Recommendations are **rule-based only**. There is no AI, LLM, or external API de
 | Priority | Rules (when count > 0, unless threshold applies) |
 |----------|--------------------------------------------------|
 | **Critical** | Expired records; expired records with active actions |
-| **High priority** | Expiring within 30 days (if above threshold); missing evidence; overdue actions |
+| **High priority** | Expiring within 30 days (if above threshold); missing evidence; missing reminder follow-up; overdue actions |
 | **Medium** | Stale evidence; expiring next month (if above threshold) |
 
 ### Threshold constants (`recommendations-engine.js`)

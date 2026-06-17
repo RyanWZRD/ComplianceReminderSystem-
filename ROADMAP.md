@@ -564,6 +564,7 @@ Verification: `npm run verify-insights-engine`
 | V4-1A | **COMPLETE** | Recommendations engine and Recommended Actions UI |
 | V4-1B | **COMPLETE** | Recommendation polish, threshold constants, documentation |
 | V4-1C | **COMPLETE** | Alpha hardening, version bump to v4.0.0-alpha |
+| V4-2A | **COMPLETE** | Operational health — reminder follow-up score and recommendation |
 
 **Constraints (V4 to date):** No new CRUD, migrations, cloud-write changes, or AI/LLM dependency.
 

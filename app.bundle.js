@@ -21728,6 +21728,13 @@ ${suffix}`;
     }
     return `${reminderType} Sent`;
   }
+  function isReminderTypeMarkedSent(notes, reminderType) {
+    if (!notes) {
+      return false;
+    }
+    const sentLabel = getReminderSentText(reminderType);
+    return notes.split(/\r?\n/).some((line) => line.includes(sentLabel));
+  }
   function mapReminderTypeToRpcCode(reminderType) {
     if (reminderType === REMINDER_UI_LABELS.expired) {
       return "expired";
@@ -23741,17 +23748,103 @@ ${suffix}`;
     counts.score = counts.totalRecords === 0 ? 0 : Math.round(counts.recordsWithoutActionRisk / counts.totalRecords * 100);
     return counts;
   }
-  function computeOperationalHealth() {
-    return {
-      available: false,
-      score: null,
-      note: "Operational health metrics are not implemented in V4-0A."
-    };
-  }
   function computeCompositeHealthScore(expiryHealth, evidenceHealth, actionHealth) {
     return Math.round(
       (expiryHealth.score + evidenceHealth.score + actionHealth.score) / 3
     );
+  }
+
+  // js/app/insights/metrics-operational.js
+  function getActiveReminderType(expiryDate, settings, ctx) {
+    const daysRemaining = ctx.getDaysUntilExpiry(expiryDate);
+    if (Number.isNaN(daysRemaining)) {
+      return null;
+    }
+    if (daysRemaining < 0) {
+      return REMINDER_UI_LABELS.expired;
+    }
+    if (settings.days7 && daysRemaining <= 7) {
+      return REMINDER_UI_LABELS[7];
+    }
+    if (settings.days14 && daysRemaining <= 14) {
+      return REMINDER_UI_LABELS[14];
+    }
+    if (settings.days30 && daysRemaining <= 30) {
+      return REMINDER_UI_LABELS[30];
+    }
+    return null;
+  }
+  function getHistoryEntryAction(entry) {
+    if (!entry || typeof entry !== "object") {
+      return "";
+    }
+    return entry.action ?? entry.action_type ?? "";
+  }
+  function getHistoryEntryDescription(entry) {
+    if (!entry || typeof entry !== "object") {
+      return "";
+    }
+    return entry.description ?? entry.details ?? "";
+  }
+  function hasReminderActivityForType(row, reminderType) {
+    if (!reminderType) {
+      return false;
+    }
+    const notes = typeof row.notes === "string" ? row.notes : "";
+    if (isReminderTypeMarkedSent(notes, reminderType)) {
+      return true;
+    }
+    const sentLabel = getReminderSentText(reminderType);
+    const history = Array.isArray(row.history) ? row.history : [];
+    return history.some((entry) => {
+      const action = getHistoryEntryAction(entry);
+      if (action !== HISTORY_ACTIONS.REMINDER_SENT) {
+        return false;
+      }
+      return getHistoryEntryDescription(entry).includes(sentLabel);
+    });
+  }
+  function filterRecordsMissingReminderActivity(rows, ctx) {
+    return rows.filter((row) => {
+      const reminderType = getActiveReminderType(row.expiryDate, ctx.settings, ctx);
+      if (!reminderType) {
+        return false;
+      }
+      return !hasReminderActivityForType(row, reminderType);
+    });
+  }
+  function buildOperationalHealthNote(recordsInReminderWindows, recordsMissingReminderActivity) {
+    if (recordsInReminderWindows === 0) {
+      return "No records are currently in 30-, 14-, or 7-day reminder windows (or expired).";
+    }
+    if (recordsMissingReminderActivity === 0) {
+      return `All ${recordsInReminderWindows} record${recordsInReminderWindows === 1 ? "" : "s"} in active reminder windows have recorded reminder follow-up.`;
+    }
+    return `${recordsMissingReminderActivity} of ${recordsInReminderWindows} record${recordsInReminderWindows === 1 ? "" : "s"} in active reminder windows lack recorded reminder follow-up (notes or history).`;
+  }
+  function computeOperationalHealth(rows, ctx) {
+    let recordsInReminderWindows = 0;
+    let recordsWithReminderActivity = 0;
+    rows.forEach((row) => {
+      const reminderType = getActiveReminderType(row.expiryDate, ctx.settings, ctx);
+      if (!reminderType) {
+        return;
+      }
+      recordsInReminderWindows += 1;
+      if (hasReminderActivityForType(row, reminderType)) {
+        recordsWithReminderActivity += 1;
+      }
+    });
+    const recordsMissingReminderActivity = recordsInReminderWindows - recordsWithReminderActivity;
+    const score = recordsInReminderWindows === 0 ? 100 : Math.round(recordsWithReminderActivity / recordsInReminderWindows * 100);
+    return {
+      available: true,
+      score,
+      recordsInReminderWindows,
+      recordsWithReminderActivity,
+      recordsMissingReminderActivity,
+      note: buildOperationalHealthNote(recordsInReminderWindows, recordsMissingReminderActivity)
+    };
   }
 
   // js/app/insights/metrics-risk.js
@@ -24062,7 +24155,7 @@ ${suffix}`;
     const expiryHealth = computeExpiryHealth(normalizedRows, ctx);
     const evidenceHealth = computeEvidenceHealth(normalizedRows, ctx);
     const actionHealth = computeActionHealth(normalizedRows, ctx);
-    const operationalHealth = computeOperationalHealth();
+    const operationalHealth = computeOperationalHealth(normalizedRows, ctx);
     const compositeHealthScore = computeCompositeHealthScore(
       expiryHealth,
       evidenceHealth,
@@ -24131,7 +24224,8 @@ ${suffix}`;
     EXPIRING_THIS_MONTH: "expiring-this-month",
     EXPIRING_NEXT_MONTH: "expiring-next-month",
     EXPIRING_30_DAYS: "expiring-within-30-days",
-    EXPIRING_90_DAYS: "expiring-within-90-days"
+    EXPIRING_90_DAYS: "expiring-within-90-days",
+    MISSING_REMINDER_ACTIVITY: "missing-reminder-activity"
   };
   var COMPLIANCE_INSIGHT_RECORD_PREVIEW_COLUMNS = [
     { key: "name", label: "Name" },
@@ -24213,6 +24307,12 @@ ${suffix}`;
       emptyMessage: "No records expire within the next 90 days.",
       filename: "compliance-insight-expiring_within_90_days.csv",
       itemLabel: "Records"
+    },
+    [COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.MISSING_REMINDER_ACTIVITY]: {
+      title: "Records Missing Reminder Follow-up",
+      emptyMessage: "All records in active reminder windows have recorded reminder follow-up.",
+      filename: "compliance-insight-missing_reminder_activity.csv",
+      itemLabel: "Records"
     }
   };
   function isActionLevelDrilldown(drilldownType) {
@@ -24256,6 +24356,9 @@ ${suffix}`;
       }
       if (drilldownType === COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.EXPIRING_90_DAYS) {
         return !Number.isNaN(daysRemaining) && daysRemaining >= 0 && daysRemaining <= 90;
+      }
+      if (drilldownType === COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.MISSING_REMINDER_ACTIVITY) {
+        return filterRecordsMissingReminderActivity([row], ctx).length > 0;
       }
       return false;
     });
@@ -24307,7 +24410,8 @@ ${suffix}`;
     EXPIRY: "expiry",
     EVIDENCE: "evidence",
     ACTIONS: "actions",
-    FORECAST: "forecast"
+    FORECAST: "forecast",
+    OPERATIONAL: "operational"
   };
   var DEFAULT_RECOMMENDATION_THRESHOLDS = {
     expiringWithin30Days: 0,
@@ -24406,6 +24510,21 @@ ${suffix}`;
           affectedCount: risk.overdueActions,
           drilldownKey: COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.OVERDUE_ACTIONS,
           sortOrder: 50
+        })
+      );
+    }
+    const operational = insights.operationalHealth;
+    if (operational?.available && operational.recordsMissingReminderActivity > 0) {
+      recommendations.push(
+        finalizeRecommendation({
+          id: "operational-missing-reminder-activity",
+          priority: RECOMMENDATION_PRIORITIES.HIGH,
+          category: RECOMMENDATION_CATEGORIES.OPERATIONAL,
+          title: "Record reminder follow-up",
+          description: `${countLabel(operational.recordsMissingReminderActivity, "record")} in active reminder windows ${operational.recordsMissingReminderActivity === 1 ? "has" : "have"} no recorded reminder follow-up.`,
+          affectedCount: operational.recordsMissingReminderActivity,
+          drilldownKey: COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.MISSING_REMINDER_ACTIVITY,
+          sortOrder: 45
         })
       );
     }
@@ -26107,8 +26226,15 @@ This cannot be undone.`
     if (complianceInsightsOperational) {
       if (insights.operationalHealth.available) {
         complianceInsightsOperational.textContent = `${insights.operationalHealth.score}%`;
+        complianceInsightsOperational.title = insights.operationalHealth.note || "";
+        complianceInsightsOperational.setAttribute(
+          "aria-label",
+          `Operational Health ${insights.operationalHealth.score}%. ${insights.operationalHealth.note || ""}`
+        );
       } else {
         complianceInsightsOperational.textContent = insights.operationalHealth.note || "Not available";
+        complianceInsightsOperational.removeAttribute("title");
+        complianceInsightsOperational.removeAttribute("aria-label");
       }
     }
     if (complianceInsightsRiskExpired) {
@@ -28433,7 +28559,7 @@ This cannot be undone.`
     }
     return notes.split(/\r?\n/).some((line) => line.includes(sentLabel));
   }
-  function isReminderTypeMarkedSent(notes, reminderType) {
+  function isReminderTypeMarkedSent2(notes, reminderType) {
     return hasReminderBeenSent(notes, getReminderSentText(reminderType));
   }
   function getRecordNotes(personId, recordId) {
@@ -28453,7 +28579,7 @@ This cannot be undone.`
     }
     const sentText = getReminderSentText(reminderType);
     const existingNotes = result.record.notes || "";
-    if (isReminderTypeMarkedSent(existingNotes, reminderType)) {
+    if (isReminderTypeMarkedSent2(existingNotes, reminderType)) {
       return { status: "skipped", reason: "already_sent" };
     }
     const auditLine = `${formatAuditDate()} - ${sentText}`;
@@ -28643,7 +28769,7 @@ ${auditLine}` : auditLine;
         return true;
       }
       const notes = getRecordNotes(reminder.personId, reminder.recordId);
-      return !isReminderTypeMarkedSent(notes, reminder.reminderType);
+      return !isReminderTypeMarkedSent2(notes, reminder.reminderType);
     });
   }
   function syncExpiryWindowFilterToUI() {
@@ -28909,7 +29035,7 @@ ${auditLine}` : auditLine;
     reminders.forEach((reminder) => {
       const row = document.createElement("tr");
       const notes = getRecordNotes(reminder.personId, reminder.recordId);
-      const alreadySent = isReminderTypeMarkedSent(notes, reminder.reminderType);
+      const alreadySent = isReminderTypeMarkedSent2(notes, reminder.reminderType);
       row.innerHTML = `
       <td>${reminder.name}</td>
       <td>${reminder.complianceType}</td>
@@ -29695,7 +29821,7 @@ ${auditLine}` : auditLine;
     if (!reminder) {
       return "None";
     }
-    if (isReminderTypeMarkedSent(notes, reminder.reminderType)) {
+    if (isReminderTypeMarkedSent2(notes, reminder.reminderType)) {
       return `Sent: ${reminder.reminderType}`;
     }
     return `Action required: ${reminder.reminderType}`;

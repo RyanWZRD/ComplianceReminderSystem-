@@ -25765,11 +25765,19 @@ ${suffix}`;
   }
   function setEvidenceModalFileVisibility(isEdit) {
     const hideFileInCloud = isCloudMode();
+    if (evidenceFileInput) {
+      evidenceFileInput.disabled = hideFileInCloud;
+      if (hideFileInCloud) {
+        evidenceFileInput.value = "";
+      }
+    }
     if (evidenceFileRow) {
       if (hideFileInCloud) {
         evidenceFileRow.classList.add("hidden");
+        evidenceFileRow.setAttribute("aria-hidden", "true");
       } else {
         evidenceFileRow.classList.remove("hidden");
+        evidenceFileRow.removeAttribute("aria-hidden");
       }
     }
     if (evidenceCloudFileNotice) {
@@ -25901,7 +25909,7 @@ ${suffix}`;
     if (isCloudMode() && file) {
       showMessage(
         evidenceModalMessage,
-        "File attachments are not available in cloud mode yet. Save metadata only or use local mode.",
+        "File upload is not available in cloud mode. Save metadata only.",
         "error"
       );
       return;

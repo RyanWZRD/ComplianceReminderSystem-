@@ -2023,32 +2023,41 @@ button[type="submit"]:hover {
   color: #334155;
 }
 
-/* Compliance type — keep readable */
+/* Email — optional contact field */
 .compliance-register-table th:nth-child(4),
 .compliance-register-table td:nth-child(4) {
+  width: 12%;
+  min-width: 7rem;
+  font-size: 0.875rem;
+  color: #334155;
+}
+
+/* Compliance type — keep readable */
+.compliance-register-table th:nth-child(5),
+.compliance-register-table td:nth-child(5) {
   width: 14%;
   min-width: 6.5rem;
 }
 
 /* Expiry date */
-.compliance-register-table th:nth-child(5),
-.compliance-register-table td:nth-child(5) {
+.compliance-register-table th:nth-child(6),
+.compliance-register-table td:nth-child(6) {
   width: 10%;
   white-space: nowrap;
   font-size: 0.875rem;
 }
 
 /* Status — keep readable */
-.compliance-register-table th:nth-child(6),
-.compliance-register-table td:nth-child(6) {
+.compliance-register-table th:nth-child(7),
+.compliance-register-table td:nth-child(7) {
   width: 9%;
   min-width: 5.25rem;
   white-space: nowrap;
 }
 
 /* Open actions count */
-.compliance-register-table th:nth-child(7),
-.compliance-register-table td:nth-child(7) {
+.compliance-register-table th:nth-child(8),
+.compliance-register-table td:nth-child(8) {
   width: 7%;
   text-align: center;
   white-space: nowrap;
@@ -2064,12 +2073,12 @@ button[type="submit"]:hover {
 }
 
 /* Details / Edit / Renew */
-.compliance-register-table th:nth-child(8),
-.compliance-register-table td:nth-child(8),
 .compliance-register-table th:nth-child(9),
 .compliance-register-table td:nth-child(9),
 .compliance-register-table th:nth-child(10),
-.compliance-register-table td:nth-child(10) {
+.compliance-register-table td:nth-child(10),
+.compliance-register-table th:nth-child(11),
+.compliance-register-table td:nth-child(11) {
   width: 6%;
   min-width: 4.5rem;
   text-align: center;

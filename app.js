@@ -5075,6 +5075,8 @@ function getAllComplianceRows() {
         recordId: record.id,
         name: person.name,
         role: person.role,
+        email: person.email || "",
+        managerEmail: person.managerEmail || "",
         complianceType: record.complianceType,
         expiryDate: record.expiryDate,
         renewalCycle: record.renewalCycle || RENEWAL_CYCLE_MANUAL,
@@ -7303,6 +7305,7 @@ function renderTable({ refreshDashboards = true } = {}) {
       </td>
       <td>${row.name}</td>
       <td>${row.role}</td>
+      <td>${escapeHtml(row.email || "—")}</td>
       <td class="compliance-type-cell">${row.complianceType}</td>
       <td>${formatDate(row.expiryDate)}</td>
       <td><span class="status status-badge ${status.className}">${getStatusBadgeLabel(status.key)}</span></td>
@@ -7838,6 +7841,8 @@ function setupReportListeners() {
 const COMPLIANCE_CSV_HEADERS = [
   "Name",
   "Role",
+  "Email",
+  "Manager Email",
   "Compliance Type",
   "Renewal Cycle",
   "Expiry Date",
@@ -7858,6 +7863,8 @@ function buildComplianceCsvRow(row) {
   return [
     escapeCsvValue(row.name),
     escapeCsvValue(row.role),
+    escapeCsvValue(row.email || ""),
+    escapeCsvValue(row.managerEmail || ""),
     escapeCsvValue(row.complianceType),
     escapeCsvValue(getRenewalCycleLabel(row.renewalCycle)),
     escapeCsvValue(formatDate(row.expiryDate)),
@@ -8126,6 +8133,9 @@ function formatSkipReasons(skipReasons) {
   if (skipReasons.invalidDate > 0) {
     parts.push(`${skipReasons.invalidDate} invalid date`);
   }
+  if (skipReasons.invalidEmail > 0) {
+    parts.push(`${skipReasons.invalidEmail} invalid email`);
+  }
 
   return parts.join(", ");
 }
@@ -8143,7 +8153,6 @@ function addComplianceRecord(
   if (rejectIfReadOnly()) {
     return;
   }
-  const contact = normalizePersonContactFields({ email, managerEmail });
   const record = repository.createComplianceRecord(
     {
       complianceType,
@@ -8163,8 +8172,12 @@ function addComplianceRecord(
   if (existingPerson) {
     existingPerson.name = name;
     existingPerson.role = role;
-    existingPerson.email = contact.email;
-    existingPerson.managerEmail = contact.managerEmail;
+    if (email !== undefined) {
+      existingPerson.email = normalizePersonContactFields({ email }).email;
+    }
+    if (managerEmail !== undefined) {
+      existingPerson.managerEmail = normalizePersonContactFields({ managerEmail }).managerEmail;
+    }
     existingPerson.complianceRecords.push(record);
     appendHistoryEntry(
       record,
@@ -8178,8 +8191,9 @@ function addComplianceRecord(
     id: repository.nextPersonId,
     name,
     role,
-    email: contact.email,
-    managerEmail: contact.managerEmail,
+    email: email !== undefined ? normalizePersonContactFields({ email }).email : "",
+    managerEmail:
+      managerEmail !== undefined ? normalizePersonContactFields({ managerEmail }).managerEmail : "",
     complianceRecords: [record],
   });
   repository.nextPersonId += 1;
@@ -8281,6 +8295,8 @@ function importPeopleFromCsv(csvText) {
   }
   const complianceTypeIndex = findColumnIndex(headers, "compliance type");
   const renewalCycleIndex = findColumnIndex(headers, "renewal cycle");
+  const emailIndex = findColumnIndex(headers, "email");
+  const managerEmailIndex = findColumnIndex(headers, "manager email");
 
   if (nameIndex === -1 || roleIndex === -1 || expiryIndex === -1) {
     return {
@@ -8297,6 +8313,7 @@ function importPeopleFromCsv(csvText) {
     missingRole: 0,
     missingDate: 0,
     invalidDate: 0,
+    invalidEmail: 0,
   };
 
   for (let i = 1; i < lines.length; i++) {
@@ -8312,6 +8329,10 @@ function importPeopleFromCsv(csvText) {
       renewalCycleIndex === -1
         ? getDefaultRenewalCycleForType(complianceType)
         : columns[renewalCycleIndex]?.trim() ?? getDefaultRenewalCycleForType(complianceType);
+    const email =
+      emailIndex === -1 ? undefined : columns[emailIndex]?.trim() ?? "";
+    const managerEmail =
+      managerEmailIndex === -1 ? undefined : columns[managerEmailIndex]?.trim() ?? "";
 
     if (!name) {
       skipped += 1;
@@ -8339,12 +8360,32 @@ function importPeopleFromCsv(csvText) {
       continue;
     }
 
+    const contactToValidate = {};
+    if (emailIndex !== -1) {
+      contactToValidate.email = email;
+    }
+    if (managerEmailIndex !== -1) {
+      contactToValidate.managerEmail = managerEmail;
+    }
+
+    if (Object.keys(contactToValidate).length > 0) {
+      const contactCheck = validatePersonContact(contactToValidate);
+
+      if (!contactCheck.ok) {
+        skipped += 1;
+        skipReasons.invalidEmail += 1;
+        continue;
+      }
+    }
+
     addComplianceRecord(
       name,
       role,
       repository.normalizeComplianceType(complianceType),
       normalizeExpiryDate(expiryDate),
-      renewalCycle
+      renewalCycle,
+      email,
+      managerEmail
     );
 
     imported += 1;

@@ -32,6 +32,7 @@ const STEPS = [
   { label: "verify-cloud-mark-reminder-sent", script: "verify-cloud-mark-reminder-sent" },
   { label: "verify-bulk-mark-reminders", script: "verify-bulk-mark-reminders" },
   { label: "verify-register-csv-export", script: "verify-register-csv-export" },
+  { label: "verify-register-csv-contact-fields", script: "verify-register-csv-contact-fields" },
   { label: "verify-cloud-set-action-status", script: "verify-cloud-set-action-status" },
   { label: "verify-cloud-renew-compliance", script: "verify-cloud-renew-compliance" },
   { label: "verify-cloud-create-compliance-record", script: "verify-cloud-create-compliance-record" },

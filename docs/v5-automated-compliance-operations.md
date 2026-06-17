@@ -3,6 +3,7 @@
 **Theme:** Move from *knowing* what needs attention (V4 Compliance Insights) to *acting on it automatically* — scheduled reminders, orchestrated actions, escalations, and auditable operations.
 
 **Target:** v5.0.0 (major release)  
+**Current alpha:** v5.0.0-alpha.1 — V5-1A Contact Management (see [`docs/v5-1a-contact-management.md`](v5-1a-contact-management.md))  
 **Prerequisites:** v4.0.1 GA, v3.1.0 cloud follow-on (evidence Storage, restore/bulk ops, production cloud-writes policy)  
 **Date:** Planned — post v4.0.1 sign-off (June 2026+)
 
@@ -87,7 +88,48 @@ V5 adds a **server-side automation layer** on top of the existing RPC-only write
 
 ## Release slices
 
-Slices are ordered **V5-0 → V5-4**. Each slice ships behind feature flags and extends `verify:phase2` (or a new `verify:automation` gate).
+Slices are ordered **V5-1A (contact foundation) → V5-0 → V5-1 automation → V5-2 → V5-4**. Contact Management ships first as **v5.0.0-alpha.1**; server automation follows once reminder preview and platform foundation are in place.
+
+### V5-1A — Contact Management · **COMPLETE (alpha)**
+
+**Goal:** Capture person contact emails locally and in cloud so insights and future reminder delivery have recipient data.
+
+**Status:** COMPLETE — application version **v5.0.0-alpha.1**. Full checklist: [`docs/v5-1a-contact-management.md`](v5-1a-contact-management.md).
+
+| Phase | Deliverable | Status |
+|-------|-------------|--------|
+| 1 | Email validation module (`js/data/email.js`) | **COMPLETE** |
+| 2 | Local model, cloud mapper, Postgres columns, create/edit RPC | **COMPLETE** |
+| 3 | Add/edit forms, workspace Contact Information section | **COMPLETE** |
+| 4 | Register Email column; CSV import/export | **COMPLETE** |
+| 5 | Contact Readiness Insights (metrics, drilldowns, export) | **COMPLETE** |
+| 6 | Drilldown Edit Contact → edit form / workspace | **COMPLETE** |
+| 7 | Alpha release gate — docs, `verify-contact-management`, version bump | **COMPLETE** |
+
+**Migrations:** `20260301000001_people_contact_fields.sql`, `20260301000002_compliance_record_contact_rpc.sql`
+
+**Verification:** `npm run verify-contact-management` (no Supabase); cloud contact smokes in `npm run verify:phase2`.
+
+**Out of scope:** email delivery, automation, cloud CSV import, permission changes.
+
+**Next slice:** V5-1B Reminder Template Preview (read-only reminder copy; no queue or SMTP).
+
+---
+
+### V5-1B — Reminder Template Preview · **PLANNED**
+
+**Goal:** Preview reminder content and recipient context for records in reminder windows before automated delivery.
+
+| ID | Deliverable | Notes |
+|----|-------------|-------|
+| V5-1B-A | Reminder preview UI | Records in 30/14/7-day windows; uses V5-1A email when present |
+| V5-1B-B | Missing-email surfacing in preview | Links to Contact Readiness / edit contact |
+| V5-1B-C | Static verification pack | No SMTP, queue, or `mark_reminder_sent` automation |
+| V5-1B-D | Documentation + release gate slice | Extends `verify-contact-management` or sibling script |
+
+**Constraints:** Read-only preview; no notification queue or Edge Functions.
+
+---
 
 ### V5-0 — Automation platform foundation
 
@@ -112,16 +154,18 @@ Slices are ordered **V5-0 → V5-4**. Each slice ships behind feature flags and 
 
 **Goal:** Replace manual “who needs a reminder today?” with scheduled identification and delivery.
 
+**Prerequisite slices:** V5-1A Contact Management (shipped), V5-1B Reminder Template Preview (planned), V5-0 automation platform.
+
 | ID | Deliverable | Notes |
 |----|-------------|-------|
-| V5-1A | Server-side reminder window evaluation | Port `metrics-operational.js` logic; honour org `reminder_settings` |
-| V5-1B | RPC `enqueue_reminder_notifications` | Creates queue rows for records entering 30/14/7-day windows not yet sent |
-| V5-1C | RPC `mark_reminder_sent` automation variant | System actor; history `reminder_sent` with `automated: true` |
-| V5-1D | Email digest template | Weekly + daily options; parish name, record table, deep link to register filter |
-| V5-1E | Edge Function `process_notification_queue` | Batch send; retry; dead-letter after N attempts |
-| V5-1F | Automation Settings UI — Reminders tab | Enable/disable auto-send; digest schedule; recipient roles/emails |
-| V5-1G | Operations log UI | Recent runs, reminders queued/sent/failed |
-| V5-1H | Verify: `verify-automation-reminders` | Seed expiring record → scan → queue → mock send → history |
+| V5-1C | Server-side reminder window evaluation | Port `metrics-operational.js` logic; honour org `reminder_settings` |
+| V5-1D | RPC `enqueue_reminder_notifications` | Creates queue rows for records entering 30/14/7-day windows not yet sent |
+| V5-1E | RPC `mark_reminder_sent` automation variant | System actor; history `reminder_sent` with `automated: true` |
+| V5-1F | Email digest template | Weekly + daily options; parish name, record table, deep link to register filter |
+| V5-1G | Edge Function `process_notification_queue` | Batch send; retry; dead-letter after N attempts |
+| V5-1H | Automation Settings UI — Reminders tab | Enable/disable auto-send; digest schedule; recipient roles/emails |
+| V5-1I | Operations log UI | Recent runs, reminders queued/sent/failed |
+| V5-1J | Verify: `verify-automation-reminders` | Seed expiring record → scan → queue → mock send → history |
 
 **User story:** *As a safeguarding officer, I receive a Monday digest of all records needing follow-up this week, and the system marks reminders sent when the digest is delivered.*
 
@@ -259,6 +303,7 @@ Extend the existing pattern from V3/V4:
 
 | Command | Scope |
 |---------|-------|
+| `npm run verify-contact-management` | V5-1A alpha gate — contact CSV/workspace + insights release chain |
 | `npm run verify-automation-schema` | V5-0 migrations + RPC |
 | `npm run verify-automation-reminders` | V5-1 queue + mark sent |
 | `npm run verify-automation-actions` | V5-2 policy apply |
@@ -341,6 +386,7 @@ Secrets (SMTP API keys) live in Supabase Edge Function secrets only — never in
 | Document | When |
 |----------|------|
 | `docs/v5-automated-compliance-operations.md` | This roadmap (v5 planning) |
+| `docs/v5-1a-contact-management.md` | V5-1A alpha — contact fields, verification, browser checklist |
 | `docs/automation-setup.md` | V5-0 — cron, secrets, feature flags |
 | `docs/automation-policies.md` | V5-2 — policy schema reference |
 | `docs/v5-release-notes.md` | V5-4 GA |
@@ -352,8 +398,10 @@ Secrets (SMTP API keys) live in Supabase Edge Function secrets only — never in
 
 | Slice | Status | Summary |
 |-------|--------|---------|
+| V5-1A | **COMPLETE** | Contact Management — email fields, insights, drilldown-to-edit; **v5.0.0-alpha.1** |
+| V5-1B | **PLANNED** | Reminder Template Preview — read-only copy before delivery |
 | V5-0 | **PLANNED** | Automation platform foundation |
-| V5-1 | **PLANNED** | Automated reminders & digests |
+| V5-1 (automation) | **PLANNED** | Automated reminders & digests (post V5-0) |
 | V5-2 | **PLANNED** | Automated action orchestration |
 | V5-3 | **PLANNED** | Escalation & operational closure |
 | V5-4 | **PLANNED** | Policy engine GA & operations pack |

@@ -41,6 +41,7 @@
     "verify-insights-engine": "node scripts/verify-insights-engine.mjs",
     "verify-insights-browser": "node scripts/verify-insights-browser.mjs",
     "verify-insights-release": "node scripts/verify-insights-release.mjs",
+    "verify-contact-management": "node scripts/verify-contact-management.mjs",
     "verify:phase2": "node scripts/verify-phase2.mjs"
   },
   "dependencies": {

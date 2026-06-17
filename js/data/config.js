@@ -80,4 +80,4 @@ export const CLOUD_WRITES_ENABLED =
   readCloudWritesFromLocation() ??
   (typeof process !== "undefined" && process.env?.CLOUD_WRITES_ENABLED === "true");
 
-export const APP_VERSION = "v4.0.0-rc1";
+export const APP_VERSION = "v5.0.0-alpha.1";

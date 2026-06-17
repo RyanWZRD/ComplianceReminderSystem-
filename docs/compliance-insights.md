@@ -19,11 +19,19 @@ Application version is **v4.0.0-alpha** for the Compliance Insights MVP alpha mi
 | Export pack | `js/app/insights/insights-export.js` | Summary and drilldown preview CSV builders |
 | Dashboard wiring | `js/app/insights/compliance-insights.js`, `app.js` | Cache, legacy metric mappings, UI |
 
-Verification (no browser or Supabase required):
+Verification (no live browser login or Supabase required):
 
 ```powershell
 npm run verify-insights-engine
+npm run verify-insights-browser
 ```
+
+| Script | What it checks |
+|--------|----------------|
+| `verify-insights-engine` | Insight calculations, dashboard mappings, drilldown counts, recommendations, and CSV export helpers using fixture rows |
+| `verify-insights-browser` | Static DOM wiring in `index.html`, `app.js` element bindings and click handlers, and built `app.bundle.js` export/render symbols |
+
+The browser smoke pack catches regressions such as missing section cards, export buttons, empty-state elements, or broken drilldown preview wiring without mutating `localStorage` or requiring cloud data.
 
 ## Compliance Insights section
 

@@ -553,7 +553,7 @@ V4 adds a read-only **Compliance Insights** layer on the existing dashboard. App
 
 Documentation: [`docs/compliance-insights.md`](docs/compliance-insights.md)
 
-Verification: `npm run verify-insights-engine`
+Verification: `npm run verify-insights-engine`, `npm run verify-insights-browser`
 
 | Slice | Status | Summary |
 |-------|--------|---------|
@@ -570,6 +570,7 @@ Verification: `npm run verify-insights-engine`
 | V4-3A | **COMPLETE** | Evidence gap tiers — critical/high/stale classification, cards, drilldowns, tier-based recommendations |
 | V4-3B | **COMPLETE** | Compliance Insights UX polish — section hierarchy, helper text, empty states, drilldown preview clarity, recommendation priority badges |
 | V4-3C | **COMPLETE** | Compliance Insights export pack — summary CSV, drilldown preview export, dated filenames, read-only export helpers |
+| V4-3D | **COMPLETE** | Compliance Insights browser smoke test pack — static DOM/wiring checks for section UI, exports, drilldown preview, and empty states |
 
 **Constraints (V4 to date):** No new CRUD, migrations, cloud-write changes, or AI/LLM dependency.
 

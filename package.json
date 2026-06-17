@@ -28,6 +28,7 @@
     "verify-cloud-update-reminder-settings": "node scripts/verify-cloud-update-reminder-settings.mjs",
     "verify-staging-config": "node scripts/verify-staging-config.mjs",
     "verify-insights-engine": "node scripts/verify-insights-engine.mjs",
+    "verify-insights-browser": "node scripts/verify-insights-browser.mjs",
     "verify:phase2": "node scripts/verify-phase2.mjs"
   },
   "dependencies": {

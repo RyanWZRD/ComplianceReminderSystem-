@@ -39,23 +39,36 @@ See [Future Releases](#future-releases) below for full architecture and goals.
 
 # Future Releases
 
-## v4.0.0-rc1 — Compliance Insights release candidate · RC hardening
+## v4.0.1 — Compliance Insights GA · RC hardening complete
 
 Read-only compliance insights on the dashboard: health score, risk summary, renewal forecast, and rule-based recommendations. See [`docs/compliance-insights.md`](docs/compliance-insights.md) and [Version Roadmap — v4](#v4--compliance-insights-release-candidate).
 
-Application version: **v4.0.0-rc1** (tagged and verified; V4 RC hardening in progress; GA pending sign-off).
+Application version: **v4.0.0-rc1** in source until GA tag; release target **v4.0.1**.
 
-**RC hardening (June 2026):**
+**RC hardening summary (June 2026):**
 
-- Manual browser acceptance: [`docs/v4-rc-browser-acceptance.md`](docs/v4-rc-browser-acceptance.md) (V4-RC1A)
-- Bug capture format included in checklist; fix verified bugs only (no scope creep)
+| ID | Fix |
+|----|-----|
+| RC-001 | Cloud in-progress action completion (`set_action_status` migration `20260203000017`) |
+| RC-002 | Cloud bulk mark reminders |
+| RC-003 | Filtered register CSV export |
+| RC-004 | Terminology consistency (register, status, archive) |
+| RC-005 | Stale evidence insight label clarity |
+| RC-006 | Error and warning message styling |
+| RC-007 | Register count scope clarity (all-records vs filtered view) |
+| RC-008 | Renew workflow wording |
+| RC-009 | Cloud evidence metadata-only clarity |
+| RC-010 | Final hardening summary and release checklist |
 
-**Release verification:**
+**Release docs:** [`docs/v4-0-1-release-notes.md`](docs/v4-0-1-release-notes.md)  
+**Manual browser acceptance:** [`docs/v4-rc-browser-acceptance.md`](docs/v4-rc-browser-acceptance.md) (V4-RC1A)
 
-- `npm run verify-insights-release` — engine, browser smoke, build
-- `npm run verify:phase2` — requires `.env` + staging Supabase (v3.0.0 release gate; run before GA tag)
+**Release verification (required before tag):**
 
-Tag: **v4.0.0-rc1**
+- `npm run verify-insights-release` — engine, browser smoke, build, RC-004–RC-009 terminology
+- `npm run verify:phase2` — requires `.env` + staging Supabase (includes RC-001–RC-003 cloud smokes)
+
+Recommended tag: **v4.0.1** (GA pending sign-off and version string bump)
 
 ## v3.1.0 — Cloud platform follow-on · Planned
 
@@ -589,12 +602,26 @@ Verification:
 | V4-3E | **COMPLETE** | Compliance Insights release verification — single command runs engine, browser smoke, and build checks in order |
 | V4-RC | **COMPLETE** | v4.0.0-rc1 prepared — version strings updated; `verify-insights-release` passed |
 | V4-RC1A | **COMPLETE** | Browser acceptance checklist and bug capture format — `docs/v4-rc-browser-acceptance.md` |
+| V4-RC-HARDENING | **COMPLETE** | RC-001–RC-010 hardening — cloud fixes, terminology, UX clarity; `docs/v4-0-1-release-notes.md` |
 
-**RC hardening:** V4-RC1A started June 2026. Use the browser acceptance checklist to log and fix defects before GA.
+**RC hardening (June 2026):** Complete. See [`docs/v4-0-1-release-notes.md`](docs/v4-0-1-release-notes.md) for fixes, verification gates, browser checklist, and tagging steps.
 
-**Constraints (V4 to date):** No new CRUD, migrations, cloud-write changes, or AI/LLM dependency.
+| ID | Summary |
+|----|---------|
+| RC-001 | Cloud in-progress → completed action transition |
+| RC-002 | Cloud bulk mark reminders |
+| RC-003 | Filtered register CSV export |
+| RC-004 | Terminology consistency |
+| RC-005 | Stale evidence insight label clarity |
+| RC-006 | Message styling consistency |
+| RC-007 | Register count scope clarity |
+| RC-008 | Renew workflow wording |
+| RC-009 | Cloud evidence metadata-only clarity |
+| RC-010 | Final hardening summary and release checklist |
 
-Tag: **v4.0.0-rc1** (GA pending sign-off).
+**Constraints (V4 to date):** No new CRUD, migrations (except RC-001 `20260203000017`), cloud-write policy changes, or AI/LLM dependency.
+
+Tag: **v4.0.0-rc1** in source; GA target **v4.0.1** (pending sign-off and version bump).
 
 ---
 

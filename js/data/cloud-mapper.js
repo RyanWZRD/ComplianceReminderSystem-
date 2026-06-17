@@ -3,11 +3,15 @@
  * Internal to the data layer — import from cloud-store.js only.
  */
 
+import { normalizePersonContactFields } from "./email.js";
+
 /**
  * @typedef {Object} PeopleRow
  * @property {string} id
  * @property {string} name
  * @property {string} role
+ * @property {string | null} [email]
+ * @property {string | null} [manager_email]
  */
 
 /**
@@ -95,7 +99,7 @@ function toIsoTimestamp(timestamp) {
  * @param {HistoryRow[]} historyRows
  * @param {EvidenceRow[]} evidenceRows
  * @param {ActionRow[]} actionRows
- * @returns {Array<{ id: string; name: string; role: string; complianceRecords: object[] }>}
+ * @returns {Array<{ id: string; name: string; role: string; email: string; managerEmail: string; complianceRecords: object[] }>}
  */
 export function buildPeopleTree(
   peopleRows,
@@ -120,6 +124,7 @@ export function buildPeopleTree(
     id: person.id,
     name: person.name,
     role: person.role,
+    ...normalizePersonContactFields(person),
     complianceRecords: recordsByPerson.get(person.id) || [],
   }));
 }

@@ -16,6 +16,10 @@ import {
   isValidExpiryDate,
   normalizeExpiryDate,
 } from "./dates.js";
+import {
+  isValidEmail,
+  normalizePersonContactFields,
+} from "./email.js";
 
 export class LocalComplianceStore {
   constructor() {
@@ -213,6 +217,18 @@ export class LocalComplianceStore {
     );
   }
 
+  isValidOptionalContactField(value) {
+    if (value === undefined || value === null) {
+      return true;
+    }
+
+    if (typeof value !== "string") {
+      return false;
+    }
+
+    return isValidEmail(value);
+  }
+
   normalizeComplianceType(value) {
     if (COMPLIANCE_TYPES.includes(value)) {
       return value;
@@ -255,6 +271,7 @@ export class LocalComplianceStore {
       id: person.id,
       name: person.name,
       role: person.role,
+      ...normalizePersonContactFields(person),
       complianceRecords: [this.createComplianceRecord(person, recordId)],
     };
   }
@@ -382,6 +399,7 @@ export class LocalComplianceStore {
       id: person.id,
       name: person.name,
       role: person.role,
+      ...normalizePersonContactFields(person),
       complianceRecords: (person.complianceRecords || []).map((record) => ({
         id: record.id,
         complianceType: this.normalizeComplianceType(record.complianceType),
@@ -415,6 +433,14 @@ export class LocalComplianceStore {
         typeof person.role !== "string" ||
         person.role.trim() === ""
       ) {
+        return false;
+      }
+
+      if (!this.isValidOptionalContactField(person.email)) {
+        return false;
+      }
+
+      if (!this.isValidOptionalContactField(person.managerEmail)) {
         return false;
       }
 

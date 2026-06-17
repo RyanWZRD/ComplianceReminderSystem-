@@ -28675,7 +28675,7 @@ This cannot be undone.`
     });
     bulkExportCsvBtn?.addEventListener("click", exportSelectedToCsv);
     bulkAddActionBtn?.addEventListener("click", openBulkAddActionModal);
-    bulkMarkRemindersBtn?.addEventListener("click", bulkMarkSelectedRemindersSent);
+    bulkMarkRemindersBtn?.addEventListener("click", () => void bulkMarkSelectedRemindersSent());
     selectAllPageCheckbox?.addEventListener("change", () => {
       const filteredRows = sortComplianceRows(getFilteredComplianceRows());
       const pageRows = paginateRows(filteredRows);
@@ -29229,8 +29229,9 @@ ${auditLine}` : auditLine;
     }
     return { status: "marked", notes: persistResult.notes };
   }
-  function bulkMarkSelectedRemindersSent() {
-    if (rejectIfReadOnly()) {
+  async function bulkMarkSelectedRemindersSent() {
+    if (!canMarkReminderSent()) {
+      notifyMarkReminderBlocked();
       return;
     }
     const rows = getSelectedComplianceRows();
@@ -29241,28 +29242,67 @@ ${auditLine}` : auditLine;
     let markedCount = 0;
     let skippedNoReminder = 0;
     let skippedAlreadySent = 0;
-    rows.forEach((row) => {
-      const reminder = getReminderForRecord({ expiryDate: row.expiryDate });
-      if (!reminder) {
-        skippedNoReminder += 1;
+    if (!isCloudMode()) {
+      rows.forEach((row) => {
+        const reminder = getReminderForRecord({ expiryDate: row.expiryDate });
+        if (!reminder) {
+          skippedNoReminder += 1;
+          return;
+        }
+        const outcome = applyReminderSent(
+          row.personId,
+          row.recordId,
+          reminder.reminderType
+        );
+        if (outcome.status === "marked") {
+          markedCount += 1;
+          syncNotesInTable(row.personId, row.recordId, outcome.notes);
+        } else if (outcome.status === "skipped") {
+          skippedAlreadySent += 1;
+        }
+      });
+      if (markedCount > 0) {
+        savePeople();
+        refreshActionRequiredUI();
+        renderTable();
+      }
+    } else {
+      if (typeof repository.markReminderSent !== "function") {
+        showMessage(appMessage, "Cloud mark reminder sent is not available.", "error");
         return;
       }
-      const outcome = applyReminderSent(
-        row.personId,
-        row.recordId,
-        reminder.reminderType
-      );
-      if (outcome.status === "marked") {
-        markedCount += 1;
-        syncNotesInTable(row.personId, row.recordId, outcome.notes);
-      } else if (outcome.status === "skipped") {
-        skippedAlreadySent += 1;
+      for (const row of rows) {
+        const reminder = getReminderForRecord({ expiryDate: row.expiryDate });
+        if (!reminder) {
+          skippedNoReminder += 1;
+          continue;
+        }
+        const persistResult = await repository.markReminderSent(
+          row.recordId,
+          reminder.reminderType
+        );
+        if (!persistResult.ok) {
+          showMessage(
+            appMessage,
+            persistResult.error || "Could not save reminder sent to the cloud.",
+            "error"
+          );
+          return;
+        }
+        if (persistResult.status === "marked") {
+          markedCount += 1;
+        } else if (persistResult.status === "skipped") {
+          skippedAlreadySent += 1;
+        }
       }
-    });
-    if (markedCount > 0) {
-      savePeople();
-      refreshActionRequiredUI();
-      renderTable();
+      if (markedCount > 0) {
+        const refreshed = await reloadCloudDataAfterWrite();
+        if (!refreshed) {
+          return;
+        }
+        refreshActionRequiredUI();
+        renderTable();
+      }
     }
     if (markedCount === 0 && skippedNoReminder === rows.length) {
       showMessage(
@@ -31713,6 +31753,16 @@ Your current data will be overwritten. Continue?`
       reminderSettingsControlIds.forEach((id) => {
         const element = document.getElementById(id);
         if (element instanceof HTMLInputElement) {
+          element.disabled = false;
+          element.classList.remove("read-only-disabled");
+        }
+      });
+    }
+    if (canMarkReminderSent()) {
+      const markReminderControlIds = ["bulk-mark-reminders-btn"];
+      markReminderControlIds.forEach((id) => {
+        const element = document.getElementById(id);
+        if (element instanceof HTMLButtonElement) {
           element.disabled = false;
           element.classList.remove("read-only-disabled");
         }

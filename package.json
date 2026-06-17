@@ -13,6 +13,7 @@
     "verify-read-only-guards": "node scripts/verify-read-only-guards.mjs",
     "verify-cloud-role-load": "node scripts/verify-cloud-role-load.mjs",
     "verify-cloud-mark-reminder-sent": "node scripts/verify-cloud-mark-reminder-sent.mjs",
+    "verify-bulk-mark-reminders": "node scripts/verify-bulk-mark-reminders.mjs",
     "verify-cloud-set-action-status": "node scripts/verify-cloud-set-action-status.mjs",
     "verify-action-status-transitions": "node scripts/verify-action-status-transitions.mjs",
     "verify-cloud-renew-compliance": "node scripts/verify-cloud-renew-compliance.mjs",

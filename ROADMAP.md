@@ -39,18 +39,23 @@ See [Future Releases](#future-releases) below for full architecture and goals.
 
 # Future Releases
 
-## v4.0.0-rc1 — Compliance Insights release candidate · Prepared
+## v4.0.0-rc1 — Compliance Insights release candidate · RC hardening
 
 Read-only compliance insights on the dashboard: health score, risk summary, renewal forecast, and rule-based recommendations. See [`docs/compliance-insights.md`](docs/compliance-insights.md) and [Version Roadmap — v4](#v4--compliance-insights-release-candidate).
 
-Application version: **v4.0.0-rc1** (V4 slices V4-0A through V4-3E complete; GA pending sign-off).
+Application version: **v4.0.0-rc1** (tagged and verified; V4 RC hardening in progress; GA pending sign-off).
 
-**Release verification (June 2026):**
+**RC hardening (June 2026):**
 
-- `npm run verify-insights-release` — **PASS** (engine, browser smoke, build)
+- Manual browser acceptance: [`docs/v4-rc-browser-acceptance.md`](docs/v4-rc-browser-acceptance.md) (V4-RC1A)
+- Bug capture format included in checklist; fix verified bugs only (no scope creep)
+
+**Release verification:**
+
+- `npm run verify-insights-release` — engine, browser smoke, build
 - `npm run verify:phase2` — requires `.env` + staging Supabase (v3.0.0 release gate; run before GA tag)
 
-Recommended tag: `v4.0.0-rc1` (after sign-off; not created until requested).
+Tag: **v4.0.0-rc1**
 
 ## v3.1.0 — Cloud platform follow-on · Planned
 
@@ -583,10 +588,13 @@ Verification:
 | V4-3D | **COMPLETE** | Compliance Insights browser smoke test pack — static DOM/wiring checks for section UI, exports, drilldown preview, and empty states |
 | V4-3E | **COMPLETE** | Compliance Insights release verification — single command runs engine, browser smoke, and build checks in order |
 | V4-RC | **COMPLETE** | v4.0.0-rc1 prepared — version strings updated; `verify-insights-release` passed |
+| V4-RC1A | **COMPLETE** | Browser acceptance checklist and bug capture format — `docs/v4-rc-browser-acceptance.md` |
+
+**RC hardening:** V4-RC1A started June 2026. Use the browser acceptance checklist to log and fix defects before GA.
 
 **Constraints (V4 to date):** No new CRUD, migrations, cloud-write changes, or AI/LLM dependency.
 
-Recommended tag: `v4.0.0-rc1` (after sign-off).
+Tag: **v4.0.0-rc1** (GA pending sign-off).
 
 ---
 

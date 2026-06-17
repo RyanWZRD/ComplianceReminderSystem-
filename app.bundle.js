@@ -24448,9 +24448,9 @@ ${suffix}`;
       itemLabel: "Records"
     },
     [COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.STALE_EVIDENCE]: {
-      title: "Records With Stale Evidence",
+      title: "Any Stale Evidence",
       emptyMessage: "No records have evidence older than 12 months.",
-      previewDescription: "Records where at least one evidence item is older than 12 months. Refresh or replace outdated documentation.",
+      previewDescription: "Every record where at least one evidence item is older than 12 months, including records also counted in Evidence Gaps critical or high tiers.",
       filename: "compliance-insight-stale_evidence.csv",
       itemLabel: "Records"
     },
@@ -24518,9 +24518,9 @@ ${suffix}`;
       itemLabel: "Records"
     },
     [COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.STALE_EVIDENCE_RECORDS]: {
-      title: "Stale Evidence Records",
+      title: "Stale Evidence Only",
       emptyMessage: "No records have stale evidence outside critical or high tiers.",
-      previewDescription: "Records with evidence on file where the newest item is older than 12 months. Excludes records already classified as critical or high evidence gaps.",
+      previewDescription: "Records with evidence on file where the newest item is older than 12 months, excluding records already prioritised as critical or high evidence gaps.",
       filename: "compliance-insight-stale_evidence_records.csv",
       itemLabel: "Records"
     }
@@ -24805,8 +24805,8 @@ ${suffix}`;
           id: "evidence-stale-records",
           priority: RECOMMENDATION_PRIORITIES.MEDIUM,
           category: RECOMMENDATION_CATEGORIES.EVIDENCE,
-          title: "Update stale evidence",
-          description: `${countLabel(evidenceGaps.stale, "record")} ${evidenceGaps.stale === 1 ? "has" : "have"} evidence older than ${staleAge}.`,
+          title: "Refresh stale-only evidence",
+          description: `${countLabel(evidenceGaps.stale, "record")} outside critical or high evidence gap tiers ${evidenceGaps.stale === 1 ? "has" : "have"} evidence older than ${staleAge}.`,
           affectedCount: evidenceGaps.stale,
           drilldownKey: COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.STALE_EVIDENCE_RECORDS,
           sortOrder: 60
@@ -24919,14 +24919,14 @@ ${suffix}`;
       "Key Risk,Count",
       csvMetricLine("Expired records", risk.expiredRecords ?? 0),
       csvMetricLine("Missing evidence records", risk.missingEvidenceRecords ?? 0),
-      csvMetricLine("Stale evidence records", risk.staleEvidenceRecords ?? 0),
+      csvMetricLine("Any stale evidence", risk.staleEvidenceRecords ?? 0),
       csvMetricLine("Overdue actions", risk.overdueActions ?? 0),
       csvMetricLine("Expired records with active actions", risk.expiredWithActiveActions ?? 0),
       "",
       "Evidence Gap Tier,Count",
       csvMetricLine("Critical evidence gaps", evidenceGaps.critical ?? 0),
       csvMetricLine("High evidence gaps", evidenceGaps.high ?? 0),
-      csvMetricLine("Stale evidence records", evidenceGaps.stale ?? 0),
+      csvMetricLine("Stale evidence only", evidenceGaps.stale ?? 0),
       "",
       "Renewal Forecast,Count",
       csvMetricLine("Expiring this month", forecast.expiringThisMonth ?? 0),

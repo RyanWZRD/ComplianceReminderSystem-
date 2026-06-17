@@ -95,10 +95,10 @@ const DRILLDOWN_META = {
     itemLabel: "Records",
   },
   [COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.STALE_EVIDENCE]: {
-    title: "Records With Stale Evidence",
+    title: "Any Stale Evidence",
     emptyMessage: "No records have evidence older than 12 months.",
     previewDescription:
-      "Records where at least one evidence item is older than 12 months. Refresh or replace outdated documentation.",
+      "Every record where at least one evidence item is older than 12 months, including records also counted in Evidence Gaps critical or high tiers.",
     filename: "compliance-insight-stale_evidence.csv",
     itemLabel: "Records",
   },
@@ -174,10 +174,10 @@ const DRILLDOWN_META = {
     itemLabel: "Records",
   },
   [COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.STALE_EVIDENCE_RECORDS]: {
-    title: "Stale Evidence Records",
+    title: "Stale Evidence Only",
     emptyMessage: "No records have stale evidence outside critical or high tiers.",
     previewDescription:
-      "Records with evidence on file where the newest item is older than 12 months. Excludes records already classified as critical or high evidence gaps.",
+      "Records with evidence on file where the newest item is older than 12 months, excluding records already prioritised as critical or high evidence gaps.",
     filename: "compliance-insight-stale_evidence_records.csv",
     itemLabel: "Records",
   },

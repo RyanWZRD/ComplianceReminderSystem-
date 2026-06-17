@@ -372,8 +372,8 @@
 
         <section class="compliance-insights-block" aria-labelledby="compliance-insights-risk-heading">
           <h3 id="compliance-insights-risk-heading" class="compliance-insights-subheading">Key Risks</h3>
-          <p class="compliance-insights-section-help">Counts of records and actions that need attention today. Click a tile to preview the matching items.</p>
-          <p id="compliance-insights-risk-empty" class="compliance-insights-section-empty hidden">No critical risks — no expired records, missing evidence, stale evidence, overdue actions, or expired records with open actions.</p>
+          <p class="compliance-insights-section-help">Counts of records and actions that need attention today. Any stale evidence includes every record with outdated evidence; Evidence Gaps uses separate tier counts below. Click a tile to preview the matching items.</p>
+          <p id="compliance-insights-risk-empty" class="compliance-insights-section-empty hidden">No critical risks — no expired records, missing evidence, any stale evidence, overdue actions, or expired records with open actions.</p>
           <div id="compliance-insights-risk-strip" class="compliance-insights-risk-strip">
             <button type="button" class="compliance-insights-metric compliance-insights-metric-risk compliance-insights-drilldown" data-compliance-insight-drilldown="expired-records" aria-label="Expired records. Click to preview.">
               <span class="compliance-insights-metric-label">Expired records</span>
@@ -385,8 +385,8 @@
               <span id="compliance-insights-risk-missing-evidence" class="compliance-insights-metric-value">0</span>
               <span class="compliance-insights-metric-hint">Click to preview</span>
             </button>
-            <button type="button" class="compliance-insights-metric compliance-insights-metric-warning compliance-insights-drilldown" data-compliance-insight-drilldown="stale-evidence" aria-label="Stale evidence. Click to preview.">
-              <span class="compliance-insights-metric-label">Stale evidence</span>
+            <button type="button" class="compliance-insights-metric compliance-insights-metric-warning compliance-insights-drilldown" data-compliance-insight-drilldown="stale-evidence" aria-label="Any stale evidence. Click to preview.">
+              <span class="compliance-insights-metric-label">Any stale evidence</span>
               <span id="compliance-insights-risk-stale-evidence" class="compliance-insights-metric-value">0</span>
               <span class="compliance-insights-metric-hint">Click to preview</span>
             </button>
@@ -405,7 +405,7 @@
 
         <section class="compliance-insights-block" aria-labelledby="compliance-insights-evidence-gaps-heading">
           <h3 id="compliance-insights-evidence-gaps-heading" class="compliance-insights-subheading">Evidence Gaps</h3>
-          <p class="compliance-insights-section-help">Tiered evidence gaps by urgency — critical and high tiers focus on expiry proximity; stale covers older evidence outside those tiers.</p>
+          <p class="compliance-insights-section-help">Tiered evidence gaps by urgency. Critical and high tiers prioritise records near expiry; stale evidence only counts records not already in those tiers. Counts may differ from Key Risks any stale evidence.</p>
           <p id="compliance-insights-evidence-gaps-empty" class="compliance-insights-section-empty hidden">No evidence gaps — all records have up-to-date evidence for their expiry window.</p>
           <div id="compliance-insights-evidence-gaps-strip" class="compliance-insights-evidence-gaps-strip">
             <button type="button" class="compliance-insights-metric compliance-insights-metric-risk compliance-insights-drilldown" data-compliance-insight-drilldown="critical-evidence-gaps" aria-label="Critical evidence gaps. Click to preview.">
@@ -418,8 +418,8 @@
               <span id="compliance-insights-evidence-gap-high" class="compliance-insights-metric-value">0</span>
               <span class="compliance-insights-metric-hint">Click to preview</span>
             </button>
-            <button type="button" class="compliance-insights-metric compliance-insights-metric-warning compliance-insights-drilldown" data-compliance-insight-drilldown="stale-evidence-records" aria-label="Stale evidence records. Click to preview.">
-              <span class="compliance-insights-metric-label">Stale evidence records</span>
+            <button type="button" class="compliance-insights-metric compliance-insights-metric-warning compliance-insights-drilldown" data-compliance-insight-drilldown="stale-evidence-records" aria-label="Stale evidence only. Click to preview.">
+              <span class="compliance-insights-metric-label">Stale evidence only</span>
               <span id="compliance-insights-evidence-gap-stale" class="compliance-insights-metric-value">0</span>
               <span class="compliance-insights-metric-hint">Click to preview</span>
             </button>

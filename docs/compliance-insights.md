@@ -95,8 +95,8 @@ Downloads a single CSV with metadata and counts from the current dashboard refre
 - Generated date/time and insights as-of date
 - Composite health score and band (High / Medium / Low)
 - Expiry, evidence, action, and operational health sub-scores
-- Key risk counts (expired, missing evidence, stale evidence, overdue actions, expired with active actions)
-- Evidence gap tier counts (critical, high, stale)
+- Key risk counts (expired, missing evidence, any stale evidence, overdue actions, expired with active actions)
+- Evidence gap tier counts (critical, high, stale evidence only)
 - Renewal forecast counts (this month, next month, within 30 days, within 90 days)
 - Operational health summary (records in windows, with follow-up, missing follow-up, note)
 - Recommendations table with priority, title, and action text (description)
@@ -219,18 +219,20 @@ Three clickable tiles appear in the **Evidence Gaps** section:
 |------|---------------|--------------|
 | Critical evidence gaps | `critical-evidence-gaps` | `evidenceGaps.byTier.critical` |
 | High evidence gaps | `high-evidence-gaps` | `evidenceGaps.byTier.high` |
-| Stale evidence records | `stale-evidence-records` | `evidenceGaps.byTier.stale` |
+| Stale evidence only | `stale-evidence-records` | `evidenceGaps.byTier.stale` |
 
 Preview tables include evidence count, newest evidence date, gap tier, and recommended action.
 
-### Legacy risk tiles (unchanged)
+The **Evidence Gaps** helper text explains that critical and high tiers prioritise records near expiry, while **stale evidence only** counts records not already in those tiers. This count may differ from **Key Risks → Any stale evidence**, which includes every record with outdated evidence regardless of tier.
 
-The **Missing evidence** and **Stale evidence** risk tiles in Risk Summary are unchanged. They use broader counts from `metrics-risk.js`:
+### Key risk stale evidence tile
+
+The **Any stale evidence** tile in **Key Risks** uses a broader count from `metrics-risk.js`:
 
 | Tile | Counts | Relation to tiers |
 |------|--------|-------------------|
 | Missing evidence | Records with zero evidence items | Includes records outside critical/high expiry windows (e.g. invalid expiry) |
-| Stale evidence | Records where any evidence is older than `STALE_EVIDENCE_DAYS` | Includes records also classified as critical (e.g. expired with all stale evidence) |
+| Any stale evidence | Records where any evidence is older than `STALE_EVIDENCE_DAYS` | Includes records also classified as critical or high (e.g. expired with all stale evidence) |
 
 Tier-based recommendations replace the former generic missing/stale evidence recommendations.
 
@@ -242,7 +244,7 @@ Tier-based recommendations replace the former generic missing/stale evidence rec
 |------|--------|
 | Expired records | Records past expiry date |
 | Missing evidence | Records with zero evidence items |
-| Stale evidence | Records where any evidence is older than `STALE_EVIDENCE_DAYS` |
+| Any stale evidence | Records where any evidence is older than `STALE_EVIDENCE_DAYS` |
 | Overdue actions | Individual actions past due date (action-level drilldown) |
 | Expired records with active actions | Expired records that still have open or in-progress actions |
 
@@ -277,7 +279,7 @@ Recommendations are **rule-based only**. There is no AI, LLM, or external API de
 |----------|--------------------------------------------------|
 | **Critical** | Expired records; critical evidence gaps; expired records with active actions |
 | **High priority** | Expiring within 30 days (if above threshold); high evidence gaps; missing reminder follow-up; overdue actions |
-| **Medium** | Stale evidence records (tier); expiring next month (if above threshold) |
+| **Medium** | Stale evidence only (evidence gap tier); expiring next month (if above threshold) |
 
 ### Threshold constants (`recommendations-engine.js`)
 

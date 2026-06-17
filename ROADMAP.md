@@ -568,6 +568,7 @@ Verification: `npm run verify-insights-engine`
 | V4-2B | **COMPLETE** | Composite health score includes operational health (4-way average) |
 | V4-2C | **COMPLETE** | Operational health drilldown columns, preview explanation, sub-score summary |
 | V4-3A | **COMPLETE** | Evidence gap tiers — critical/high/stale classification, cards, drilldowns, tier-based recommendations |
+| V4-3B | **COMPLETE** | Compliance Insights UX polish — section hierarchy, helper text, empty states, drilldown preview clarity, recommendation priority badges |
 
 **Constraints (V4 to date):** No new CRUD, migrations, cloud-write changes, or AI/LLM dependency.
 

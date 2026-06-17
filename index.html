@@ -331,119 +331,154 @@
 
     <section class="card compliance-insights-section" id="compliance-insights-section" aria-labelledby="compliance-insights-heading">
       <h2 id="compliance-insights-heading">Compliance Insights</h2>
-      <p class="settings-hint">Composite health view from expiry, evidence, action, and operational dimensions across all records. Click a risk or forecast tile to preview matching records.</p>
+      <p class="settings-hint">Read-only register health across expiry, evidence, actions, and reminder follow-up. Select a tile or recommendation to preview matching records.</p>
       <p id="compliance-insights-cloud-note" class="settings-hint compliance-insights-cloud-note hidden">In cloud mode, evidence health is based on metadata only (document name, type, and dates).</p>
       <p id="compliance-insights-empty" class="settings-hint compliance-insights-empty hidden">No compliance records yet. Add records to see compliance insights.</p>
 
       <div id="compliance-insights-content" class="compliance-insights-content">
-        <div class="compliance-insights-health-card">
-          <div class="compliance-insights-score-header">
-            <span class="compliance-insights-score-label">Compliance Health Score</span>
-            <div class="compliance-insights-score-row">
-              <span id="compliance-insights-composite-score" class="compliance-insights-composite-score">0%</span>
-              <span id="compliance-insights-band" class="compliance-insights-band band-low">Low</span>
+        <section class="compliance-insights-block" aria-labelledby="compliance-insights-health-heading">
+          <h3 id="compliance-insights-health-heading" class="compliance-insights-subheading">Health Overview</h3>
+          <p class="compliance-insights-section-help">Composite score and dimension sub-scores summarising overall register health. The composite is the average of expiry, evidence, action, and operational dimensions.</p>
+          <div class="compliance-insights-health-card">
+            <div class="compliance-insights-score-header">
+              <span class="compliance-insights-score-label">Compliance Health Score</span>
+              <div class="compliance-insights-score-row">
+                <span id="compliance-insights-composite-score" class="compliance-insights-composite-score">0%</span>
+                <span id="compliance-insights-band" class="compliance-insights-band band-low">Low</span>
+              </div>
             </div>
+            <dl class="compliance-insights-subscores">
+              <div class="compliance-insights-subscore">
+                <dt>Expiry Health</dt>
+                <dd id="compliance-insights-expiry-score">0%</dd>
+              </div>
+              <div class="compliance-insights-subscore">
+                <dt>Evidence Health</dt>
+                <dd id="compliance-insights-evidence-score">0%</dd>
+              </div>
+              <div class="compliance-insights-subscore">
+                <dt>Action Health</dt>
+                <dd id="compliance-insights-action-score">0%</dd>
+              </div>
+            </dl>
           </div>
-          <dl class="compliance-insights-subscores">
-            <div class="compliance-insights-subscore">
-              <dt>Expiry Health</dt>
-              <dd id="compliance-insights-expiry-score">0%</dd>
-            </div>
-            <div class="compliance-insights-subscore">
-              <dt>Evidence Health</dt>
-              <dd id="compliance-insights-evidence-score">0%</dd>
-            </div>
-            <div class="compliance-insights-subscore">
-              <dt>Action Health</dt>
-              <dd id="compliance-insights-action-score">0%</dd>
-            </div>
-            <div class="compliance-insights-subscore compliance-insights-subscore-operational">
-              <dt>Operational Health</dt>
-              <dd id="compliance-insights-operational">
-                <span id="compliance-insights-operational-score" class="compliance-insights-operational-score">Not available</span>
-                <span id="compliance-insights-operational-detail" class="compliance-insights-operational-detail hidden"></span>
-              </dd>
-            </div>
-          </dl>
-        </div>
+        </section>
 
-        <div class="compliance-insights-risk">
-          <h3 class="compliance-insights-subheading">Risk Summary</h3>
-          <div class="compliance-insights-risk-strip">
+        <section class="compliance-insights-block" aria-labelledby="compliance-insights-risk-heading">
+          <h3 id="compliance-insights-risk-heading" class="compliance-insights-subheading">Key Risks</h3>
+          <p class="compliance-insights-section-help">Counts of records and actions that need attention today. Click a tile to preview the matching items.</p>
+          <p id="compliance-insights-risk-empty" class="compliance-insights-section-empty hidden">No critical risks — no expired records, missing evidence, stale evidence, overdue actions, or expired records with open actions.</p>
+          <div id="compliance-insights-risk-strip" class="compliance-insights-risk-strip">
             <button type="button" class="compliance-insights-metric compliance-insights-metric-risk compliance-insights-drilldown" data-compliance-insight-drilldown="expired-records" aria-label="Expired records. Click to preview.">
               <span class="compliance-insights-metric-label">Expired records</span>
               <span id="compliance-insights-risk-expired" class="compliance-insights-metric-value">0</span>
+              <span class="compliance-insights-metric-hint">Click to preview</span>
             </button>
             <button type="button" class="compliance-insights-metric compliance-insights-metric-warning compliance-insights-drilldown" data-compliance-insight-drilldown="missing-evidence" aria-label="Missing evidence. Click to preview.">
               <span class="compliance-insights-metric-label">Missing evidence</span>
               <span id="compliance-insights-risk-missing-evidence" class="compliance-insights-metric-value">0</span>
+              <span class="compliance-insights-metric-hint">Click to preview</span>
             </button>
             <button type="button" class="compliance-insights-metric compliance-insights-metric-warning compliance-insights-drilldown" data-compliance-insight-drilldown="stale-evidence" aria-label="Stale evidence. Click to preview.">
               <span class="compliance-insights-metric-label">Stale evidence</span>
               <span id="compliance-insights-risk-stale-evidence" class="compliance-insights-metric-value">0</span>
+              <span class="compliance-insights-metric-hint">Click to preview</span>
             </button>
             <button type="button" class="compliance-insights-metric compliance-insights-metric-risk compliance-insights-drilldown" data-compliance-insight-drilldown="overdue-actions" aria-label="Overdue actions. Click to preview.">
               <span class="compliance-insights-metric-label">Overdue actions</span>
               <span id="compliance-insights-risk-overdue-actions" class="compliance-insights-metric-value">0</span>
+              <span class="compliance-insights-metric-hint">Click to preview</span>
             </button>
             <button type="button" class="compliance-insights-metric compliance-insights-metric-risk compliance-insights-drilldown" data-compliance-insight-drilldown="expired-active-actions" aria-label="Expired records with active actions. Click to preview.">
               <span class="compliance-insights-metric-label">Expired records with active actions</span>
               <span id="compliance-insights-risk-expired-active-actions" class="compliance-insights-metric-value">0</span>
+              <span class="compliance-insights-metric-hint">Click to preview</span>
             </button>
           </div>
-        </div>
+        </section>
 
-        <div class="compliance-insights-evidence-gaps">
-          <h3 class="compliance-insights-subheading">Evidence Gaps</h3>
-          <div class="compliance-insights-evidence-gaps-strip">
+        <section class="compliance-insights-block" aria-labelledby="compliance-insights-evidence-gaps-heading">
+          <h3 id="compliance-insights-evidence-gaps-heading" class="compliance-insights-subheading">Evidence Gaps</h3>
+          <p class="compliance-insights-section-help">Tiered evidence gaps by urgency — critical and high tiers focus on expiry proximity; stale covers older evidence outside those tiers.</p>
+          <p id="compliance-insights-evidence-gaps-empty" class="compliance-insights-section-empty hidden">No evidence gaps — all records have up-to-date evidence for their expiry window.</p>
+          <div id="compliance-insights-evidence-gaps-strip" class="compliance-insights-evidence-gaps-strip">
             <button type="button" class="compliance-insights-metric compliance-insights-metric-risk compliance-insights-drilldown" data-compliance-insight-drilldown="critical-evidence-gaps" aria-label="Critical evidence gaps. Click to preview.">
               <span class="compliance-insights-metric-label">Critical evidence gaps</span>
               <span id="compliance-insights-evidence-gap-critical" class="compliance-insights-metric-value">0</span>
+              <span class="compliance-insights-metric-hint">Click to preview</span>
             </button>
             <button type="button" class="compliance-insights-metric compliance-insights-metric-warning compliance-insights-drilldown" data-compliance-insight-drilldown="high-evidence-gaps" aria-label="High evidence gaps. Click to preview.">
               <span class="compliance-insights-metric-label">High evidence gaps</span>
               <span id="compliance-insights-evidence-gap-high" class="compliance-insights-metric-value">0</span>
+              <span class="compliance-insights-metric-hint">Click to preview</span>
             </button>
             <button type="button" class="compliance-insights-metric compliance-insights-metric-warning compliance-insights-drilldown" data-compliance-insight-drilldown="stale-evidence-records" aria-label="Stale evidence records. Click to preview.">
               <span class="compliance-insights-metric-label">Stale evidence records</span>
               <span id="compliance-insights-evidence-gap-stale" class="compliance-insights-metric-value">0</span>
+              <span class="compliance-insights-metric-hint">Click to preview</span>
             </button>
           </div>
-        </div>
+        </section>
 
-        <div class="compliance-insights-forecast">
-          <h3 class="compliance-insights-subheading">Renewal Forecast</h3>
-          <div class="compliance-insights-forecast-cards">
+        <section class="compliance-insights-block" aria-labelledby="compliance-insights-forecast-heading">
+          <h3 id="compliance-insights-forecast-heading" class="compliance-insights-subheading">Renewal Forecast</h3>
+          <p class="compliance-insights-section-help">Upcoming expiry windows to help plan renewals. Counts are based on record expiry dates, not reminder settings.</p>
+          <p id="compliance-insights-forecast-empty" class="compliance-insights-section-empty hidden">No upcoming renewals — no records expire in the next 90 days.</p>
+          <div id="compliance-insights-forecast-cards" class="compliance-insights-forecast-cards">
             <button type="button" class="compliance-insights-forecast-card compliance-insights-drilldown" data-compliance-insight-drilldown="expiring-this-month" aria-label="Expiring this month. Click to preview.">
               <span class="compliance-insights-metric-label">Expiring this month</span>
               <span id="compliance-insights-forecast-this-month" class="compliance-insights-metric-value">0</span>
+              <span class="compliance-insights-metric-hint">Click to preview</span>
             </button>
             <button type="button" class="compliance-insights-forecast-card compliance-insights-drilldown" data-compliance-insight-drilldown="expiring-next-month" aria-label="Expiring next month. Click to preview.">
               <span class="compliance-insights-metric-label">Expiring next month</span>
               <span id="compliance-insights-forecast-next-month" class="compliance-insights-metric-value">0</span>
+              <span class="compliance-insights-metric-hint">Click to preview</span>
             </button>
             <button type="button" class="compliance-insights-forecast-card compliance-insights-drilldown" data-compliance-insight-drilldown="expiring-within-30-days" aria-label="Expiring within 30 days. Click to preview.">
               <span class="compliance-insights-metric-label">Expiring within 30 days</span>
               <span id="compliance-insights-forecast-30-days" class="compliance-insights-metric-value">0</span>
+              <span class="compliance-insights-metric-hint">Click to preview</span>
             </button>
             <button type="button" class="compliance-insights-forecast-card compliance-insights-drilldown" data-compliance-insight-drilldown="expiring-within-90-days" aria-label="Expiring within 90 days. Click to preview.">
               <span class="compliance-insights-metric-label">Expiring within 90 days</span>
               <span id="compliance-insights-forecast-90-days" class="compliance-insights-metric-value">0</span>
+              <span class="compliance-insights-metric-hint">Click to preview</span>
             </button>
           </div>
-        </div>
+        </section>
 
-        <div class="compliance-insights-recommendations">
-          <h3 class="compliance-insights-subheading">Recommended Actions</h3>
-          <p id="compliance-insights-recommendations-empty" class="settings-hint compliance-insights-recommendations-empty hidden">No recommended actions — your register looks healthy across expiry, evidence, and actions.</p>
+        <section class="compliance-insights-block compliance-insights-recommendations" aria-labelledby="compliance-insights-recommendations-heading">
+          <h3 id="compliance-insights-recommendations-heading" class="compliance-insights-subheading">Recommendations</h3>
+          <p class="compliance-insights-section-help">Prioritised suggested actions derived from current metrics. Click a recommendation to open the same preview as its linked tile.</p>
+          <p id="compliance-insights-recommendations-empty" class="compliance-insights-section-empty compliance-insights-recommendations-empty hidden">No recommendations — your register looks healthy across expiry, evidence, actions, and reminder follow-up.</p>
           <ul id="compliance-insights-recommendations-list" class="compliance-recommendations-list" aria-live="polite"></ul>
-        </div>
+        </section>
 
-        <p id="compliance-insights-preview-empty-hint" class="settings-hint compliance-insights-preview-empty-hint">Select a risk tile, forecast tile, or recommended action to preview matching records.</p>
+        <section class="compliance-insights-block" aria-labelledby="compliance-insights-operational-heading">
+          <h3 id="compliance-insights-operational-heading" class="compliance-insights-subheading">Operational Health</h3>
+          <p class="compliance-insights-section-help">Reminder follow-up for records in active reminder windows (expired, 7-, 14-, or 30-day). Follow-up is detected from sent markers in notes or history.</p>
+          <p id="compliance-insights-operational-empty" class="compliance-insights-section-empty hidden">No operational issues — all records in active reminder windows have recorded follow-up.</p>
+          <div id="compliance-insights-operational-cards" class="compliance-insights-operational-cards">
+            <div id="compliance-insights-operational-summary" class="compliance-insights-operational-summary">
+              <span class="compliance-insights-metric-label">Operational health score</span>
+              <span id="compliance-insights-operational-score" class="compliance-insights-operational-score">Not available</span>
+              <span id="compliance-insights-operational-detail" class="compliance-insights-operational-detail hidden"></span>
+            </div>
+            <button type="button" id="compliance-insights-operational-missing-btn" class="compliance-insights-metric compliance-insights-metric-warning compliance-insights-drilldown" data-compliance-insight-drilldown="missing-reminder-activity" aria-label="Missing reminder follow-up. Click to preview.">
+              <span class="compliance-insights-metric-label">Missing reminder follow-up</span>
+              <span id="compliance-insights-operational-missing-count" class="compliance-insights-metric-value">0</span>
+              <span class="compliance-insights-metric-hint">Click to preview</span>
+            </button>
+          </div>
+        </section>
 
-        <div id="compliance-insights-preview" class="insight-preview compliance-insights-preview hidden">
+        <p id="compliance-insights-preview-empty-hint" class="settings-hint compliance-insights-preview-empty-hint">Select a tile or recommendation above to preview matching records in the panel below.</p>
+
+        <div id="compliance-insights-preview" class="insight-preview compliance-insights-preview hidden" role="region" aria-labelledby="compliance-insights-preview-title">
           <div class="insight-preview-header">
             <h3 id="compliance-insights-preview-title" class="insight-preview-title"></h3>
+            <p id="compliance-insights-preview-count" class="insight-preview-count"></p>
             <p id="compliance-insights-preview-meta" class="insight-preview-meta"></p>
             <p id="compliance-insights-preview-description" class="settings-hint compliance-insights-preview-description hidden"></p>
           </div>

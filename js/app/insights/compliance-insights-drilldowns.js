@@ -81,54 +81,71 @@ const DRILLDOWN_META = {
   [COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.EXPIRED]: {
     title: "Expired Records",
     emptyMessage: "No expired compliance records.",
+    previewDescription:
+      "Records whose expiry date is in the past. Renew or update these records to restore compliance.",
     filename: "compliance-insight-expired_records.csv",
     itemLabel: "Records",
   },
   [COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.MISSING_EVIDENCE]: {
     title: "Records Missing Evidence",
     emptyMessage: "All records have at least one evidence item attached.",
+    previewDescription:
+      "Records with no evidence items on file. Attach supporting documentation to improve evidence health.",
     filename: "compliance-insight-missing_evidence.csv",
     itemLabel: "Records",
   },
   [COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.STALE_EVIDENCE]: {
     title: "Records With Stale Evidence",
     emptyMessage: "No records have evidence older than 12 months.",
+    previewDescription:
+      "Records where at least one evidence item is older than 12 months. Refresh or replace outdated documentation.",
     filename: "compliance-insight-stale_evidence.csv",
     itemLabel: "Records",
   },
   [COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.OVERDUE_ACTIONS]: {
     title: "Overdue Actions",
     emptyMessage: "No actions are past their due date.",
+    previewDescription:
+      "Individual actions whose due date has passed. Each row is one overdue action linked to a compliance record.",
     filename: "compliance-insight-overdue_actions.csv",
     itemLabel: "Actions",
   },
   [COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.EXPIRED_ACTIVE_ACTIONS]: {
     title: "Expired Records With Active Actions",
     emptyMessage: "No expired records have open or in-progress actions.",
+    previewDescription:
+      "Expired records that still have open or in-progress actions. Close or complete actions on expired records.",
     filename: "compliance-insight-expired_active_actions.csv",
     itemLabel: "Records",
   },
   [COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.EXPIRING_THIS_MONTH]: {
     title: "Expiring This Month",
     emptyMessage: "No non-expired records expire in the current calendar month.",
+    previewDescription:
+      "Non-expired records whose expiry date falls in the current calendar month.",
     filename: "compliance-insight-expiring_this_month.csv",
     itemLabel: "Records",
   },
   [COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.EXPIRING_NEXT_MONTH]: {
     title: "Expiring Next Month",
     emptyMessage: "No records expire in the next calendar month.",
+    previewDescription: "Records whose expiry date falls in the next calendar month.",
     filename: "compliance-insight-expiring_next_month.csv",
     itemLabel: "Records",
   },
   [COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.EXPIRING_30_DAYS]: {
     title: "Expiring Within 30 Days",
     emptyMessage: "No records expire within the next 30 days.",
+    previewDescription:
+      "Records expiring within the next 30 days (inclusive), based on expiry date.",
     filename: "compliance-insight-expiring_within_30_days.csv",
     itemLabel: "Records",
   },
   [COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.EXPIRING_90_DAYS]: {
     title: "Expiring Within 90 Days",
     emptyMessage: "No records expire within the next 90 days.",
+    previewDescription:
+      "Records expiring within the next 90 days (inclusive), based on expiry date.",
     filename: "compliance-insight-expiring_within_90_days.csv",
     itemLabel: "Records",
   },

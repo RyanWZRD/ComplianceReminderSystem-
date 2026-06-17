@@ -21306,7 +21306,7 @@ ${suffix}`;
   }
   var DATA_BACKEND = readBackendFromLocation() ?? (typeof process !== "undefined" && process.env?.DATA_BACKEND === "cloud" ? "cloud" : "local");
   var CLOUD_WRITES_ENABLED = readCloudWritesFromLocation() ?? (typeof process !== "undefined" && process.env?.CLOUD_WRITES_ENABLED === "true");
-  var APP_VERSION = "v4.0.0-alpha";
+  var APP_VERSION = "v4.0.0-rc1";
 
   // js/app/permissions.js
   function isCloudMode() {

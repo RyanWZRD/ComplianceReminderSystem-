@@ -1,8 +1,8 @@
-# Compliance Insights (V4 — in development)
+# Compliance Insights (V4 — release candidate)
 
 The **Compliance Insights** dashboard section provides a read-only, rule-based view of register health. It runs entirely in the browser from loaded compliance rows — no AI/LLM, no Supabase RPC calls, and no cloud-write behaviour.
 
-Application version is **v4.0.0-alpha** for the Compliance Insights MVP alpha milestone.
+Application version is **v4.0.0-rc1** for the Compliance Insights release candidate.
 
 ## Overview
 
@@ -50,7 +50,7 @@ The **Compliance Insights** card on the dashboard is organised into six sections
 
 Below the sections, a **preview panel** opens when you select a tile or recommendation. It shows a clear title (`Preview: …`), record/action count, explanation text, the filtered table, and CSV export.
 
-In cloud mode, evidence health uses metadata only (document name, type, dates) — file attachments are not uploaded to Storage in v4.0.0-alpha.
+In cloud mode, evidence health uses metadata only (document name, type, dates) — file attachments are not uploaded to Storage in v4.0.0-rc1.
 
 ### Section empty states
 
@@ -312,6 +312,6 @@ Some older dashboard cards intentionally use different formulas. See comments in
 - Management health score on legacy cards may differ from the V4 composite score.
 - Register summary counts treat invalid expiry dates as “valid” for backward compatibility.
 
-## V4 development status
+## V4 release candidate status
 
-See [ROADMAP.md](../ROADMAP.md#v4--compliance-insights-in-development) for slice progress (V4-0A through V4-3C and beyond).
+See [ROADMAP.md](../ROADMAP.md#v4--compliance-insights-release-candidate) for slice progress (V4-0A through V4-3E) and RC verification.

@@ -39,11 +39,18 @@ See [Future Releases](#future-releases) below for full architecture and goals.
 
 # Future Releases
 
-## v4.0.0-alpha — Compliance Insights alpha · In development
+## v4.0.0-rc1 — Compliance Insights release candidate · Prepared
 
-Read-only compliance insights on the dashboard: health score, risk summary, renewal forecast, and rule-based recommendations. See [`docs/compliance-insights.md`](docs/compliance-insights.md) and [Version Roadmap — v4](#v4--compliance-insights-in-development).
+Read-only compliance insights on the dashboard: health score, risk summary, renewal forecast, and rule-based recommendations. See [`docs/compliance-insights.md`](docs/compliance-insights.md) and [Version Roadmap — v4](#v4--compliance-insights-release-candidate).
 
-Application version: **v4.0.0-alpha** (Compliance Insights MVP complete; GA pending).
+Application version: **v4.0.0-rc1** (V4 slices V4-0A through V4-3E complete; GA pending sign-off).
+
+**Release verification (June 2026):**
+
+- `npm run verify-insights-release` — **PASS** (engine, browser smoke, build)
+- `npm run verify:phase2` — requires `.env` + staging Supabase (v3.0.0 release gate; run before GA tag)
+
+Recommended tag: `v4.0.0-rc1` (after sign-off; not created until requested).
 
 ## v3.1.0 — Cloud platform follow-on · Planned
 
@@ -547,13 +554,16 @@ Tag: v3.0.0
 
 ---
 
-## v4 — Compliance Insights (in development)
+## v4 — Compliance Insights (release candidate)
 
-V4 adds a read-only **Compliance Insights** layer on the existing dashboard. Application version is **v4.0.0-alpha** for the Compliance Insights MVP alpha milestone.
+V4 adds a read-only **Compliance Insights** layer on the existing dashboard. Application version is **v4.0.0-rc1**.
 
 Documentation: [`docs/compliance-insights.md`](docs/compliance-insights.md)
 
-Verification: `npm run verify-insights-engine`, `npm run verify-insights-browser`
+Verification:
+
+- `npm run verify-insights-release` — full V4 release chain (engine → browser smoke → build)
+- `npm run verify:phase2` — v3.0.0 cloud release gate (requires `.env` + staging Supabase)
 
 | Slice | Status | Summary |
 |-------|--------|---------|
@@ -572,10 +582,11 @@ Verification: `npm run verify-insights-engine`, `npm run verify-insights-browser
 | V4-3C | **COMPLETE** | Compliance Insights export pack — summary CSV, drilldown preview export, dated filenames, read-only export helpers |
 | V4-3D | **COMPLETE** | Compliance Insights browser smoke test pack — static DOM/wiring checks for section UI, exports, drilldown preview, and empty states |
 | V4-3E | **COMPLETE** | Compliance Insights release verification — single command runs engine, browser smoke, and build checks in order |
+| V4-RC | **COMPLETE** | v4.0.0-rc1 prepared — version strings updated; `verify-insights-release` passed |
 
 **Constraints (V4 to date):** No new CRUD, migrations, cloud-write changes, or AI/LLM dependency.
 
-Recommended tag: `v4.0.0-alpha` (after sign-off).
+Recommended tag: `v4.0.0-rc1` (after sign-off).
 
 ---
 

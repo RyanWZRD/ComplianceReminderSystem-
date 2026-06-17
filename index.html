@@ -662,6 +662,7 @@
           <input type="file" id="backup-file-input" accept=".json,application/json" class="file-input-offscreen">
           <button type="button" id="import-csv-btn" class="import-btn">Import CSV</button>
           <button type="button" id="export-csv-btn" class="export-btn">Export CSV</button>
+          <button type="button" id="export-all-csv-btn" class="export-btn">Export All Records CSV</button>
           <button type="button" id="import-backup-btn" class="backup-btn">Import Backup</button>
           <button type="button" id="validate-backup-btn" class="backup-btn">Validate Backup</button>
           <button type="button" id="export-backup-btn" class="backup-btn">Export Backup</button>
@@ -669,7 +670,7 @@
           <span id="person-count" class="badge">0 records</span>
         </div>
       </div>
-      <p class="settings-hint">Export CSV downloads all records. Export Backup saves a JSON file with full record history. Validate Backup checks a file before importing (dry run).</p>
+      <p class="settings-hint">Export CSV downloads the current register view (respecting active filters). Export All Records CSV downloads every record. Export Backup saves a JSON file with full record history. Validate Backup checks a file before importing (dry run).</p>
       <p id="import-message" class="import-message hidden"></p>
       <div class="filter-controls">
         <div class="filter-row">

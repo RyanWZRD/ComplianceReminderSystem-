@@ -181,6 +181,7 @@ const stripValid = document.getElementById("strip-valid");
 const stripDueSoon = document.getElementById("strip-due-soon");
 const stripExpired = document.getElementById("strip-expired");
 const exportCsvBtn = document.getElementById("export-csv-btn");
+const exportAllCsvBtn = document.getElementById("export-all-csv-btn");
 const importCsvBtn = document.getElementById("import-csv-btn");
 const csvFileInput = document.getElementById("csv-file-input");
 const exportBackupBtn = document.getElementById("export-backup-btn");
@@ -7785,9 +7786,20 @@ function buildComplianceCsvContent(rows) {
   return [COMPLIANCE_CSV_HEADERS.join(","), ...rows.map(buildComplianceCsvRow)].join("\n");
 }
 
+function getRegisterCsvExportRows() {
+  return sortComplianceRows(getFilteredComplianceRows());
+}
+
 function exportToCsv() {
-  const csvContent = buildComplianceCsvContent(getAllComplianceRows());
+  const rows = getRegisterCsvExportRows();
+  const csvContent = buildComplianceCsvContent(rows);
   downloadFile(csvContent, "compliance-reminder-data.csv", "text/csv");
+}
+
+function exportAllRecordsToCsv() {
+  const rows = sortComplianceRows(getAllComplianceRows());
+  const csvContent = buildComplianceCsvContent(rows);
+  downloadFile(csvContent, "compliance-reminder-all-records.csv", "text/csv");
 }
 
 function exportSelectedToCsv() {
@@ -8299,6 +8311,7 @@ function handleCsvImport(event) {
 
 function wireImportExportControls() {
   exportCsvBtn?.addEventListener("click", exportToCsv);
+  exportAllCsvBtn?.addEventListener("click", exportAllRecordsToCsv);
   importCsvBtn?.addEventListener("click", () => csvFileInput?.click());
   csvFileInput?.addEventListener("change", handleCsvImport);
 

@@ -25054,6 +25054,7 @@ ${suffix}`;
   var stripDueSoon = document.getElementById("strip-due-soon");
   var stripExpired = document.getElementById("strip-expired");
   var exportCsvBtn = document.getElementById("export-csv-btn");
+  var exportAllCsvBtn = document.getElementById("export-all-csv-btn");
   var importCsvBtn = document.getElementById("import-csv-btn");
   var csvFileInput = document.getElementById("csv-file-input");
   var exportBackupBtn = document.getElementById("export-backup-btn");
@@ -30834,9 +30835,18 @@ ${auditLine}` : auditLine;
   function buildComplianceCsvContent(rows) {
     return [COMPLIANCE_CSV_HEADERS.join(","), ...rows.map(buildComplianceCsvRow)].join("\n");
   }
+  function getRegisterCsvExportRows() {
+    return sortComplianceRows(getFilteredComplianceRows());
+  }
   function exportToCsv() {
-    const csvContent = buildComplianceCsvContent(getAllComplianceRows());
+    const rows = getRegisterCsvExportRows();
+    const csvContent = buildComplianceCsvContent(rows);
     downloadFile(csvContent, "compliance-reminder-data.csv", "text/csv");
+  }
+  function exportAllRecordsToCsv() {
+    const rows = sortComplianceRows(getAllComplianceRows());
+    const csvContent = buildComplianceCsvContent(rows);
+    downloadFile(csvContent, "compliance-reminder-all-records.csv", "text/csv");
   }
   function exportSelectedToCsv() {
     const rows = getSelectedComplianceRows();
@@ -31240,6 +31250,7 @@ Your current data will be overwritten. Continue?`
   }
   function wireImportExportControls() {
     exportCsvBtn?.addEventListener("click", exportToCsv);
+    exportAllCsvBtn?.addEventListener("click", exportAllRecordsToCsv);
     importCsvBtn?.addEventListener("click", () => csvFileInput?.click());
     csvFileInput?.addEventListener("change", handleCsvImport);
     if (exportBackupBtn) {

@@ -39,6 +39,12 @@ See [Future Releases](#future-releases) below for full architecture and goals.
 
 # Future Releases
 
+## v4 — Compliance Insights (in development)
+
+Read-only compliance insights on the dashboard: health score, risk summary, renewal forecast, and rule-based recommendations. See [`docs/compliance-insights.md`](docs/compliance-insights.md) and [Version Roadmap — v4](#v4--compliance-insights-in-development).
+
+Application version remains **v3.0.0** during V4 development.
+
 ## v3.1.0 — Cloud platform follow-on · Planned
 
 - Evidence storage buckets and uploads
@@ -538,6 +544,27 @@ Tag: v3.0.0
 - Evidence storage buckets and uploads
 - CSV/backup import migration path
 - Restore/unarchive and bulk archive/delete
+
+---
+
+## v4 — Compliance Insights (in development)
+
+V4 adds a read-only **Compliance Insights** layer on the existing dashboard. Application version stays **v3.0.0** until V4 is released as a tagged version.
+
+Documentation: [`docs/compliance-insights.md`](docs/compliance-insights.md)
+
+Verification: `npm run verify-insights-engine`
+
+| Slice | Status | Summary |
+|-------|--------|---------|
+| V4-0A | **COMPLETE** | Insights engine — normalize rows, health/risk/forecast metrics |
+| V4-0B | **COMPLETE** | Dashboard metric mappings to legacy register cards |
+| V4-0C | **COMPLETE** | Compliance Insights UI — health score, risk, forecast sections |
+| V4-0D | **COMPLETE** | Drilldown filters, preview table, CSV export |
+| V4-1A | **COMPLETE** | Recommendations engine and Recommended Actions UI |
+| V4-1B | **COMPLETE** | Recommendation polish, threshold constants, documentation |
+
+**Constraints (V4 to date):** No new CRUD, migrations, cloud-write changes, or AI/LLM dependency.
 
 ---
 

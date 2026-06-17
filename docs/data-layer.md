@@ -79,6 +79,7 @@ Release gate: `npm run verify:phase2`. Checklist: `docs/v3-release-checklist.md`
 
 | Script | Purpose |
 |--------|---------|
+| `npm run verify-insights-engine` | V4 Compliance Insights engine (fixtures only, no Supabase) |
 | `npm run verify:phase2` | **v3.0.0 release gate** (Phase 2 + Phase 3 RPC smokes, pre/post reset, build) |
 | `npm run sync-env` | Generate `supabase-env.js` from `.env` |
 | `npm run verify-supabase` | Client configured |

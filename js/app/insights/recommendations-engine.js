@@ -1,4 +1,5 @@
 import { COMPLIANCE_INSIGHT_DRILLDOWN_TYPES } from "./compliance-insights-drilldowns.js";
+import { STALE_EVIDENCE_DAYS } from "./insights-engine.js";
 
 /** @typedef {import("./insights-engine.js").NormalizedComplianceRow} NormalizedComplianceRow */
 
@@ -20,6 +21,10 @@ import { COMPLIANCE_INSIGHT_DRILLDOWN_TYPES } from "./compliance-insights-drilld
  */
 
 /**
+ * Minimum counts before a forecast/expiry recommendation is shown.
+ * Each rule fires when the metric is **strictly greater than** the threshold
+ * (e.g. threshold `0` means any count ≥ 1 triggers the recommendation).
+ *
  * @typedef {object} RecommendationThresholds
  * @property {number} expiringWithin30Days
  * @property {number} expiringNextMonth
@@ -32,6 +37,13 @@ export const RECOMMENDATION_PRIORITIES = {
   LOW: "low",
 };
 
+export const RECOMMENDATION_PRIORITY_LABELS = {
+  critical: "Critical",
+  high: "High priority",
+  medium: "Medium",
+  low: "Low",
+};
+
 export const RECOMMENDATION_CATEGORIES = {
   EXPIRY: "expiry",
   EVIDENCE: "evidence",
@@ -39,6 +51,7 @@ export const RECOMMENDATION_CATEGORIES = {
   FORECAST: "forecast",
 };
 
+/** Default recommendation count thresholds (override via `generateComplianceRecommendations`). */
 export const DEFAULT_RECOMMENDATION_THRESHOLDS = {
   expiringWithin30Days: 0,
   expiringNextMonth: 0,
@@ -52,6 +65,14 @@ const PRIORITY_RANK = {
 };
 
 /**
+ * @param {RecommendationPriority} priority
+ * @returns {string}
+ */
+export function getRecommendationPriorityLabel(priority) {
+  return RECOMMENDATION_PRIORITY_LABELS[priority] || priority;
+}
+
+/**
  * @param {number} count
  * @param {string} singular
  * @param {string} [plural]
@@ -59,6 +80,15 @@ const PRIORITY_RANK = {
  */
 function countLabel(count, singular, plural = `${singular}s`) {
   return `${count} ${count === 1 ? singular : plural}`;
+}
+
+/**
+ * Human-readable stale-evidence age derived from {@link STALE_EVIDENCE_DAYS}.
+ * @returns {string}
+ */
+function staleEvidenceAgeLabel() {
+  const months = Math.round(STALE_EVIDENCE_DAYS / 30);
+  return months === 1 ? "1 month" : `${months} months`;
 }
 
 /**
@@ -81,6 +111,7 @@ function buildRecommendationRules(insights, thresholds) {
   const { risk, forecast } = insights;
   /** @type {ComplianceRecommendation[]} */
   const recommendations = [];
+  const staleAge = staleEvidenceAgeLabel();
 
   if (risk.expiredRecords > 0) {
     recommendations.push(
@@ -88,8 +119,8 @@ function buildRecommendationRules(insights, thresholds) {
         id: "expiry-expired-records",
         priority: RECOMMENDATION_PRIORITIES.CRITICAL,
         category: RECOMMENDATION_CATEGORIES.EXPIRY,
-        title: "Renew expired records",
-        description: `${countLabel(risk.expiredRecords, "expired record")} ${risk.expiredRecords === 1 ? "requires" : "require"} immediate renewal.`,
+        title: "Renew expired compliance records",
+        description: `${countLabel(risk.expiredRecords, "expired record")} ${risk.expiredRecords === 1 ? "needs" : "need"} immediate renewal.`,
         affectedCount: risk.expiredRecords,
         drilldownKey: COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.EXPIRED,
         sortOrder: 10,
@@ -103,8 +134,8 @@ function buildRecommendationRules(insights, thresholds) {
         id: "actions-expired-active-actions",
         priority: RECOMMENDATION_PRIORITIES.CRITICAL,
         category: RECOMMENDATION_CATEGORIES.ACTIONS,
-        title: "Resolve actions on expired records",
-        description: `${countLabel(risk.expiredWithActiveActions, "expired record")} still ${risk.expiredWithActiveActions === 1 ? "has" : "have"} active actions.`,
+        title: "Complete actions on expired records",
+        description: `${countLabel(risk.expiredWithActiveActions, "expired record")} still ${risk.expiredWithActiveActions === 1 ? "has" : "have"} open or in-progress actions.`,
         affectedCount: risk.expiredWithActiveActions,
         drilldownKey: COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.EXPIRED_ACTIVE_ACTIONS,
         sortOrder: 20,
@@ -118,8 +149,8 @@ function buildRecommendationRules(insights, thresholds) {
         id: "expiry-expiring-within-30-days",
         priority: RECOMMENDATION_PRIORITIES.HIGH,
         category: RECOMMENDATION_CATEGORIES.EXPIRY,
-        title: "Plan renewals within 30 days",
-        description: `${countLabel(forecast.expiringWithin30Days, "record")} ${forecast.expiringWithin30Days === 1 ? "expires" : "expire"} within 30 days.`,
+        title: "Schedule renewals within 30 days",
+        description: `${countLabel(forecast.expiringWithin30Days, "record")} ${forecast.expiringWithin30Days === 1 ? "expires" : "expire"} in the next 30 days.`,
         affectedCount: forecast.expiringWithin30Days,
         drilldownKey: COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.EXPIRING_30_DAYS,
         sortOrder: 30,
@@ -133,8 +164,8 @@ function buildRecommendationRules(insights, thresholds) {
         id: "evidence-missing-evidence",
         priority: RECOMMENDATION_PRIORITIES.HIGH,
         category: RECOMMENDATION_CATEGORIES.EVIDENCE,
-        title: "Attach missing evidence",
-        description: `${countLabel(risk.missingEvidenceRecords, "record")} have no evidence attached.`,
+        title: "Add missing evidence",
+        description: `${countLabel(risk.missingEvidenceRecords, "record")} ${risk.missingEvidenceRecords === 1 ? "has" : "have"} no evidence on file.`,
         affectedCount: risk.missingEvidenceRecords,
         drilldownKey: COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.MISSING_EVIDENCE,
         sortOrder: 40,
@@ -148,8 +179,8 @@ function buildRecommendationRules(insights, thresholds) {
         id: "actions-overdue-actions",
         priority: RECOMMENDATION_PRIORITIES.HIGH,
         category: RECOMMENDATION_CATEGORIES.ACTIONS,
-        title: "Review overdue actions",
-        description: `${countLabel(risk.overdueActions, "overdue action")} should be reviewed.`,
+        title: "Follow up overdue actions",
+        description: `${countLabel(risk.overdueActions, "overdue action")} ${risk.overdueActions === 1 ? "is" : "are"} past ${risk.overdueActions === 1 ? "its" : "their"} due date.`,
         affectedCount: risk.overdueActions,
         drilldownKey: COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.OVERDUE_ACTIONS,
         sortOrder: 50,
@@ -163,8 +194,8 @@ function buildRecommendationRules(insights, thresholds) {
         id: "evidence-stale-evidence",
         priority: RECOMMENDATION_PRIORITIES.MEDIUM,
         category: RECOMMENDATION_CATEGORIES.EVIDENCE,
-        title: "Refresh stale evidence",
-        description: `${countLabel(risk.staleEvidenceRecords, "record")} ${risk.staleEvidenceRecords === 1 ? "has" : "have"} evidence older than 12 months.`,
+        title: "Update stale evidence",
+        description: `${countLabel(risk.staleEvidenceRecords, "record")} ${risk.staleEvidenceRecords === 1 ? "has" : "have"} evidence older than ${staleAge}.`,
         affectedCount: risk.staleEvidenceRecords,
         drilldownKey: COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.STALE_EVIDENCE,
         sortOrder: 60,
@@ -178,8 +209,8 @@ function buildRecommendationRules(insights, thresholds) {
         id: "forecast-expiring-next-month",
         priority: RECOMMENDATION_PRIORITIES.MEDIUM,
         category: RECOMMENDATION_CATEGORIES.FORECAST,
-        title: "Prepare next month renewals",
-        description: `${countLabel(forecast.expiringNextMonth, "record")} ${forecast.expiringNextMonth === 1 ? "expires" : "expire"} next month.`,
+        title: "Plan renewals for next month",
+        description: `${countLabel(forecast.expiringNextMonth, "record")} ${forecast.expiringNextMonth === 1 ? "expires" : "expire"} during the next calendar month.`,
         affectedCount: forecast.expiringNextMonth,
         drilldownKey: COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.EXPIRING_NEXT_MONTH,
         sortOrder: 70,
@@ -192,6 +223,9 @@ function buildRecommendationRules(insights, thresholds) {
 
 /**
  * Generate actionable recommendations from computed compliance insights.
+ *
+ * Rule-based only — no AI/LLM. Each recommendation links to an existing
+ * compliance insight drilldown via `drilldownKey`.
  *
  * @param {ReturnType<import("./insights-engine.js").computeComplianceInsights>} insights
  * @param {NormalizedComplianceRow[] | object[]} [rows]

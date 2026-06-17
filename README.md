@@ -78,6 +78,8 @@ npm run verify:phase2
 | `js/auth/` | Auth shell (`session.js` facade) |
 | `docs/cloud-setup.md` | Supabase setup and migration index |
 | `docs/v3-release-checklist.md` | Pre-tag RC checklist |
+| `docs/compliance-insights.md` | V4 Compliance Insights (health, risk, forecast, recommendations) |
+| `js/app/insights/` | Read-only insights engine (verify: `npm run verify-insights-engine`) |
 
 ## Troubleshooting
 

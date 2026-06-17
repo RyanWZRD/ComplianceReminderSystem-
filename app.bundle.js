@@ -24297,6 +24297,12 @@ ${suffix}`;
     MEDIUM: "medium",
     LOW: "low"
   };
+  var RECOMMENDATION_PRIORITY_LABELS = {
+    critical: "Critical",
+    high: "High priority",
+    medium: "Medium",
+    low: "Low"
+  };
   var RECOMMENDATION_CATEGORIES = {
     EXPIRY: "expiry",
     EVIDENCE: "evidence",
@@ -24313,8 +24319,15 @@ ${suffix}`;
     medium: 2,
     low: 3
   };
+  function getRecommendationPriorityLabel(priority) {
+    return RECOMMENDATION_PRIORITY_LABELS[priority] || priority;
+  }
   function countLabel(count, singular, plural = `${singular}s`) {
     return `${count} ${count === 1 ? singular : plural}`;
+  }
+  function staleEvidenceAgeLabel() {
+    const months = Math.round(STALE_EVIDENCE_DAYS / 30);
+    return months === 1 ? "1 month" : `${months} months`;
   }
   function finalizeRecommendation(recommendation) {
     return {
@@ -24325,14 +24338,15 @@ ${suffix}`;
   function buildRecommendationRules(insights, thresholds) {
     const { risk, forecast } = insights;
     const recommendations = [];
+    const staleAge = staleEvidenceAgeLabel();
     if (risk.expiredRecords > 0) {
       recommendations.push(
         finalizeRecommendation({
           id: "expiry-expired-records",
           priority: RECOMMENDATION_PRIORITIES.CRITICAL,
           category: RECOMMENDATION_CATEGORIES.EXPIRY,
-          title: "Renew expired records",
-          description: `${countLabel(risk.expiredRecords, "expired record")} ${risk.expiredRecords === 1 ? "requires" : "require"} immediate renewal.`,
+          title: "Renew expired compliance records",
+          description: `${countLabel(risk.expiredRecords, "expired record")} ${risk.expiredRecords === 1 ? "needs" : "need"} immediate renewal.`,
           affectedCount: risk.expiredRecords,
           drilldownKey: COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.EXPIRED,
           sortOrder: 10
@@ -24345,8 +24359,8 @@ ${suffix}`;
           id: "actions-expired-active-actions",
           priority: RECOMMENDATION_PRIORITIES.CRITICAL,
           category: RECOMMENDATION_CATEGORIES.ACTIONS,
-          title: "Resolve actions on expired records",
-          description: `${countLabel(risk.expiredWithActiveActions, "expired record")} still ${risk.expiredWithActiveActions === 1 ? "has" : "have"} active actions.`,
+          title: "Complete actions on expired records",
+          description: `${countLabel(risk.expiredWithActiveActions, "expired record")} still ${risk.expiredWithActiveActions === 1 ? "has" : "have"} open or in-progress actions.`,
           affectedCount: risk.expiredWithActiveActions,
           drilldownKey: COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.EXPIRED_ACTIVE_ACTIONS,
           sortOrder: 20
@@ -24359,8 +24373,8 @@ ${suffix}`;
           id: "expiry-expiring-within-30-days",
           priority: RECOMMENDATION_PRIORITIES.HIGH,
           category: RECOMMENDATION_CATEGORIES.EXPIRY,
-          title: "Plan renewals within 30 days",
-          description: `${countLabel(forecast.expiringWithin30Days, "record")} ${forecast.expiringWithin30Days === 1 ? "expires" : "expire"} within 30 days.`,
+          title: "Schedule renewals within 30 days",
+          description: `${countLabel(forecast.expiringWithin30Days, "record")} ${forecast.expiringWithin30Days === 1 ? "expires" : "expire"} in the next 30 days.`,
           affectedCount: forecast.expiringWithin30Days,
           drilldownKey: COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.EXPIRING_30_DAYS,
           sortOrder: 30
@@ -24373,8 +24387,8 @@ ${suffix}`;
           id: "evidence-missing-evidence",
           priority: RECOMMENDATION_PRIORITIES.HIGH,
           category: RECOMMENDATION_CATEGORIES.EVIDENCE,
-          title: "Attach missing evidence",
-          description: `${countLabel(risk.missingEvidenceRecords, "record")} have no evidence attached.`,
+          title: "Add missing evidence",
+          description: `${countLabel(risk.missingEvidenceRecords, "record")} ${risk.missingEvidenceRecords === 1 ? "has" : "have"} no evidence on file.`,
           affectedCount: risk.missingEvidenceRecords,
           drilldownKey: COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.MISSING_EVIDENCE,
           sortOrder: 40
@@ -24387,8 +24401,8 @@ ${suffix}`;
           id: "actions-overdue-actions",
           priority: RECOMMENDATION_PRIORITIES.HIGH,
           category: RECOMMENDATION_CATEGORIES.ACTIONS,
-          title: "Review overdue actions",
-          description: `${countLabel(risk.overdueActions, "overdue action")} should be reviewed.`,
+          title: "Follow up overdue actions",
+          description: `${countLabel(risk.overdueActions, "overdue action")} ${risk.overdueActions === 1 ? "is" : "are"} past ${risk.overdueActions === 1 ? "its" : "their"} due date.`,
           affectedCount: risk.overdueActions,
           drilldownKey: COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.OVERDUE_ACTIONS,
           sortOrder: 50
@@ -24401,8 +24415,8 @@ ${suffix}`;
           id: "evidence-stale-evidence",
           priority: RECOMMENDATION_PRIORITIES.MEDIUM,
           category: RECOMMENDATION_CATEGORIES.EVIDENCE,
-          title: "Refresh stale evidence",
-          description: `${countLabel(risk.staleEvidenceRecords, "record")} ${risk.staleEvidenceRecords === 1 ? "has" : "have"} evidence older than 12 months.`,
+          title: "Update stale evidence",
+          description: `${countLabel(risk.staleEvidenceRecords, "record")} ${risk.staleEvidenceRecords === 1 ? "has" : "have"} evidence older than ${staleAge}.`,
           affectedCount: risk.staleEvidenceRecords,
           drilldownKey: COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.STALE_EVIDENCE,
           sortOrder: 60
@@ -24415,8 +24429,8 @@ ${suffix}`;
           id: "forecast-expiring-next-month",
           priority: RECOMMENDATION_PRIORITIES.MEDIUM,
           category: RECOMMENDATION_CATEGORIES.FORECAST,
-          title: "Prepare next month renewals",
-          description: `${countLabel(forecast.expiringNextMonth, "record")} ${forecast.expiringNextMonth === 1 ? "expires" : "expire"} next month.`,
+          title: "Plan renewals for next month",
+          description: `${countLabel(forecast.expiringNextMonth, "record")} ${forecast.expiringNextMonth === 1 ? "expires" : "expire"} during the next calendar month.`,
           affectedCount: forecast.expiringNextMonth,
           drilldownKey: COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.EXPIRING_NEXT_MONTH,
           sortOrder: 70
@@ -26119,15 +26133,6 @@ This cannot be undone.`
     }
     renderComplianceRecommendations(insights);
   }
-  function getComplianceRecommendationPriorityLabel(priority) {
-    const labels = {
-      critical: "Critical",
-      high: "High",
-      medium: "Medium",
-      low: "Low"
-    };
-    return labels[priority] || priority;
-  }
   function renderComplianceRecommendations(insights) {
     if (!complianceInsightsRecommendationsList) {
       return;
@@ -26139,7 +26144,7 @@ This cannot be undone.`
       complianceInsightsRecommendationsEmpty.classList.toggle("hidden", hasRecommendations);
     }
     complianceInsightsRecommendationsList.innerHTML = recommendations.map((recommendation) => {
-      const affectedLabel = recommendation.affectedCount === 1 ? "1 affected" : `${recommendation.affectedCount} affected`;
+      const affectedLabel = recommendation.affectedCount === 1 ? "1 item" : `${recommendation.affectedCount} items`;
       return `
         <li>
           <button
@@ -26149,7 +26154,7 @@ This cannot be undone.`
             data-recommendation-id="${escapeHtml(recommendation.id)}"
             aria-label="${escapeHtml(`${recommendation.title}. ${recommendation.description} Click to preview.`)}"
           >
-            <span class="compliance-recommendation-priority priority-${escapeHtml(recommendation.priority)}">${escapeHtml(getComplianceRecommendationPriorityLabel(recommendation.priority))}</span>
+            <span class="compliance-recommendation-priority priority-${escapeHtml(recommendation.priority)}">${escapeHtml(getRecommendationPriorityLabel(recommendation.priority))}</span>
             <span class="compliance-recommendation-title">${escapeHtml(recommendation.title)}</span>
             <span class="compliance-recommendation-description">${escapeHtml(recommendation.description)}</span>
             <span class="compliance-recommendation-count">${escapeHtml(affectedLabel)}</span>

@@ -76,7 +76,10 @@ import {
   getComplianceInsightDrilldownMeta,
   isActionLevelDrilldown,
 } from "./js/app/insights/compliance-insights-drilldowns.js";
-import { generateComplianceRecommendations } from "./js/app/insights/recommendations-engine.js";
+import {
+  generateComplianceRecommendations,
+  getRecommendationPriorityLabel,
+} from "./js/app/insights/recommendations-engine.js";
 
 console.log(
   `Compliance Reminder System v${APP_VERSION} — app.js loaded (${DATA_BACKEND} data, ${AUTH_MODE} auth)`
@@ -2210,17 +2213,6 @@ function renderComplianceInsights() {
   renderComplianceRecommendations(insights);
 }
 
-function getComplianceRecommendationPriorityLabel(priority) {
-  const labels = {
-    critical: "Critical",
-    high: "High",
-    medium: "Medium",
-    low: "Low",
-  };
-
-  return labels[priority] || priority;
-}
-
 function renderComplianceRecommendations(insights) {
   if (!complianceInsightsRecommendationsList) {
     return;
@@ -2238,8 +2230,8 @@ function renderComplianceRecommendations(insights) {
     .map((recommendation) => {
       const affectedLabel =
         recommendation.affectedCount === 1
-          ? "1 affected"
-          : `${recommendation.affectedCount} affected`;
+          ? "1 item"
+          : `${recommendation.affectedCount} items`;
 
       return `
         <li>
@@ -2250,7 +2242,7 @@ function renderComplianceRecommendations(insights) {
             data-recommendation-id="${escapeHtml(recommendation.id)}"
             aria-label="${escapeHtml(`${recommendation.title}. ${recommendation.description} Click to preview.`)}"
           >
-            <span class="compliance-recommendation-priority priority-${escapeHtml(recommendation.priority)}">${escapeHtml(getComplianceRecommendationPriorityLabel(recommendation.priority))}</span>
+            <span class="compliance-recommendation-priority priority-${escapeHtml(recommendation.priority)}">${escapeHtml(getRecommendationPriorityLabel(recommendation.priority))}</span>
             <span class="compliance-recommendation-title">${escapeHtml(recommendation.title)}</span>
             <span class="compliance-recommendation-description">${escapeHtml(recommendation.description)}</span>
             <span class="compliance-recommendation-count">${escapeHtml(affectedLabel)}</span>

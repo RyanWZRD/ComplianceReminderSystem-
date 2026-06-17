@@ -1,6 +1,7 @@
 /**
  * Deterministic verification for the V4-0A Compliance Insights engine,
- * V4-0B dashboard metric mappings, V4-0D drilldown filters, and V4-1A recommendations.
+ * V4-0B dashboard metric mappings, V4-0D drilldown filters, V4-1A recommendations,
+ * and V4-1B recommendation polish and thresholds.
  * Uses fixture rows only — no Supabase or browser required.
  */
 
@@ -15,7 +16,9 @@ import {
   getExpectedDrilldownCounts,
 } from "../js/app/insights/compliance-insights-drilldowns.js";
 import {
+  DEFAULT_RECOMMENDATION_THRESHOLDS,
   generateComplianceRecommendations,
+  getRecommendationPriorityLabel,
   getRecommendationPriorityOrder,
 } from "../js/app/insights/recommendations-engine.js";
 import {
@@ -319,11 +322,44 @@ function verifyRecommendations(label, rows) {
       true,
       `${label} recommendation ${recommendation.id} affectedCount > 0`
     );
+    assertEqual(
+      recommendation.drilldownKey in getExpectedDrilldownCounts(normalizedRows, createInsightsContext(FIXTURE_AS_OF_DATE, FIXTURE_SETTINGS)),
+      true,
+      `${label} recommendation ${recommendation.id} drilldownKey maps to drilldown`
+    );
   });
 }
 
+function verifyRecommendationThresholds(label, rows) {
+  const insights = computeComplianceInsights(rows, FIXTURE_SETTINGS, FIXTURE_AS_OF_DATE);
+  const normalizedRows = normalizeFixtureRows(rows);
+
+  const suppressed = generateComplianceRecommendations(insights, normalizedRows, {
+    expiringWithin30Days: insights.forecast.expiringWithin30Days,
+    expiringNextMonth: insights.forecast.expiringNextMonth,
+  });
+
+  assertEqual(
+    suppressed.some((item) => item.id === "expiry-expiring-within-30-days"),
+    false,
+    `${label} threshold suppresses 30-day expiry recommendation`
+  );
+  assertEqual(
+    suppressed.some((item) => item.id === "forecast-expiring-next-month"),
+    false,
+    `${label} threshold suppresses next-month forecast recommendation`
+  );
+
+  assertDeepEqual(
+    DEFAULT_RECOMMENDATION_THRESHOLDS,
+    { expiringWithin30Days: 0, expiringNextMonth: 0 },
+    `${label} default recommendation thresholds`
+  );
+  assertEqual(getRecommendationPriorityLabel("high"), "High priority", `${label} priority label`);
+}
+
 console.log(
-  "Compliance Insights engine verification (V4-0A + V4-0B + V4-0D + V4-1A recommendations)\n"
+  "Compliance Insights engine verification (V4-0A + V4-0B + V4-0D + V4-1A + V4-1B)\n"
 );
 
 verifyInsights("local fixture rows", LOCAL_FIXTURE_ROWS);
@@ -334,6 +370,7 @@ verifyDrilldownCounts("local fixture rows", LOCAL_FIXTURE_ROWS);
 verifyDrilldownCounts("cloud-shaped fixture rows", CLOUD_FIXTURE_ROWS);
 verifyRecommendations("local fixture rows", LOCAL_FIXTURE_ROWS);
 verifyRecommendations("cloud-shaped fixture rows", CLOUD_FIXTURE_ROWS);
+verifyRecommendationThresholds("local fixture rows", LOCAL_FIXTURE_ROWS);
 
 const emptyInsights = computeComplianceInsights([], FIXTURE_SETTINGS, FIXTURE_AS_OF_DATE);
 
@@ -360,3 +397,4 @@ console.log("  local + cloud-shaped fixtures produce identical metrics");
 console.log("  dashboard summary/action/evidence mappings match legacy formulas");
 console.log("  compliance insight drilldown counts match risk/forecast tiles");
 console.log(`  recommendations generated=${EXPECTED_RECOMMENDATIONS.length}`);
+console.log("  recommendation thresholds and priority labels verified");

@@ -78,7 +78,19 @@ A record counts as having **reminder activity** for its current window when eith
 
 Only the **current** window’s reminder type is checked — a 30-day sent marker does not satisfy a record now in the 7-day window.
 
-Operational health is displayed in the Compliance Insights sub-score row and included in the composite score. Hover or screen-reader users see the explanatory note via the element’s `title` and `aria-label`.
+Operational health is displayed in the Compliance Insights sub-score row and included in the composite score. The sub-score shows the percentage plus a summary line: records in active reminder windows, with recorded follow-up, and missing follow-up. Hover or screen-reader users see the full note via the element’s `title` and `aria-label`.
+
+### Missing reminder follow-up drilldown
+
+The **Record reminder follow-up** recommendation opens the `missing-reminder-activity` drilldown. The preview table includes:
+
+| Column | Meaning |
+|--------|---------|
+| Name / Role / Compliance Type / Expiry Date / Status | Standard record context |
+| Reminder Window | Current active window (Expired, 7-, 14-, or 30-day) |
+| Reminder Activity Status | **Recorded** when notes or history contain the sent marker for that window; **Missing** otherwise |
+
+The preview includes a short explanation of what “missing reminder activity” means. When no records match, the empty state reads: *No records are missing reminder follow-up.*
 
 ### Score bands (UI)
 

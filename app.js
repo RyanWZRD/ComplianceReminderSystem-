@@ -78,7 +78,10 @@ import {
   getComplianceInsightDrilldownColumns,
   getComplianceInsightDrilldownMeta,
   isActionLevelDrilldown,
+  mapMissingReminderActivityPreviewRow,
+  COMPLIANCE_INSIGHT_DRILLDOWN_TYPES,
 } from "./js/app/insights/compliance-insights-drilldowns.js";
+import { formatOperationalHealthSummary } from "./js/app/insights/metrics-operational.js";
 import {
   generateComplianceRecommendations,
   getRecommendationPriorityLabel,
@@ -293,6 +296,12 @@ const complianceInsightsExpiryScore = document.getElementById("compliance-insigh
 const complianceInsightsEvidenceScore = document.getElementById("compliance-insights-evidence-score");
 const complianceInsightsActionScore = document.getElementById("compliance-insights-action-score");
 const complianceInsightsOperational = document.getElementById("compliance-insights-operational");
+const complianceInsightsOperationalScore = document.getElementById(
+  "compliance-insights-operational-score"
+);
+const complianceInsightsOperationalDetail = document.getElementById(
+  "compliance-insights-operational-detail"
+);
 const complianceInsightsRiskExpired = document.getElementById("compliance-insights-risk-expired");
 const complianceInsightsRiskMissingEvidence = document.getElementById(
   "compliance-insights-risk-missing-evidence"
@@ -320,6 +329,9 @@ const complianceInsightsPreviewEmptyHint = document.getElementById(
 const complianceInsightsPreview = document.getElementById("compliance-insights-preview");
 const complianceInsightsPreviewTitle = document.getElementById("compliance-insights-preview-title");
 const complianceInsightsPreviewMeta = document.getElementById("compliance-insights-preview-meta");
+const complianceInsightsPreviewDescription = document.getElementById(
+  "compliance-insights-preview-description"
+);
 const complianceInsightsPreviewTableHead = document.getElementById(
   "compliance-insights-preview-table-head"
 );
@@ -2177,17 +2189,26 @@ function renderComplianceInsights() {
   }
 
   if (complianceInsightsOperational) {
-    if (insights.operationalHealth.available) {
-      complianceInsightsOperational.textContent = `${insights.operationalHealth.score}%`;
-      complianceInsightsOperational.title = insights.operationalHealth.note || "";
-      complianceInsightsOperational.setAttribute(
-        "aria-label",
-        `Operational Health ${insights.operationalHealth.score}%. ${insights.operationalHealth.note || ""}`
-      );
+    const summary = formatOperationalHealthSummary(insights.operationalHealth);
+
+    if (complianceInsightsOperationalScore) {
+      complianceInsightsOperationalScore.textContent = summary.scoreText;
+    }
+
+    if (complianceInsightsOperationalDetail) {
+      complianceInsightsOperationalDetail.textContent = summary.detailText;
+      complianceInsightsOperationalDetail.classList.toggle("hidden", !summary.detailText);
+    }
+
+    if (summary.title) {
+      complianceInsightsOperational.title = summary.title;
     } else {
-      complianceInsightsOperational.textContent =
-        insights.operationalHealth.note || "Not available";
       complianceInsightsOperational.removeAttribute("title");
+    }
+
+    if (summary.ariaLabel) {
+      complianceInsightsOperational.setAttribute("aria-label", summary.ariaLabel);
+    } else {
       complianceInsightsOperational.removeAttribute("aria-label");
     }
   }
@@ -2308,7 +2329,17 @@ function getComplianceInsightsDrilldownContext() {
   });
 }
 
-function buildComplianceInsightDrilldownRecordRow(row, drilldownType) {
+function buildComplianceInsightDrilldownRecordRow(row, drilldownType, ctx) {
+  if (drilldownType === COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.MISSING_REMINDER_ACTIVITY) {
+    const previewRow = mapMissingReminderActivityPreviewRow(row, ctx);
+
+    return {
+      ...previewRow,
+      expiryDate: formatDate(row.expiryDate),
+      status: getStatusBadgeLabel(getStatus(row.expiryDate).key),
+    };
+  }
+
   const status = getStatus(row.expiryDate);
   const evidenceSummary = getEvidenceSummary(row.evidence);
   const actionSummary = getActionSummary(row.actions);
@@ -2366,7 +2397,7 @@ function buildComplianceInsightDrilldownReport(drilldownType) {
     );
 
     tableRows = matchedRows.map((row) =>
-      buildComplianceInsightDrilldownRecordRow(row, drilldownType)
+      buildComplianceInsightDrilldownRecordRow(row, drilldownType, ctx)
     );
   }
 
@@ -2374,6 +2405,7 @@ function buildComplianceInsightDrilldownReport(drilldownType) {
     type: drilldownType,
     title: meta.title,
     emptyMessage: meta.emptyMessage,
+    previewDescription: meta.previewDescription || "",
     itemLabel: meta.itemLabel,
     generatedAt: generatedAt.toISOString(),
     generatedDisplay: generatedAt.toLocaleString("en-GB", {
@@ -2416,6 +2448,16 @@ function renderComplianceInsightDrilldownPreview(report) {
   currentComplianceInsightDrilldown = report;
   complianceInsightsPreviewTitle.textContent = report.title;
   complianceInsightsPreviewMeta.textContent = `Generated: ${report.generatedDisplay} · ${report.itemLabel} included: ${report.totalCount}`;
+
+  if (complianceInsightsPreviewDescription) {
+    if (report.previewDescription) {
+      complianceInsightsPreviewDescription.textContent = report.previewDescription;
+      complianceInsightsPreviewDescription.classList.remove("hidden");
+    } else {
+      complianceInsightsPreviewDescription.textContent = "";
+      complianceInsightsPreviewDescription.classList.add("hidden");
+    }
+  }
 
   complianceInsightsPreviewTableHead.innerHTML = `
     <tr>
@@ -2482,6 +2524,11 @@ function clearComplianceInsightDrilldownPreview() {
 
   if (complianceInsightsPreviewEmptyHint) {
     complianceInsightsPreviewEmptyHint.classList.remove("hidden");
+  }
+
+  if (complianceInsightsPreviewDescription) {
+    complianceInsightsPreviewDescription.textContent = "";
+    complianceInsightsPreviewDescription.classList.add("hidden");
   }
 
   updateComplianceInsightDrilldownTileActiveState();

@@ -23850,6 +23850,37 @@ ${suffix}`;
       note: buildOperationalHealthNote(recordsInReminderWindows, recordsMissingReminderActivity)
     };
   }
+  function formatOperationalHealthSummary(operationalHealth) {
+    if (!operationalHealth?.available) {
+      const fallback = operationalHealth?.note || "Not available";
+      return {
+        scoreText: fallback,
+        detailText: "",
+        title: "",
+        ariaLabel: fallback
+      };
+    }
+    const score = operationalHealth.score ?? 0;
+    const recordsInReminderWindows = operationalHealth.recordsInReminderWindows ?? 0;
+    const recordsWithReminderActivity = operationalHealth.recordsWithReminderActivity ?? 0;
+    const recordsMissingReminderActivity = operationalHealth.recordsMissingReminderActivity ?? 0;
+    const note = operationalHealth.note || "";
+    const scoreText = `${score}%`;
+    const detailText = recordsInReminderWindows === 0 ? "No records in active reminder windows" : `${recordsInReminderWindows} in windows \xB7 ${recordsWithReminderActivity} followed up \xB7 ${recordsMissingReminderActivity} missing`;
+    const ariaLabel = [
+      `Operational Health ${score}%.`,
+      `${recordsInReminderWindows} records in active reminder windows.`,
+      `${recordsWithReminderActivity} with recorded reminder follow-up.`,
+      `${recordsMissingReminderActivity} missing reminder follow-up.`,
+      note
+    ].filter(Boolean).join(" ");
+    return {
+      scoreText,
+      detailText,
+      title: note,
+      ariaLabel
+    };
+  }
 
   // js/app/insights/metrics-risk.js
   function computeRiskSummary(rows, ctx) {
@@ -24233,6 +24264,15 @@ ${suffix}`;
     EXPIRING_90_DAYS: "expiring-within-90-days",
     MISSING_REMINDER_ACTIVITY: "missing-reminder-activity"
   };
+  var COMPLIANCE_INSIGHT_REMINDER_ACTIVITY_PREVIEW_COLUMNS = [
+    { key: "name", label: "Name" },
+    { key: "role", label: "Role" },
+    { key: "complianceType", label: "Compliance Type" },
+    { key: "expiryDate", label: "Expiry Date" },
+    { key: "status", label: "Status" },
+    { key: "reminderWindow", label: "Reminder Window" },
+    { key: "reminderActivityStatus", label: "Reminder Activity Status" }
+  ];
   var COMPLIANCE_INSIGHT_RECORD_PREVIEW_COLUMNS = [
     { key: "name", label: "Name" },
     { key: "role", label: "Role" },
@@ -24316,7 +24356,8 @@ ${suffix}`;
     },
     [COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.MISSING_REMINDER_ACTIVITY]: {
       title: "Records Missing Reminder Follow-up",
-      emptyMessage: "All records in active reminder windows have recorded reminder follow-up.",
+      emptyMessage: "No records are missing reminder follow-up.",
+      previewDescription: "These records are in an active reminder window (expired, 7-, 14-, or 30-day) but have no reminder sent marker in notes or reminder_sent history for that window.",
       filename: "compliance-insight-missing_reminder_activity.csv",
       itemLabel: "Records"
     }
@@ -24381,6 +24422,20 @@ ${suffix}`;
     });
     return entries;
   }
+  function mapMissingReminderActivityPreviewRow(row, ctx) {
+    const status = ctx.getExpiryStatus(row.expiryDate);
+    const reminderWindow = getActiveReminderType(row.expiryDate, ctx.settings, ctx) || "\u2014";
+    const hasActivity = reminderWindow !== "\u2014" && hasReminderActivityForType(row, reminderWindow);
+    return {
+      name: row.name,
+      role: row.role,
+      complianceType: row.complianceType,
+      expiryDate: row.expiryDate,
+      status: status.label,
+      reminderWindow,
+      reminderActivityStatus: hasActivity ? "Recorded" : "Missing"
+    };
+  }
   function getComplianceInsightDrilldownColumns(drilldownType) {
     if (isActionLevelDrilldown(drilldownType)) {
       return COMPLIANCE_INSIGHT_ACTION_PREVIEW_COLUMNS;
@@ -24388,12 +24443,16 @@ ${suffix}`;
     if (drilldownType === COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.EXPIRED_ACTIVE_ACTIONS) {
       return COMPLIANCE_INSIGHT_RECORD_WITH_ACTIONS_PREVIEW_COLUMNS;
     }
+    if (drilldownType === COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.MISSING_REMINDER_ACTIVITY) {
+      return COMPLIANCE_INSIGHT_REMINDER_ACTIVITY_PREVIEW_COLUMNS;
+    }
     return COMPLIANCE_INSIGHT_RECORD_PREVIEW_COLUMNS;
   }
   function getComplianceInsightDrilldownMeta(drilldownType) {
     return DRILLDOWN_META[drilldownType] || {
       title: "Compliance Insight",
       emptyMessage: "No matching records.",
+      previewDescription: "",
       filename: "compliance-insight-preview.csv",
       itemLabel: "Records"
     };
@@ -24781,6 +24840,12 @@ ${suffix}`;
   var complianceInsightsEvidenceScore = document.getElementById("compliance-insights-evidence-score");
   var complianceInsightsActionScore = document.getElementById("compliance-insights-action-score");
   var complianceInsightsOperational = document.getElementById("compliance-insights-operational");
+  var complianceInsightsOperationalScore = document.getElementById(
+    "compliance-insights-operational-score"
+  );
+  var complianceInsightsOperationalDetail = document.getElementById(
+    "compliance-insights-operational-detail"
+  );
   var complianceInsightsRiskExpired = document.getElementById("compliance-insights-risk-expired");
   var complianceInsightsRiskMissingEvidence = document.getElementById(
     "compliance-insights-risk-missing-evidence"
@@ -24808,6 +24873,9 @@ ${suffix}`;
   var complianceInsightsPreview = document.getElementById("compliance-insights-preview");
   var complianceInsightsPreviewTitle = document.getElementById("compliance-insights-preview-title");
   var complianceInsightsPreviewMeta = document.getElementById("compliance-insights-preview-meta");
+  var complianceInsightsPreviewDescription = document.getElementById(
+    "compliance-insights-preview-description"
+  );
   var complianceInsightsPreviewTableHead = document.getElementById(
     "compliance-insights-preview-table-head"
   );
@@ -26230,16 +26298,22 @@ This cannot be undone.`
       complianceInsightsActionScore.textContent = `${insights.actionHealth.score}%`;
     }
     if (complianceInsightsOperational) {
-      if (insights.operationalHealth.available) {
-        complianceInsightsOperational.textContent = `${insights.operationalHealth.score}%`;
-        complianceInsightsOperational.title = insights.operationalHealth.note || "";
-        complianceInsightsOperational.setAttribute(
-          "aria-label",
-          `Operational Health ${insights.operationalHealth.score}%. ${insights.operationalHealth.note || ""}`
-        );
+      const summary = formatOperationalHealthSummary(insights.operationalHealth);
+      if (complianceInsightsOperationalScore) {
+        complianceInsightsOperationalScore.textContent = summary.scoreText;
+      }
+      if (complianceInsightsOperationalDetail) {
+        complianceInsightsOperationalDetail.textContent = summary.detailText;
+        complianceInsightsOperationalDetail.classList.toggle("hidden", !summary.detailText);
+      }
+      if (summary.title) {
+        complianceInsightsOperational.title = summary.title;
       } else {
-        complianceInsightsOperational.textContent = insights.operationalHealth.note || "Not available";
         complianceInsightsOperational.removeAttribute("title");
+      }
+      if (summary.ariaLabel) {
+        complianceInsightsOperational.setAttribute("aria-label", summary.ariaLabel);
+      } else {
         complianceInsightsOperational.removeAttribute("aria-label");
       }
     }
@@ -26327,7 +26401,15 @@ This cannot be undone.`
       dueSoonDays: DUE_SOON_DAYS2
     });
   }
-  function buildComplianceInsightDrilldownRecordRow(row, drilldownType) {
+  function buildComplianceInsightDrilldownRecordRow(row, drilldownType, ctx) {
+    if (drilldownType === COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.MISSING_REMINDER_ACTIVITY) {
+      const previewRow2 = mapMissingReminderActivityPreviewRow(row, ctx);
+      return {
+        ...previewRow2,
+        expiryDate: formatDate(row.expiryDate),
+        status: getStatusBadgeLabel(getStatus(row.expiryDate).key)
+      };
+    }
     const status = getStatus(row.expiryDate);
     const evidenceSummary = getEvidenceSummary(row.evidence);
     const actionSummary = getActionSummary(row.actions);
@@ -26376,13 +26458,14 @@ This cannot be undone.`
         (a, b) => a.expiryDate.localeCompare(b.expiryDate) || a.name.localeCompare(b.name)
       );
       tableRows = matchedRows.map(
-        (row) => buildComplianceInsightDrilldownRecordRow(row, drilldownType)
+        (row) => buildComplianceInsightDrilldownRecordRow(row, drilldownType, ctx)
       );
     }
     return {
       type: drilldownType,
       title: meta.title,
       emptyMessage: meta.emptyMessage,
+      previewDescription: meta.previewDescription || "",
       itemLabel: meta.itemLabel,
       generatedAt: generatedAt.toISOString(),
       generatedDisplay: generatedAt.toLocaleString("en-GB", {
@@ -26415,6 +26498,15 @@ This cannot be undone.`
     currentComplianceInsightDrilldown = report;
     complianceInsightsPreviewTitle.textContent = report.title;
     complianceInsightsPreviewMeta.textContent = `Generated: ${report.generatedDisplay} \xB7 ${report.itemLabel} included: ${report.totalCount}`;
+    if (complianceInsightsPreviewDescription) {
+      if (report.previewDescription) {
+        complianceInsightsPreviewDescription.textContent = report.previewDescription;
+        complianceInsightsPreviewDescription.classList.remove("hidden");
+      } else {
+        complianceInsightsPreviewDescription.textContent = "";
+        complianceInsightsPreviewDescription.classList.add("hidden");
+      }
+    }
     complianceInsightsPreviewTableHead.innerHTML = `
     <tr>
       ${report.columns.map((column) => `<th>${escapeHtml(column.label)}</th>`).join("")}
@@ -26464,6 +26556,10 @@ This cannot be undone.`
     }
     if (complianceInsightsPreviewEmptyHint) {
       complianceInsightsPreviewEmptyHint.classList.remove("hidden");
+    }
+    if (complianceInsightsPreviewDescription) {
+      complianceInsightsPreviewDescription.textContent = "";
+      complianceInsightsPreviewDescription.classList.add("hidden");
     }
     updateComplianceInsightDrilldownTileActiveState();
     updateComplianceRecommendationActiveState();

@@ -597,6 +597,26 @@ header h1 {
   color: #5a6270;
 }
 
+.compliance-insights-operational-score {
+  display: block;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #16213e;
+}
+
+.compliance-insights-operational-detail {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.35;
+  color: #5a6270;
+}
+
+.compliance-insights-preview-description {
+  margin: 0.35rem 0 0;
+}
+
 .compliance-insights-subheading {
   font-size: 0.95rem;
   font-weight: 600;

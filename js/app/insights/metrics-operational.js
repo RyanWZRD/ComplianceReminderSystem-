@@ -196,3 +196,57 @@ export function computeOperationalHealth(rows, ctx) {
     note: buildOperationalHealthNote(recordsInReminderWindows, recordsMissingReminderActivity),
   };
 }
+
+/**
+ * Format operational health for the Compliance Insights sub-score UI.
+ *
+ * @param {{
+ *   available?: boolean;
+ *   score?: number;
+ *   recordsInReminderWindows?: number;
+ *   recordsWithReminderActivity?: number;
+ *   recordsMissingReminderActivity?: number;
+ *   note?: string;
+ * }} operationalHealth
+ */
+export function formatOperationalHealthSummary(operationalHealth) {
+  if (!operationalHealth?.available) {
+    const fallback = operationalHealth?.note || "Not available";
+
+    return {
+      scoreText: fallback,
+      detailText: "",
+      title: "",
+      ariaLabel: fallback,
+    };
+  }
+
+  const score = operationalHealth.score ?? 0;
+  const recordsInReminderWindows = operationalHealth.recordsInReminderWindows ?? 0;
+  const recordsWithReminderActivity = operationalHealth.recordsWithReminderActivity ?? 0;
+  const recordsMissingReminderActivity = operationalHealth.recordsMissingReminderActivity ?? 0;
+  const note = operationalHealth.note || "";
+
+  const scoreText = `${score}%`;
+  const detailText =
+    recordsInReminderWindows === 0
+      ? "No records in active reminder windows"
+      : `${recordsInReminderWindows} in windows · ${recordsWithReminderActivity} followed up · ${recordsMissingReminderActivity} missing`;
+
+  const ariaLabel = [
+    `Operational Health ${score}%.`,
+    `${recordsInReminderWindows} records in active reminder windows.`,
+    `${recordsWithReminderActivity} with recorded reminder follow-up.`,
+    `${recordsMissingReminderActivity} missing reminder follow-up.`,
+    note,
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  return {
+    scoreText,
+    detailText,
+    title: note,
+    ariaLabel,
+  };
+}

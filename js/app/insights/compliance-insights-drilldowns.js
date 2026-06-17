@@ -1,5 +1,5 @@
 import { ACTION_STATUSES } from "../../data/constants.js";
-import { filterRecordsMissingReminderActivity } from "./metrics-operational.js";
+import { filterRecordsMissingReminderActivity, getActiveReminderType, hasReminderActivityForType } from "./metrics-operational.js";
 
 /** @typedef {import("./insights-engine.js").NormalizedComplianceRow} NormalizedComplianceRow */
 /** @typedef {import("./insights-engine.js").InsightsContext} InsightsContext */
@@ -16,6 +16,16 @@ export const COMPLIANCE_INSIGHT_DRILLDOWN_TYPES = {
   EXPIRING_90_DAYS: "expiring-within-90-days",
   MISSING_REMINDER_ACTIVITY: "missing-reminder-activity",
 };
+
+export const COMPLIANCE_INSIGHT_REMINDER_ACTIVITY_PREVIEW_COLUMNS = [
+  { key: "name", label: "Name" },
+  { key: "role", label: "Role" },
+  { key: "complianceType", label: "Compliance Type" },
+  { key: "expiryDate", label: "Expiry Date" },
+  { key: "status", label: "Status" },
+  { key: "reminderWindow", label: "Reminder Window" },
+  { key: "reminderActivityStatus", label: "Reminder Activity Status" },
+];
 
 export const COMPLIANCE_INSIGHT_RECORD_PREVIEW_COLUMNS = [
   { key: "name", label: "Name" },
@@ -103,7 +113,9 @@ const DRILLDOWN_META = {
   },
   [COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.MISSING_REMINDER_ACTIVITY]: {
     title: "Records Missing Reminder Follow-up",
-    emptyMessage: "All records in active reminder windows have recorded reminder follow-up.",
+    emptyMessage: "No records are missing reminder follow-up.",
+    previewDescription:
+      "These records are in an active reminder window (expired, 7-, 14-, or 30-day) but have no reminder sent marker in notes or reminder_sent history for that window.",
     filename: "compliance-insight-missing_reminder_activity.csv",
     itemLabel: "Records",
   },
@@ -213,6 +225,29 @@ export function flattenOverdueActionEntries(rows, ctx) {
 }
 
 /**
+ * Map a record to missing-reminder-activity preview fields (dates unformatted).
+ *
+ * @param {NormalizedComplianceRow} row
+ * @param {InsightsContext} ctx
+ */
+export function mapMissingReminderActivityPreviewRow(row, ctx) {
+  const status = ctx.getExpiryStatus(row.expiryDate);
+  const reminderWindow = getActiveReminderType(row.expiryDate, ctx.settings, ctx) || "—";
+  const hasActivity =
+    reminderWindow !== "—" && hasReminderActivityForType(row, reminderWindow);
+
+  return {
+    name: row.name,
+    role: row.role,
+    complianceType: row.complianceType,
+    expiryDate: row.expiryDate,
+    status: status.label,
+    reminderWindow,
+    reminderActivityStatus: hasActivity ? "Recorded" : "Missing",
+  };
+}
+
+/**
  * @param {string} drilldownType
  * @returns {Array<{ key: string, label: string }>}
  */
@@ -223,6 +258,10 @@ export function getComplianceInsightDrilldownColumns(drilldownType) {
 
   if (drilldownType === COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.EXPIRED_ACTIVE_ACTIONS) {
     return COMPLIANCE_INSIGHT_RECORD_WITH_ACTIONS_PREVIEW_COLUMNS;
+  }
+
+  if (drilldownType === COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.MISSING_REMINDER_ACTIVITY) {
+    return COMPLIANCE_INSIGHT_REMINDER_ACTIVITY_PREVIEW_COLUMNS;
   }
 
   return COMPLIANCE_INSIGHT_RECORD_PREVIEW_COLUMNS;
@@ -237,6 +276,7 @@ export function getComplianceInsightDrilldownMeta(drilldownType) {
     DRILLDOWN_META[drilldownType] || {
       title: "Compliance Insight",
       emptyMessage: "No matching records.",
+      previewDescription: "",
       filename: "compliance-insight-preview.csv",
       itemLabel: "Records",
     }

@@ -2,7 +2,7 @@
  * Deterministic verification for the V4-0A Compliance Insights engine,
  * V4-0B dashboard metric mappings, V4-0D drilldown filters, V4-1A recommendations,
  * V4-1B recommendation polish and thresholds, V4-1C alpha hardening, V4-2A operational health,
- * and V4-2B composite score including operational health.
+ * and V4-2B composite score including operational health, and V4-2C operational drilldown polish.
  * Uses fixture rows only — no Supabase or browser required.
  */
 
@@ -14,8 +14,13 @@ import {
 } from "../js/app/insights/compliance-insights.js";
 import {
   COMPLIANCE_INSIGHT_DRILLDOWN_TYPES,
+  filterComplianceInsightDrilldownRecords,
+  getComplianceInsightDrilldownColumns,
+  getComplianceInsightDrilldownMeta,
   getExpectedDrilldownCounts,
+  mapMissingReminderActivityPreviewRow,
 } from "../js/app/insights/compliance-insights-drilldowns.js";
+import { formatOperationalHealthSummary } from "../js/app/insights/metrics-operational.js";
 import {
   DEFAULT_RECOMMENDATION_THRESHOLDS,
   generateComplianceRecommendations,
@@ -480,8 +485,91 @@ function verifyOperationalHealthScenarios() {
   assertEqual(historyInsights.operationalHealth.score, 100, "operational history score");
 }
 
+function verifyOperationalHealthDrilldownPolish() {
+  const meta = getComplianceInsightDrilldownMeta(
+    COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.MISSING_REMINDER_ACTIVITY
+  );
+
+  assertEqual(
+    meta.emptyMessage,
+    "No records are missing reminder follow-up.",
+    "missing reminder activity empty message"
+  );
+  assertEqual(
+    Boolean(meta.previewDescription),
+    true,
+    "missing reminder activity preview description"
+  );
+
+  const columns = getComplianceInsightDrilldownColumns(
+    COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.MISSING_REMINDER_ACTIVITY
+  );
+
+  assertDeepEqual(
+    columns.map((column) => column.key),
+    [
+      "name",
+      "role",
+      "complianceType",
+      "expiryDate",
+      "status",
+      "reminderWindow",
+      "reminderActivityStatus",
+    ],
+    "missing reminder activity preview columns"
+  );
+
+  const ctx = createInsightsContext(FIXTURE_AS_OF_DATE, FIXTURE_SETTINGS);
+  const normalizedRows = normalizeFixtureRows(LOCAL_FIXTURE_ROWS);
+  const missingRows = filterComplianceInsightDrilldownRecords(
+    COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.MISSING_REMINDER_ACTIVITY,
+    normalizedRows,
+    ctx
+  );
+
+  assertEqual(missingRows.length, 3, "missing reminder activity drilldown row count");
+
+  const samPriest = missingRows.find((row) => row.name === "Sam Priest");
+
+  assertEqual(Boolean(samPriest), true, "Sam Priest in missing reminder activity drilldown");
+
+  const previewRow = mapMissingReminderActivityPreviewRow(samPriest, ctx);
+
+  assertEqual(previewRow.reminderActivityStatus, "Missing", "Sam Priest reminder activity status");
+  assertEqual(previewRow.reminderWindow, "Expired", "Sam Priest reminder window");
+
+  const operationalSummary = formatOperationalHealthSummary(EXPECTED_INSIGHTS.operationalHealth);
+
+  assertEqual(operationalSummary.scoreText, "0%", "operational summary score text");
+  assertEqual(
+    operationalSummary.detailText,
+    "3 in windows · 0 followed up · 3 missing",
+    "operational summary detail text"
+  );
+
+  const healthySummary = formatOperationalHealthSummary(EXPECTED_HEALTHY_INSIGHTS.operationalHealth);
+
+  assertEqual(
+    healthySummary.detailText,
+    "No records in active reminder windows",
+    "healthy operational summary detail text"
+  );
+
+  const insights = computeComplianceInsights(LOCAL_FIXTURE_ROWS, FIXTURE_SETTINGS, FIXTURE_AS_OF_DATE);
+  const recommendations = generateComplianceRecommendations(insights, normalizedRows);
+  const operationalRecommendation = recommendations.find(
+    (item) => item.id === "operational-missing-reminder-activity"
+  );
+
+  assertEqual(
+    operationalRecommendation?.drilldownKey,
+    COMPLIANCE_INSIGHT_DRILLDOWN_TYPES.MISSING_REMINDER_ACTIVITY,
+    "operational recommendation drilldown key"
+  );
+}
+
 console.log(
-  "Compliance Insights engine verification (V4-0A through V4-2B)\n"
+  "Compliance Insights engine verification (V4-0A through V4-2C)\n"
 );
 
 verifyInsights("local fixture rows", LOCAL_FIXTURE_ROWS);
@@ -496,6 +584,7 @@ verifyRecommendationThresholds("local fixture rows", LOCAL_FIXTURE_ROWS);
 verifyHealthyFixture("healthy local fixture rows", HEALTHY_FIXTURE_ROWS);
 verifyHealthyFixture("healthy cloud-shaped fixture rows", HEALTHY_CLOUD_FIXTURE_ROWS);
 verifyOperationalHealthScenarios();
+verifyOperationalHealthDrilldownPolish();
 
 const emptyInsights = computeComplianceInsights([], FIXTURE_SETTINGS, FIXTURE_AS_OF_DATE);
 
@@ -531,3 +620,4 @@ console.log(`  recommendations generated=${EXPECTED_RECOMMENDATIONS.length}`);
 console.log("  recommendation thresholds and priority labels verified");
 console.log("  healthy local + cloud-shaped fixtures produce 100% scores and zero recommendations");
 console.log("  operational health scenarios (notes, history, empty windows) verified");
+console.log("  operational health drilldown polish (columns, preview, summary) verified");

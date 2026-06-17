@@ -24306,6 +24306,37 @@ ${suffix}`;
   var activeFilterChips = document.getElementById("active-filter-chips");
   var clearFiltersBtn = document.getElementById("clear-filters-btn");
   var analyticsCards = document.querySelectorAll("[data-analytics-filter]");
+  var complianceInsightsSection = document.getElementById("compliance-insights-section");
+  var complianceInsightsCloudNote = document.getElementById("compliance-insights-cloud-note");
+  var complianceInsightsEmpty = document.getElementById("compliance-insights-empty");
+  var complianceInsightsContent = document.getElementById("compliance-insights-content");
+  var complianceInsightsCompositeScore = document.getElementById("compliance-insights-composite-score");
+  var complianceInsightsBand = document.getElementById("compliance-insights-band");
+  var complianceInsightsExpiryScore = document.getElementById("compliance-insights-expiry-score");
+  var complianceInsightsEvidenceScore = document.getElementById("compliance-insights-evidence-score");
+  var complianceInsightsActionScore = document.getElementById("compliance-insights-action-score");
+  var complianceInsightsOperational = document.getElementById("compliance-insights-operational");
+  var complianceInsightsRiskExpired = document.getElementById("compliance-insights-risk-expired");
+  var complianceInsightsRiskMissingEvidence = document.getElementById(
+    "compliance-insights-risk-missing-evidence"
+  );
+  var complianceInsightsRiskStaleEvidence = document.getElementById(
+    "compliance-insights-risk-stale-evidence"
+  );
+  var complianceInsightsRiskOverdueActions = document.getElementById(
+    "compliance-insights-risk-overdue-actions"
+  );
+  var complianceInsightsRiskExpiredActiveActions = document.getElementById(
+    "compliance-insights-risk-expired-active-actions"
+  );
+  var complianceInsightsForecastThisMonth = document.getElementById(
+    "compliance-insights-forecast-this-month"
+  );
+  var complianceInsightsForecastNextMonth = document.getElementById(
+    "compliance-insights-forecast-next-month"
+  );
+  var complianceInsightsForecast30Days = document.getElementById("compliance-insights-forecast-30-days");
+  var complianceInsightsForecast90Days = document.getElementById("compliance-insights-forecast-90-days");
   var insightHealthScore = document.getElementById("insight-health-score");
   var insightOpenActions = document.getElementById("insight-open-actions");
   var insightExpiredLinkedActions = document.getElementById("insight-expired-linked-actions");
@@ -25651,6 +25682,86 @@ This cannot be undone.`
       insightHealthScore.classList.add("health-medium");
     } else {
       insightHealthScore.classList.add("health-low");
+    }
+  }
+  function getComplianceHealthScoreBand(score) {
+    if (score >= 80) {
+      return { label: "High", bandClass: "band-high", scoreClass: "health-high" };
+    }
+    if (score >= 50) {
+      return { label: "Medium", bandClass: "band-medium", scoreClass: "health-medium" };
+    }
+    return { label: "Low", bandClass: "band-low", scoreClass: "health-low" };
+  }
+  function renderComplianceInsights() {
+    if (!complianceInsightsSection || !complianceInsightsCompositeScore) {
+      return;
+    }
+    const insights = getComplianceInsights(getAllComplianceRows(), reminderSettings);
+    const isEmpty = insights.recordCount === 0;
+    if (complianceInsightsEmpty) {
+      complianceInsightsEmpty.classList.toggle("hidden", !isEmpty);
+    }
+    if (complianceInsightsContent) {
+      complianceInsightsContent.classList.toggle("hidden", isEmpty);
+    }
+    if (complianceInsightsCloudNote) {
+      complianceInsightsCloudNote.classList.toggle("hidden", !isCloudMode());
+    }
+    if (isEmpty) {
+      return;
+    }
+    const band = getComplianceHealthScoreBand(insights.compositeHealthScore);
+    complianceInsightsCompositeScore.textContent = `${insights.compositeHealthScore}%`;
+    complianceInsightsCompositeScore.classList.remove("health-high", "health-medium", "health-low");
+    complianceInsightsCompositeScore.classList.add(band.scoreClass);
+    if (complianceInsightsBand) {
+      complianceInsightsBand.textContent = band.label;
+      complianceInsightsBand.classList.remove("band-high", "band-medium", "band-low");
+      complianceInsightsBand.classList.add(band.bandClass);
+    }
+    if (complianceInsightsExpiryScore) {
+      complianceInsightsExpiryScore.textContent = `${insights.expiryHealth.score}%`;
+    }
+    if (complianceInsightsEvidenceScore) {
+      complianceInsightsEvidenceScore.textContent = `${insights.evidenceHealth.score}%`;
+    }
+    if (complianceInsightsActionScore) {
+      complianceInsightsActionScore.textContent = `${insights.actionHealth.score}%`;
+    }
+    if (complianceInsightsOperational) {
+      if (insights.operationalHealth.available) {
+        complianceInsightsOperational.textContent = `${insights.operationalHealth.score}%`;
+      } else {
+        complianceInsightsOperational.textContent = insights.operationalHealth.note || "Not available";
+      }
+    }
+    if (complianceInsightsRiskExpired) {
+      complianceInsightsRiskExpired.textContent = insights.risk.expiredRecords;
+    }
+    if (complianceInsightsRiskMissingEvidence) {
+      complianceInsightsRiskMissingEvidence.textContent = insights.risk.missingEvidenceRecords;
+    }
+    if (complianceInsightsRiskStaleEvidence) {
+      complianceInsightsRiskStaleEvidence.textContent = insights.risk.staleEvidenceRecords;
+    }
+    if (complianceInsightsRiskOverdueActions) {
+      complianceInsightsRiskOverdueActions.textContent = insights.risk.overdueActions;
+    }
+    if (complianceInsightsRiskExpiredActiveActions) {
+      complianceInsightsRiskExpiredActiveActions.textContent = insights.risk.expiredWithActiveActions;
+    }
+    if (complianceInsightsForecastThisMonth) {
+      complianceInsightsForecastThisMonth.textContent = insights.forecast.expiringThisMonth;
+    }
+    if (complianceInsightsForecastNextMonth) {
+      complianceInsightsForecastNextMonth.textContent = insights.forecast.expiringNextMonth;
+    }
+    if (complianceInsightsForecast30Days) {
+      complianceInsightsForecast30Days.textContent = insights.forecast.expiringWithin30Days;
+    }
+    if (complianceInsightsForecast90Days) {
+      complianceInsightsForecast90Days.textContent = insights.forecast.expiringWithin90Days;
     }
   }
   function updateInsightCardActiveState() {
@@ -28123,6 +28234,7 @@ ${auditLine}` : auditLine;
     summaryDueSoon.textContent = counts.dueSoon;
     summaryExpired.textContent = counts.expired;
     renderActionSummaryCards();
+    renderComplianceInsights();
     renderManagementInsights();
     renderVisualInsights();
     updateSummaryActiveState();

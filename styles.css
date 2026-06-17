@@ -468,6 +468,206 @@ header h1 {
   margin-bottom: 1.5rem;
 }
 
+.compliance-insights-section {
+  margin-bottom: 1.5rem;
+}
+
+.compliance-insights-empty {
+  margin-top: 0.5rem;
+}
+
+.compliance-insights-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  margin-top: 1rem;
+}
+
+.compliance-insights-health-card {
+  background: #f8f9fb;
+  border: 1px solid #e8eaed;
+  border-radius: 10px;
+  padding: 1.25rem;
+  border-left: 4px solid #4361ee;
+}
+
+.compliance-insights-score-header {
+  margin-bottom: 1rem;
+}
+
+.compliance-insights-score-label {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #5a6270;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.compliance-insights-score-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  margin-top: 0.35rem;
+}
+
+.compliance-insights-composite-score {
+  font-size: 2.5rem;
+  font-weight: 700;
+  line-height: 1;
+  color: #16213e;
+}
+
+.compliance-insights-composite-score.health-high {
+  color: #1e7e34;
+}
+
+.compliance-insights-composite-score.health-medium {
+  color: #856404;
+}
+
+.compliance-insights-composite-score.health-low {
+  color: #c0392b;
+}
+
+.compliance-insights-band {
+  display: inline-block;
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+}
+
+.compliance-insights-band.band-high {
+  color: #1e7e34;
+  background: #e8f5e9;
+  border-color: #bbf7d0;
+}
+
+.compliance-insights-band.band-medium {
+  color: #856404;
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+
+.compliance-insights-band.band-low {
+  color: #c0392b;
+  background: #fff5f5;
+  border-color: #fecaca;
+}
+
+.compliance-insights-subscores {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.75rem 1rem;
+  margin: 0;
+}
+
+@media (min-width: 640px) {
+  .compliance-insights-subscores {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+.compliance-insights-subscore {
+  margin: 0;
+}
+
+.compliance-insights-subscore dt {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #5a6270;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.compliance-insights-subscore dd {
+  margin: 0.2rem 0 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #16213e;
+}
+
+.compliance-insights-subscore-operational dd {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #5a6270;
+}
+
+.compliance-insights-subheading {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #16213e;
+  margin: 0 0 0.75rem;
+}
+
+.compliance-insights-risk-strip,
+.compliance-insights-forecast-cards {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
+}
+
+@media (min-width: 640px) {
+  .compliance-insights-risk-strip {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .compliance-insights-forecast-cards {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 960px) {
+  .compliance-insights-risk-strip {
+    grid-template-columns: repeat(5, 1fr);
+  }
+
+  .compliance-insights-forecast-cards {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+.compliance-insights-metric,
+.compliance-insights-forecast-card {
+  background: #fff;
+  border: 1px solid #e8eaed;
+  border-radius: 10px;
+  padding: 0.85rem 1rem;
+}
+
+.compliance-insights-metric-risk {
+  border-top: 3px solid #c0392b;
+}
+
+.compliance-insights-metric-warning {
+  border-top: 3px solid #d97706;
+}
+
+.compliance-insights-forecast-card {
+  border-top: 3px solid #4361ee;
+}
+
+.compliance-insights-metric-label {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #5a6270;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.compliance-insights-metric-value {
+  display: block;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #16213e;
+  margin-top: 0.25rem;
+}
+
 .insight-health-card {
   display: block;
   width: 100%;

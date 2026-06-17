@@ -329,6 +329,91 @@
       </div>
     </section>
 
+    <section class="card compliance-insights-section" id="compliance-insights-section" aria-labelledby="compliance-insights-heading">
+      <h2 id="compliance-insights-heading">Compliance Insights</h2>
+      <p class="settings-hint">Composite health view from expiry, evidence, and action dimensions across all records.</p>
+      <p id="compliance-insights-cloud-note" class="settings-hint compliance-insights-cloud-note hidden">In cloud mode, evidence health is based on metadata only (document name, type, and dates).</p>
+      <p id="compliance-insights-empty" class="settings-hint compliance-insights-empty hidden">No compliance records yet. Add records to see compliance insights.</p>
+
+      <div id="compliance-insights-content" class="compliance-insights-content">
+        <div class="compliance-insights-health-card">
+          <div class="compliance-insights-score-header">
+            <span class="compliance-insights-score-label">Compliance Health Score</span>
+            <div class="compliance-insights-score-row">
+              <span id="compliance-insights-composite-score" class="compliance-insights-composite-score">0%</span>
+              <span id="compliance-insights-band" class="compliance-insights-band band-low">Low</span>
+            </div>
+          </div>
+          <dl class="compliance-insights-subscores">
+            <div class="compliance-insights-subscore">
+              <dt>Expiry Health</dt>
+              <dd id="compliance-insights-expiry-score">0%</dd>
+            </div>
+            <div class="compliance-insights-subscore">
+              <dt>Evidence Health</dt>
+              <dd id="compliance-insights-evidence-score">0%</dd>
+            </div>
+            <div class="compliance-insights-subscore">
+              <dt>Action Health</dt>
+              <dd id="compliance-insights-action-score">0%</dd>
+            </div>
+            <div class="compliance-insights-subscore compliance-insights-subscore-operational">
+              <dt>Operational Health</dt>
+              <dd id="compliance-insights-operational">Not available</dd>
+            </div>
+          </dl>
+        </div>
+
+        <div class="compliance-insights-risk">
+          <h3 class="compliance-insights-subheading">Risk Summary</h3>
+          <div class="compliance-insights-risk-strip">
+            <div class="compliance-insights-metric compliance-insights-metric-risk">
+              <span class="compliance-insights-metric-label">Expired records</span>
+              <span id="compliance-insights-risk-expired" class="compliance-insights-metric-value">0</span>
+            </div>
+            <div class="compliance-insights-metric compliance-insights-metric-warning">
+              <span class="compliance-insights-metric-label">Missing evidence</span>
+              <span id="compliance-insights-risk-missing-evidence" class="compliance-insights-metric-value">0</span>
+            </div>
+            <div class="compliance-insights-metric compliance-insights-metric-warning">
+              <span class="compliance-insights-metric-label">Stale evidence</span>
+              <span id="compliance-insights-risk-stale-evidence" class="compliance-insights-metric-value">0</span>
+            </div>
+            <div class="compliance-insights-metric compliance-insights-metric-risk">
+              <span class="compliance-insights-metric-label">Overdue actions</span>
+              <span id="compliance-insights-risk-overdue-actions" class="compliance-insights-metric-value">0</span>
+            </div>
+            <div class="compliance-insights-metric compliance-insights-metric-risk">
+              <span class="compliance-insights-metric-label">Expired records with active actions</span>
+              <span id="compliance-insights-risk-expired-active-actions" class="compliance-insights-metric-value">0</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="compliance-insights-forecast">
+          <h3 class="compliance-insights-subheading">Renewal Forecast</h3>
+          <div class="compliance-insights-forecast-cards">
+            <div class="compliance-insights-forecast-card">
+              <span class="compliance-insights-metric-label">Expiring this month</span>
+              <span id="compliance-insights-forecast-this-month" class="compliance-insights-metric-value">0</span>
+            </div>
+            <div class="compliance-insights-forecast-card">
+              <span class="compliance-insights-metric-label">Expiring next month</span>
+              <span id="compliance-insights-forecast-next-month" class="compliance-insights-metric-value">0</span>
+            </div>
+            <div class="compliance-insights-forecast-card">
+              <span class="compliance-insights-metric-label">Expiring within 30 days</span>
+              <span id="compliance-insights-forecast-30-days" class="compliance-insights-metric-value">0</span>
+            </div>
+            <div class="compliance-insights-forecast-card">
+              <span class="compliance-insights-metric-label">Expiring within 90 days</span>
+              <span id="compliance-insights-forecast-90-days" class="compliance-insights-metric-value">0</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <section class="card management-insights-section" id="management-insights-section">
       <h2>Management Insights</h2>
       <p class="settings-hint">Click an insight to preview affected records. Export Insight CSV downloads the current preview.</p>

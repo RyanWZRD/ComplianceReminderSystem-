@@ -24,10 +24,22 @@ First v5 alpha checkpoint: optional person **email** and **manager email** acros
 
 Application version: **v5.0.0-alpha.1**
 
-**Next slice:** V5-1B Reminder Template Preview
+**Next slice:** V5-1B Reminder Template Preview — Phase 1 foundation in progress
 
 Status: Alpha checkpoint complete (Phase 7)  
 Tag: not created unless explicitly requested
+
+---
+
+## V5-1B Phase 1 — Reminder Template Preview Foundation · In progress
+
+**Date:** June 2026
+
+Read-only reminder email template generation (`js/app/reminders/reminder-templates.js`) for 30/14/7-day and expired windows. Uses V5-1A contact emails when present. No UI, sending, queue, or automation.
+
+**Documentation:** [`docs/v5-1b-reminder-template-preview.md`](docs/v5-1b-reminder-template-preview.md)
+
+**Verification:** `npm run verify-reminder-template-preview`
 
 ---
 
@@ -51,9 +63,13 @@ Tag: v3.0.0
 
 # Next Planned Release
 
-## V5-1B — Reminder Template Preview
+## V5-1B — Reminder Template Preview · Phase 1 in progress
 
-Read-only preview of reminder copy and recipient context for records in 30/14/7-day windows. Uses V5-1A contact emails when present; no queue, SMTP, or automated `mark_reminder_sent`.
+Read-only preview of reminder copy and recipient context for records in 30/14/7-day and expired windows. Phase 1 ships the template module and verification only; UI and delivery follow in later phases.
+
+**Documentation:** [`docs/v5-1b-reminder-template-preview.md`](docs/v5-1b-reminder-template-preview.md)
+
+**Verification:** `npm run verify-reminder-template-preview`
 
 See [`docs/v5-automated-compliance-operations.md`](docs/v5-automated-compliance-operations.md) and [Future Releases](#future-releases) for broader v5 automation and v3.1.0 cloud follow-on.
 

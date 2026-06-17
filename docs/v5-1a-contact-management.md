@@ -199,12 +199,13 @@ Use **local mode** for CSV import checks; use **cloud + `?cloudWrites=1`** on st
 
 **Goal:** Preview reminder copy and recipient context before any automated delivery (foundation for v5 notification work).
 
-**Planned scope (indicative):**
+**Phase 1 (complete):** Read-only template module and verification — see [`docs/v5-1b-reminder-template-preview.md`](v5-1b-reminder-template-preview.md).
 
-- Read-only preview of reminder content for records in 30/14/7-day windows
+**Later phases (indicative):**
+
+- Preview UI for records in 30/14/7-day and expired windows
 - Uses person email when present; surfaces missing-email gap from V5-1A Contact Readiness
-- No queue, SMTP, or `mark_reminder_sent` automation
-- Static/browser verification pack; optional staging smoke when templates touch RPC
+- No queue, SMTP, or `mark_reminder_sent` automation until V5-0/V5-1 automation slices
 
 See [`docs/v5-automated-compliance-operations.md`](v5-automated-compliance-operations.md) for the broader v5 automation roadmap.
 

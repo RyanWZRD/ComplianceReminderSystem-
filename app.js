@@ -87,6 +87,12 @@ import {
   generateComplianceRecommendations,
   getRecommendationPriorityLabel,
 } from "./js/app/insights/recommendations-engine.js";
+import {
+  buildComplianceInsightDrilldownCsv,
+  buildComplianceInsightsSummaryCsv,
+  getComplianceInsightDrilldownFilename,
+  getComplianceInsightsSummaryFilename,
+} from "./js/app/insights/insights-export.js";
 
 console.log(
   `Compliance Reminder System ${APP_VERSION} — app.js loaded (${DATA_BACKEND} data, ${AUTH_MODE} auth)`
@@ -373,6 +379,12 @@ const complianceInsightsPreviewTableBody = document.getElementById(
 );
 const exportComplianceInsightsPreviewCsvBtn = document.getElementById(
   "export-compliance-insights-preview-csv-btn"
+);
+const exportComplianceInsightsSummaryBtn = document.getElementById(
+  "export-compliance-insights-summary-btn"
+);
+const exportComplianceInsightsDrilldownBtn = document.getElementById(
+  "export-compliance-insights-drilldown-btn"
 );
 const clearComplianceInsightsPreviewBtn = document.getElementById(
   "clear-compliance-insights-preview-btn"
@@ -2194,8 +2206,11 @@ function renderComplianceInsights() {
     }
 
     clearComplianceInsightDrilldownPreview();
+    updateComplianceInsightExportButtons(false);
     return;
   }
+
+  updateComplianceInsightExportButtons(true);
 
   const band = getComplianceHealthScoreBand(insights.compositeHealthScore);
 
@@ -2636,6 +2651,7 @@ function renderComplianceInsightDrilldownPreview(report) {
 
   updateComplianceInsightDrilldownTileActiveState();
   updateComplianceRecommendationActiveState();
+  updateComplianceInsightDrilldownExportButton();
 }
 
 function showComplianceInsightDrilldownPreview(drilldownType) {
@@ -2680,6 +2696,47 @@ function clearComplianceInsightDrilldownPreview() {
 
   updateComplianceInsightDrilldownTileActiveState();
   updateComplianceRecommendationActiveState();
+  updateComplianceInsightDrilldownExportButton();
+}
+
+function updateComplianceInsightExportButtons(hasRecords) {
+  if (exportComplianceInsightsSummaryBtn) {
+    exportComplianceInsightsSummaryBtn.disabled = !hasRecords;
+  }
+}
+
+function updateComplianceInsightDrilldownExportButton() {
+  const showDrilldownExport = Boolean(
+    currentComplianceInsightDrilldown &&
+      complianceInsightsPreview &&
+      !complianceInsightsPreview.classList.contains("hidden")
+  );
+
+  if (exportComplianceInsightsDrilldownBtn) {
+    exportComplianceInsightsDrilldownBtn.classList.toggle("hidden", !showDrilldownExport);
+    exportComplianceInsightsDrilldownBtn.disabled = !showDrilldownExport;
+  }
+}
+
+function exportComplianceInsightsSummary() {
+  const rows = getAllComplianceRows();
+  const insights = getComplianceInsights(rows, reminderSettings);
+
+  if (insights.recordCount === 0) {
+    showMessage(appMessage, "Add compliance records before exporting insights.", "error");
+    return;
+  }
+
+  const recommendations = generateComplianceRecommendations(insights, rows);
+  const generatedAt = new Date();
+  const csvContent = buildComplianceInsightsSummaryCsv(insights, recommendations, generatedAt);
+
+  downloadFile(
+    csvContent,
+    getComplianceInsightsSummaryFilename(generatedAt),
+    "text/csv"
+  );
+  showMessage(appMessage, "Compliance insights summary CSV downloaded.", "success");
 }
 
 function exportComplianceInsightDrilldownCsv() {
@@ -2688,24 +2745,15 @@ function exportComplianceInsightDrilldownCsv() {
     return;
   }
 
-  const headerRow = currentComplianceInsightDrilldown.columns
-    .map((column) => escapeCsvValue(column.label))
-    .join(",");
-  const dataRows = currentComplianceInsightDrilldown.tableRows.map((row) =>
-    currentComplianceInsightDrilldown.columns
-      .map((column) => escapeCsvValue(row[column.key] ?? ""))
-      .join(",")
-  );
-  const summaryLines = [
-    `"Insight","${escapeCsvValue(currentComplianceInsightDrilldown.title)}"`,
-    `"Generated","${escapeCsvValue(currentComplianceInsightDrilldown.generatedDisplay)}"`,
-    `"${escapeCsvValue(currentComplianceInsightDrilldown.itemLabel)} included","${currentComplianceInsightDrilldown.totalCount}"`,
-    "",
-  ];
-  const csvContent = [...summaryLines, headerRow, ...dataRows].join("\n");
+  const generatedAt = new Date();
+  const csvContent = buildComplianceInsightDrilldownCsv(currentComplianceInsightDrilldown);
 
-  downloadFile(csvContent, currentComplianceInsightDrilldown.filename, "text/csv");
-  showMessage(appMessage, "Compliance insight preview CSV downloaded.", "success");
+  downloadFile(
+    csvContent,
+    getComplianceInsightDrilldownFilename(currentComplianceInsightDrilldown.type, generatedAt),
+    "text/csv"
+  );
+  showMessage(appMessage, "Compliance insight drilldown preview CSV downloaded.", "success");
 }
 
 function refreshActiveComplianceInsightDrilldownPreview() {
@@ -2730,6 +2778,14 @@ function setupComplianceInsightsDrilldownListeners() {
   });
 
   exportComplianceInsightsPreviewCsvBtn?.addEventListener(
+    "click",
+    exportComplianceInsightDrilldownCsv
+  );
+  exportComplianceInsightsSummaryBtn?.addEventListener(
+    "click",
+    exportComplianceInsightsSummary
+  );
+  exportComplianceInsightsDrilldownBtn?.addEventListener(
     "click",
     exportComplianceInsightDrilldownCsv
   );

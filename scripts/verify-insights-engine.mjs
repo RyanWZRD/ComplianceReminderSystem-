@@ -3,7 +3,7 @@
  * V4-0B dashboard metric mappings, V4-0D drilldown filters, V4-1A recommendations,
  * V4-1B recommendation polish and thresholds, V4-1C alpha hardening, V4-2A operational health,
  * and V4-2B composite score including operational health, and V4-2C operational drilldown polish,
- * and V4-3A evidence gap tiers.
+ * and V4-3A evidence gap tiers, and V4-3C export pack.
  * Uses fixture rows only — no Supabase or browser required.
  */
 
@@ -29,6 +29,13 @@ import {
   getRecommendationPriorityLabel,
   getRecommendationPriorityOrder,
 } from "../js/app/insights/recommendations-engine.js";
+import {
+  buildComplianceInsightDrilldownCsv,
+  buildComplianceInsightsSummaryCsv,
+  formatInsightsExportDate,
+  getComplianceInsightDrilldownFilename,
+  getComplianceInsightsSummaryFilename,
+} from "../js/app/insights/insights-export.js";
 import {
   CLOUD_FIXTURE_ROWS,
   EXPECTED_HEALTHY_INSIGHTS,
@@ -705,6 +712,58 @@ const emptyRecommendations = generateComplianceRecommendations(emptyInsights, []
 
 assertEqual(emptyRecommendations.length, 0, "empty recommendations");
 
+const exportDate = new Date("2026-06-17T12:00:00");
+const summaryRecommendations = generateComplianceRecommendations(
+  computeComplianceInsights(LOCAL_FIXTURE_ROWS, FIXTURE_SETTINGS, FIXTURE_AS_OF_DATE),
+  LOCAL_FIXTURE_ROWS
+);
+const summaryCsv = buildComplianceInsightsSummaryCsv(
+  computeComplianceInsights(LOCAL_FIXTURE_ROWS, FIXTURE_SETTINGS, FIXTURE_AS_OF_DATE),
+  summaryRecommendations,
+  exportDate
+);
+
+assertEqual(
+  getComplianceInsightsSummaryFilename(exportDate),
+  "compliance-insights-summary-2026-06-17.csv",
+  "summary export filename"
+);
+assertEqual(
+  getComplianceInsightDrilldownFilename("expired-records", exportDate),
+  "compliance-insights-drilldown-expired_records-2026-06-17.csv",
+  "drilldown export filename"
+);
+assertEqual(formatInsightsExportDate(exportDate), "2026-06-17", "export date format");
+
+if (!summaryCsv.includes("Compliance health score")) {
+  console.error("FAIL summary export missing health score");
+  process.exit(1);
+}
+
+if (!summaryCsv.includes("Renew expired compliance records")) {
+  console.error("FAIL summary export missing recommendation title");
+  process.exit(1);
+}
+
+if (!summaryCsv.includes(getRecommendationPriorityLabel("critical"))) {
+  console.error("FAIL summary export missing recommendation priority");
+  process.exit(1);
+}
+
+const drilldownCsv = buildComplianceInsightDrilldownCsv({
+  title: "Expired Records",
+  generatedDisplay: "17 Jun 2026, 12:00",
+  itemLabel: "Records",
+  totalCount: 1,
+  columns: [{ key: "name", label: "Name" }],
+  tableRows: [{ name: "Jane Smith" }],
+});
+
+if (!drilldownCsv.includes("Name") || !drilldownCsv.includes("Jane Smith")) {
+  console.error("FAIL drilldown export CSV content");
+  process.exit(1);
+}
+
 console.log("Insights engine verification: OK");
 console.log(`  asOfDate=${FIXTURE_AS_OF_DATE}`);
 console.log(`  recordCount=${EXPECTED_INSIGHTS.recordCount}`);
@@ -718,3 +777,4 @@ console.log("  healthy local + cloud-shaped fixtures produce 100% scores and zer
 console.log("  operational health scenarios (notes, history, empty windows) verified");
 console.log("  operational health drilldown polish (columns, preview, summary) verified");
 console.log("  evidence gap tiers, drilldowns, and recommendations verified");
+console.log("  insights summary and drilldown export helpers verified");

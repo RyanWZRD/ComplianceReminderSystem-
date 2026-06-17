@@ -24851,6 +24851,128 @@ ${suffix}`;
     });
   }
 
+  // js/app/insights/insights-export.js
+  function escapeCsvValue(value) {
+    const text = String(value);
+    if (text.includes(",") || text.includes('"') || text.includes("\n")) {
+      return `"${text.replace(/"/g, '""')}"`;
+    }
+    return text;
+  }
+  function formatInsightsExportDate(date = /* @__PURE__ */ new Date()) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }
+  function formatInsightsGeneratedDisplay(date = /* @__PURE__ */ new Date()) {
+    return date.toLocaleString("en-GB", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit"
+    });
+  }
+  function getComplianceInsightsSummaryFilename(date = /* @__PURE__ */ new Date()) {
+    return `compliance-insights-summary-${formatInsightsExportDate(date)}.csv`;
+  }
+  function getComplianceInsightDrilldownFilename(drilldownType, date = /* @__PURE__ */ new Date()) {
+    const slug = String(drilldownType || "preview").replace(/-/g, "_");
+    return `compliance-insights-drilldown-${slug}-${formatInsightsExportDate(date)}.csv`;
+  }
+  function csvMetricLine(label, value) {
+    return `"${escapeCsvValue(label)}","${escapeCsvValue(value)}"`;
+  }
+  function getHealthBandLabel(score) {
+    if (score >= 80) {
+      return "High";
+    }
+    if (score >= 50) {
+      return "Medium";
+    }
+    return "Low";
+  }
+  function buildComplianceInsightsSummaryCsv(insights, recommendations, generatedAt = /* @__PURE__ */ new Date()) {
+    const generatedDisplay = formatInsightsGeneratedDisplay(generatedAt);
+    const operationalSummary = formatOperationalHealthSummary(insights.operationalHealth);
+    const operational = insights.operationalHealth || {};
+    const risk = insights.risk || {};
+    const evidenceGaps = insights.evidenceGaps?.byTier || {};
+    const forecast = insights.forecast || {};
+    const recs = Array.isArray(recommendations) ? recommendations : [];
+    const lines = [
+      "Metric,Value",
+      csvMetricLine("Generated", generatedDisplay),
+      csvMetricLine("Record count", insights.recordCount ?? 0),
+      csvMetricLine("Insights as of date", insights.asOfDate || ""),
+      "",
+      "Health Score,Value",
+      csvMetricLine("Compliance health score", `${insights.compositeHealthScore ?? 0}%`),
+      csvMetricLine("Health band", getHealthBandLabel(insights.compositeHealthScore ?? 0)),
+      csvMetricLine("Expiry health score", `${insights.expiryHealth?.score ?? 0}%`),
+      csvMetricLine("Evidence health score", `${insights.evidenceHealth?.score ?? 0}%`),
+      csvMetricLine("Action health score", `${insights.actionHealth?.score ?? 0}%`),
+      csvMetricLine("Operational health score", operationalSummary.scoreText),
+      csvMetricLine("Operational health detail", operationalSummary.detailText),
+      "",
+      "Key Risk,Count",
+      csvMetricLine("Expired records", risk.expiredRecords ?? 0),
+      csvMetricLine("Missing evidence records", risk.missingEvidenceRecords ?? 0),
+      csvMetricLine("Stale evidence records", risk.staleEvidenceRecords ?? 0),
+      csvMetricLine("Overdue actions", risk.overdueActions ?? 0),
+      csvMetricLine("Expired records with active actions", risk.expiredWithActiveActions ?? 0),
+      "",
+      "Evidence Gap Tier,Count",
+      csvMetricLine("Critical evidence gaps", evidenceGaps.critical ?? 0),
+      csvMetricLine("High evidence gaps", evidenceGaps.high ?? 0),
+      csvMetricLine("Stale evidence records", evidenceGaps.stale ?? 0),
+      "",
+      "Renewal Forecast,Count",
+      csvMetricLine("Expiring this month", forecast.expiringThisMonth ?? 0),
+      csvMetricLine("Expiring next month", forecast.expiringNextMonth ?? 0),
+      csvMetricLine("Expiring within 30 days", forecast.expiringWithin30Days ?? 0),
+      csvMetricLine("Expiring within 90 days", forecast.expiringWithin90Days ?? 0),
+      "",
+      "Operational Health,Value",
+      csvMetricLine("Records in active reminder windows", operational.recordsInReminderWindows ?? 0),
+      csvMetricLine("Records with reminder follow-up", operational.recordsWithReminderActivity ?? 0),
+      csvMetricLine(
+        "Records missing reminder follow-up",
+        operational.recordsMissingReminderActivity ?? 0
+      ),
+      csvMetricLine("Operational health note", operational.note || operationalSummary.title || "")
+    ];
+    if (recs.length > 0) {
+      lines.push("", "Priority,Title,Action");
+      recs.forEach((recommendation) => {
+        lines.push(
+          [
+            escapeCsvValue(getRecommendationPriorityLabel(recommendation.priority)),
+            escapeCsvValue(recommendation.title),
+            escapeCsvValue(recommendation.description)
+          ].join(",")
+        );
+      });
+    } else {
+      lines.push("", "Recommendations", "None");
+    }
+    return lines.join("\n");
+  }
+  function buildComplianceInsightDrilldownCsv(report) {
+    const headerRow = report.columns.map((column) => escapeCsvValue(column.label)).join(",");
+    const dataRows = report.tableRows.map(
+      (row) => report.columns.map((column) => escapeCsvValue(row[column.key] ?? "")).join(",")
+    );
+    const summaryLines = [
+      `"Insight","${escapeCsvValue(report.title)}"`,
+      `"Generated","${escapeCsvValue(report.generatedDisplay)}"`,
+      `"${escapeCsvValue(report.itemLabel)} included","${report.totalCount}"`,
+      ""
+    ];
+    return [...summaryLines, headerRow, ...dataRows].join("\n");
+  }
+
   // app.js
   console.log(
     `Compliance Reminder System ${APP_VERSION} \u2014 app.js loaded (${DATA_BACKEND} data, ${AUTH_MODE} auth)`
@@ -25122,6 +25244,12 @@ ${suffix}`;
   );
   var exportComplianceInsightsPreviewCsvBtn = document.getElementById(
     "export-compliance-insights-preview-csv-btn"
+  );
+  var exportComplianceInsightsSummaryBtn = document.getElementById(
+    "export-compliance-insights-summary-btn"
+  );
+  var exportComplianceInsightsDrilldownBtn = document.getElementById(
+    "export-compliance-insights-drilldown-btn"
   );
   var clearComplianceInsightsPreviewBtn = document.getElementById(
     "clear-compliance-insights-preview-btn"
@@ -26358,7 +26486,7 @@ This cannot be undone.`
       `"Records Missing Evidence","${snapshot.missingEvidence}"`,
       `"Records Expiring in Next 30 Days","${snapshot.expiringNext30Days}"`,
       "",
-      `"Generated","${escapeCsvValue(snapshot.generatedDisplay)}"`
+      `"Generated","${escapeCsvValue2(snapshot.generatedDisplay)}"`
     ];
     downloadFile(lines.join("\n"), "management-snapshot.csv", "text/csv");
     showMessage(appMessage, "Management snapshot CSV downloaded.", "success");
@@ -26515,8 +26643,10 @@ This cannot be undone.`
         complianceInsightsRecommendationsEmpty.classList.add("hidden");
       }
       clearComplianceInsightDrilldownPreview();
+      updateComplianceInsightExportButtons(false);
       return;
     }
+    updateComplianceInsightExportButtons(true);
     const band = getComplianceHealthScoreBand(insights.compositeHealthScore);
     complianceInsightsCompositeScore.textContent = `${insights.compositeHealthScore}%`;
     complianceInsightsCompositeScore.classList.remove("health-high", "health-medium", "health-low");
@@ -26834,6 +26964,7 @@ This cannot be undone.`
     }
     updateComplianceInsightDrilldownTileActiveState();
     updateComplianceRecommendationActiveState();
+    updateComplianceInsightDrilldownExportButton();
   }
   function showComplianceInsightDrilldownPreview(drilldownType) {
     if (!drilldownType || typeof drilldownType !== "string") {
@@ -26867,25 +26998,52 @@ This cannot be undone.`
     }
     updateComplianceInsightDrilldownTileActiveState();
     updateComplianceRecommendationActiveState();
+    updateComplianceInsightDrilldownExportButton();
+  }
+  function updateComplianceInsightExportButtons(hasRecords) {
+    if (exportComplianceInsightsSummaryBtn) {
+      exportComplianceInsightsSummaryBtn.disabled = !hasRecords;
+    }
+  }
+  function updateComplianceInsightDrilldownExportButton() {
+    const showDrilldownExport = Boolean(
+      currentComplianceInsightDrilldown && complianceInsightsPreview && !complianceInsightsPreview.classList.contains("hidden")
+    );
+    if (exportComplianceInsightsDrilldownBtn) {
+      exportComplianceInsightsDrilldownBtn.classList.toggle("hidden", !showDrilldownExport);
+      exportComplianceInsightsDrilldownBtn.disabled = !showDrilldownExport;
+    }
+  }
+  function exportComplianceInsightsSummary() {
+    const rows = getAllComplianceRows();
+    const insights = getComplianceInsights(rows, reminderSettings);
+    if (insights.recordCount === 0) {
+      showMessage(appMessage, "Add compliance records before exporting insights.", "error");
+      return;
+    }
+    const recommendations = generateComplianceRecommendations(insights, rows);
+    const generatedAt = /* @__PURE__ */ new Date();
+    const csvContent = buildComplianceInsightsSummaryCsv(insights, recommendations, generatedAt);
+    downloadFile(
+      csvContent,
+      getComplianceInsightsSummaryFilename(generatedAt),
+      "text/csv"
+    );
+    showMessage(appMessage, "Compliance insights summary CSV downloaded.", "success");
   }
   function exportComplianceInsightDrilldownCsv() {
     if (!currentComplianceInsightDrilldown) {
       showMessage(appMessage, "Select a compliance insight tile to preview first.", "error");
       return;
     }
-    const headerRow = currentComplianceInsightDrilldown.columns.map((column) => escapeCsvValue(column.label)).join(",");
-    const dataRows = currentComplianceInsightDrilldown.tableRows.map(
-      (row) => currentComplianceInsightDrilldown.columns.map((column) => escapeCsvValue(row[column.key] ?? "")).join(",")
+    const generatedAt = /* @__PURE__ */ new Date();
+    const csvContent = buildComplianceInsightDrilldownCsv(currentComplianceInsightDrilldown);
+    downloadFile(
+      csvContent,
+      getComplianceInsightDrilldownFilename(currentComplianceInsightDrilldown.type, generatedAt),
+      "text/csv"
     );
-    const summaryLines = [
-      `"Insight","${escapeCsvValue(currentComplianceInsightDrilldown.title)}"`,
-      `"Generated","${escapeCsvValue(currentComplianceInsightDrilldown.generatedDisplay)}"`,
-      `"${escapeCsvValue(currentComplianceInsightDrilldown.itemLabel)} included","${currentComplianceInsightDrilldown.totalCount}"`,
-      ""
-    ];
-    const csvContent = [...summaryLines, headerRow, ...dataRows].join("\n");
-    downloadFile(csvContent, currentComplianceInsightDrilldown.filename, "text/csv");
-    showMessage(appMessage, "Compliance insight preview CSV downloaded.", "success");
+    showMessage(appMessage, "Compliance insight drilldown preview CSV downloaded.", "success");
   }
   function refreshActiveComplianceInsightDrilldownPreview() {
     if (!currentComplianceInsightDrilldown?.type || !complianceInsightsPreview || complianceInsightsPreview.classList.contains("hidden")) {
@@ -26902,6 +27060,14 @@ This cannot be undone.`
       });
     });
     exportComplianceInsightsPreviewCsvBtn?.addEventListener(
+      "click",
+      exportComplianceInsightDrilldownCsv
+    );
+    exportComplianceInsightsSummaryBtn?.addEventListener(
+      "click",
+      exportComplianceInsightsSummary
+    );
+    exportComplianceInsightsDrilldownBtn?.addEventListener(
       "click",
       exportComplianceInsightDrilldownCsv
     );
@@ -26978,13 +27144,13 @@ This cannot be undone.`
       showMessage(appMessage, "Select an insight to preview first.", "error");
       return;
     }
-    const headerRow = currentInsight.columns.map((column) => escapeCsvValue(column.label)).join(",");
+    const headerRow = currentInsight.columns.map((column) => escapeCsvValue2(column.label)).join(",");
     const dataRows = currentInsight.tableRows.map(
-      (row) => currentInsight.columns.map((column) => escapeCsvValue(row[column.key] ?? "")).join(",")
+      (row) => currentInsight.columns.map((column) => escapeCsvValue2(row[column.key] ?? "")).join(",")
     );
     const summaryLines = [
-      `"Insight","${escapeCsvValue(currentInsight.title)}"`,
-      `"Generated","${escapeCsvValue(currentInsight.generatedDisplay)}"`,
+      `"Insight","${escapeCsvValue2(currentInsight.title)}"`,
+      `"Generated","${escapeCsvValue2(currentInsight.generatedDisplay)}"`,
       `"Records included","${currentInsight.totalCount}"`,
       ""
     ];
@@ -28415,13 +28581,13 @@ This cannot be undone.`
       showMessage(appMessage, "Select an action metric to preview first.", "error");
       return;
     }
-    const headerRow = currentActionDashboard.columns.map((column) => escapeCsvValue(column.label)).join(",");
+    const headerRow = currentActionDashboard.columns.map((column) => escapeCsvValue2(column.label)).join(",");
     const dataRows = currentActionDashboard.tableRows.map(
-      (row) => currentActionDashboard.columns.map((column) => escapeCsvValue(row[column.key] ?? "")).join(",")
+      (row) => currentActionDashboard.columns.map((column) => escapeCsvValue2(row[column.key] ?? "")).join(",")
     );
     const summaryLines = [
-      `"Insight","${escapeCsvValue(currentActionDashboard.title)}"`,
-      `"Generated","${escapeCsvValue(currentActionDashboard.generatedDisplay)}"`,
+      `"Insight","${escapeCsvValue2(currentActionDashboard.title)}"`,
+      `"Generated","${escapeCsvValue2(currentActionDashboard.generatedDisplay)}"`,
       `"Actions included","${currentActionDashboard.totalCount}"`,
       ""
     ];
@@ -30215,7 +30381,7 @@ ${auditLine}` : auditLine;
   function escapeHtml(value) {
     return String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   }
-  function escapeCsvValue(value) {
+  function escapeCsvValue2(value) {
     const text = String(value);
     if (text.includes(",") || text.includes('"') || text.includes("\n")) {
       return `"${text.replace(/"/g, '""')}"`;
@@ -30544,16 +30710,16 @@ ${auditLine}` : auditLine;
       showMessage(appMessage, "Generate a report first.", "error");
       return;
     }
-    const headerRow = currentReport.columns.map((column) => escapeCsvValue(column.label)).join(",");
+    const headerRow = currentReport.columns.map((column) => escapeCsvValue2(column.label)).join(",");
     const dataRows = currentReport.tableRows.map(
-      (row) => currentReport.columns.map((column) => escapeCsvValue(row[column.key] ?? "")).join(",")
+      (row) => currentReport.columns.map((column) => escapeCsvValue2(row[column.key] ?? "")).join(",")
     );
     const summaryLines = [];
     if (currentReport.type === REPORT_TYPES.EVIDENCE_COVERAGE && currentReport.summary) {
       const summary = currentReport.summary;
       summaryLines.push(
-        `"Report","${escapeCsvValue(currentReport.title)}"`,
-        `"Generated","${escapeCsvValue(currentReport.generatedDisplay)}"`,
+        `"Report","${escapeCsvValue2(currentReport.title)}"`,
+        `"Generated","${escapeCsvValue2(currentReport.generatedDisplay)}"`,
         `"Total compliance records","${summary.total}"`,
         `"Records with evidence","${summary.withEvidence}"`,
         `"Records without evidence","${summary.withoutEvidence}"`,
@@ -30562,8 +30728,8 @@ ${auditLine}` : auditLine;
       );
     } else {
       summaryLines.push(
-        `"Report","${escapeCsvValue(currentReport.title)}"`,
-        `"Generated","${escapeCsvValue(currentReport.generatedDisplay)}"`,
+        `"Report","${escapeCsvValue2(currentReport.title)}"`,
+        `"Generated","${escapeCsvValue2(currentReport.generatedDisplay)}"`,
         `"Total records included","${currentReport.totalCount}"`,
         ""
       );
@@ -30611,18 +30777,18 @@ ${auditLine}` : auditLine;
     const evidenceSummary = getEvidenceSummary(row.evidence);
     const actionSummary = getActionSummary(row.actions);
     return [
-      escapeCsvValue(row.name),
-      escapeCsvValue(row.role),
-      escapeCsvValue(row.complianceType),
-      escapeCsvValue(getRenewalCycleLabel(row.renewalCycle)),
-      escapeCsvValue(formatDate(row.expiryDate)),
-      escapeCsvValue(status.label),
-      escapeCsvValue(getReminderStatusLabel(row.expiryDate, row.notes)),
-      escapeCsvValue(String(evidenceSummary.count)),
-      escapeCsvValue(evidenceSummary.latestAdded),
-      escapeCsvValue(String(actionSummary.activeCount)),
-      escapeCsvValue(String(actionSummary.completedCount)),
-      escapeCsvValue(row.notes || "")
+      escapeCsvValue2(row.name),
+      escapeCsvValue2(row.role),
+      escapeCsvValue2(row.complianceType),
+      escapeCsvValue2(getRenewalCycleLabel(row.renewalCycle)),
+      escapeCsvValue2(formatDate(row.expiryDate)),
+      escapeCsvValue2(status.label),
+      escapeCsvValue2(getReminderStatusLabel(row.expiryDate, row.notes)),
+      escapeCsvValue2(String(evidenceSummary.count)),
+      escapeCsvValue2(evidenceSummary.latestAdded),
+      escapeCsvValue2(String(actionSummary.activeCount)),
+      escapeCsvValue2(String(actionSummary.completedCount)),
+      escapeCsvValue2(row.notes || "")
     ].join(",");
   }
   function buildComplianceCsvContent(rows) {

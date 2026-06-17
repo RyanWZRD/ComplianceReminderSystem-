@@ -472,6 +472,25 @@ header h1 {
   margin-bottom: 1.5rem;
 }
 
+.compliance-insights-section-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  margin-bottom: 0.35rem;
+}
+
+.compliance-insights-section-header h2 {
+  margin: 0;
+}
+
+.compliance-insights-section-actions {
+  margin-left: auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
 .compliance-insights-empty {
   margin-top: 0.5rem;
 }

@@ -330,7 +330,13 @@
     </section>
 
     <section class="card compliance-insights-section" id="compliance-insights-section" aria-labelledby="compliance-insights-heading">
-      <h2 id="compliance-insights-heading">Compliance Insights</h2>
+      <div class="compliance-insights-section-header">
+        <h2 id="compliance-insights-heading">Compliance Insights</h2>
+        <div class="compliance-insights-section-actions no-print">
+          <button type="button" id="export-compliance-insights-summary-btn" class="export-btn" disabled>Export Insights Summary</button>
+          <button type="button" id="export-compliance-insights-drilldown-btn" class="export-btn hidden" disabled>Export Drilldown Preview</button>
+        </div>
+      </div>
       <p class="settings-hint">Read-only register health across expiry, evidence, actions, and reminder follow-up. Select a tile or recommendation to preview matching records.</p>
       <p id="compliance-insights-cloud-note" class="settings-hint compliance-insights-cloud-note hidden">In cloud mode, evidence health is based on metadata only (document name, type, and dates).</p>
       <p id="compliance-insights-empty" class="settings-hint compliance-insights-empty hidden">No compliance records yet. Add records to see compliance insights.</p>
@@ -489,7 +495,7 @@
             </table>
           </div>
           <div class="insight-preview-actions no-print">
-            <button type="button" id="export-compliance-insights-preview-csv-btn" class="export-btn">Export Preview CSV</button>
+            <button type="button" id="export-compliance-insights-preview-csv-btn" class="export-btn">Export Drilldown Preview</button>
             <button type="button" id="clear-compliance-insights-preview-btn" class="quick-action-btn">Clear Preview</button>
           </div>
         </div>

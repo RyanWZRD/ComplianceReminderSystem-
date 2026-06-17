@@ -16,6 +16,7 @@ Application version is **v4.0.0-alpha** for the Compliance Insights MVP alpha mi
 | Renewal forecast | `js/app/insights/metrics-forecast.js` | Expiry windows and reminder counts |
 | Recommendations | `js/app/insights/recommendations-engine.js` | Prioritized suggested actions |
 | Drilldowns | `js/app/insights/compliance-insights-drilldowns.js` | Filters and preview tables |
+| Export pack | `js/app/insights/insights-export.js` | Summary and drilldown preview CSV builders |
 | Dashboard wiring | `js/app/insights/compliance-insights.js`, `app.js` | Cache, legacy metric mappings, UI |
 
 Verification (no browser or Supabase required):
@@ -67,6 +68,38 @@ Each drilldown preview includes:
 - **CSV export** — unchanged
 
 Recommendation items show **priority badges** (Critical, High priority, Medium, Low) using existing CSS colour classes — no icons or new assets.
+
+## Export pack (V4-3C)
+
+Compliance Insights supports read-only CSV exports from the section header and drilldown preview panel. Exports use **computed insight data only** — they do not create, update, or delete records, actions, evidence, settings, or history.
+
+| Export | Button | When available | Filename pattern |
+|--------|--------|----------------|------------------|
+| **Insights summary** | Export Insights Summary | Register has at least one compliance record | `compliance-insights-summary-YYYY-MM-DD.csv` |
+| **Drilldown preview** | Export Drilldown Preview | A drilldown preview is open (header button and preview panel button) | `compliance-insights-drilldown-{type}-YYYY-MM-DD.csv` |
+
+### Insights summary export
+
+Downloads a single CSV with metadata and counts from the current dashboard refresh:
+
+- Generated date/time and insights as-of date
+- Composite health score and band (High / Medium / Low)
+- Expiry, evidence, action, and operational health sub-scores
+- Key risk counts (expired, missing evidence, stale evidence, overdue actions, expired with active actions)
+- Evidence gap tier counts (critical, high, stale)
+- Renewal forecast counts (this month, next month, within 30 days, within 90 days)
+- Operational health summary (records in windows, with follow-up, missing follow-up, note)
+- Recommendations table with priority, title, and action text (description)
+
+The summary export does **not** include raw record notes, evidence file content, or other sensitive fields beyond what is already shown in the Compliance Insights UI.
+
+### Drilldown preview export
+
+Exports the **currently open** drilldown preview using the same preview columns shown in the table (name, role, compliance type, expiry, status, evidence counts, action fields, etc.). The CSV includes a short header block (insight title, generated time, row count) followed by the preview data rows.
+
+Both drilldown export buttons (section header and preview panel) call the same export helper and produce identical output for the active preview.
+
+Implementation: `js/app/insights/insights-export.js` (`buildComplianceInsightsSummaryCsv`, `buildComplianceInsightDrilldownCsv`).
 
 ## Health score
 
@@ -271,4 +304,4 @@ Some older dashboard cards intentionally use different formulas. See comments in
 
 ## V4 development status
 
-See [ROADMAP.md](../ROADMAP.md#v4--compliance-insights-in-development) for slice progress (V4-0A through V4-3B and beyond).
+See [ROADMAP.md](../ROADMAP.md#v4--compliance-insights-in-development) for slice progress (V4-0A through V4-3C and beyond).

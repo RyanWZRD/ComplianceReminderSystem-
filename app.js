@@ -41,6 +41,10 @@ import {
   validateCustomRenewalDate,
 } from "./js/data/renew-compliance.js";
 import { validateEditComplianceRecordInput } from "./js/data/edit-compliance-record.js";
+import {
+  normalizePersonContactFields,
+  validatePersonContact,
+} from "./js/data/email.js";
 import { buildRecordDeletedHistoryDescription } from "./js/data/archive-compliance-record.js";
 import {
   ACTION_STATUSES,
@@ -3346,6 +3350,14 @@ function renderRecordWorkspace() {
           <dd>${escapeHtml(person.role)}</dd>
         </div>
         <div class="workspace-info-item">
+          <dt>Email</dt>
+          <dd>${escapeHtml(person.email || "—")}</dd>
+        </div>
+        <div class="workspace-info-item">
+          <dt>Manager Email</dt>
+          <dd>${escapeHtml(person.managerEmail || "—")}</dd>
+        </div>
+        <div class="workspace-info-item">
           <dt>Compliance Type</dt>
           <dd>${escapeHtml(record.complianceType)}</dd>
         </div>
@@ -5209,6 +5221,23 @@ function getActiveReminderDays() {
   return activeDays;
 }
 
+function getContactValidationMessage(contactCheck) {
+  const label = contactCheck.field === "managerEmail" ? "Manager email" : "Email";
+  return `${label} format is invalid.`;
+}
+
+function getContactFieldValidationMessage(field) {
+  if (field === "manager_email" || field === "managerEmail") {
+    return "Manager email format is invalid.";
+  }
+
+  if (field === "email") {
+    return "Email format is invalid.";
+  }
+
+  return null;
+}
+
 function validatePersonInput(name, role, complianceType, dbsExpiry) {
   const errors = [];
   const trimmedName = name.trim();
@@ -6482,6 +6511,8 @@ function startEdit(personId, recordId) {
   editRecordIdInput.value = record.id;
   document.getElementById("edit-name").value = person.name;
   document.getElementById("edit-role").value = person.role;
+  document.getElementById("edit-email").value = person.email || "";
+  document.getElementById("edit-manager-email").value = person.managerEmail || "";
   document.getElementById("edit-compliance-type").value = record.complianceType;
   document.getElementById("edit-dbs-expiry").value = record.expiryDate;
   document.getElementById("edit-renewal-cycle").value = record.renewalCycle || RENEWAL_CYCLE_MANUAL;
@@ -6508,11 +6539,21 @@ function updatePerson(
   complianceType,
   expiryDate,
   notes,
-  renewalCycle
+  renewalCycle,
+  email,
+  managerEmail
 ) {
   if (rejectIfReadOnly()) {
     return;
   }
+
+  const contactCheck = validatePersonContact({ email, managerEmail });
+
+  if (!contactCheck.ok) {
+    showMessage(editFormMessage, getContactValidationMessage(contactCheck), "error");
+    return false;
+  }
+
   const validation = validatePersonInput(name, role, complianceType, expiryDate);
 
   if (!validation.valid) {
@@ -6525,6 +6566,8 @@ function updatePerson(
 
   const { person, record } = result;
   const normalizedCycle = repository.normalizeRenewalCycle(renewalCycle);
+  const normalizedContact = normalizePersonContactFields({ email, managerEmail });
+  const previousContact = normalizePersonContactFields(person);
   const previousCycle = repository.normalizeRenewalCycle(record.renewalCycle);
   const changes = [];
   let cycleChanged = false;
@@ -6534,6 +6577,12 @@ function updatePerson(
   }
   if (person.role !== validation.role) {
     changes.push(`role to "${validation.role}"`);
+  }
+  if (previousContact.email !== normalizedContact.email) {
+    changes.push("email updated");
+  }
+  if (previousContact.managerEmail !== normalizedContact.managerEmail) {
+    changes.push("manager email updated");
   }
   if (record.complianceType !== validation.complianceType) {
     changes.push(`type to ${validation.complianceType}`);
@@ -6557,6 +6606,8 @@ function updatePerson(
 
   person.name = validation.name;
   person.role = validation.role;
+  person.email = normalizedContact.email;
+  person.managerEmail = normalizedContact.managerEmail;
   record.complianceType = validation.complianceType;
   record.expiryDate = normalizedExpiry;
   record.notes = notes;
@@ -6596,7 +6647,9 @@ async function persistUpdateComplianceRecord(
   role,
   complianceType,
   expiryDate,
-  renewalCycle
+  renewalCycle,
+  email,
+  managerEmail
 ) {
   if (!canEditComplianceRecord()) {
     notifyEditComplianceRecordBlocked();
@@ -6613,6 +6666,8 @@ async function persistUpdateComplianceRecord(
     complianceType: repository.normalizeComplianceType(complianceType),
     expiryDate,
     renewalCycle: normalizedCycle,
+    email,
+    managerEmail,
   });
 
   if (!result.ok) {
@@ -6621,9 +6676,11 @@ async function persistUpdateComplianceRecord(
   }
 
   if (result.status === "validation_error") {
+    const contactMessage = getContactFieldValidationMessage(result.field);
     showMessage(
       editFormMessage,
-      "Could not update record. Check name, role, compliance type, and expiry date.",
+      contactMessage ||
+        "Could not update record. Check name, role, compliance type, and expiry date.",
       "error"
     );
     return;
@@ -8074,10 +8131,19 @@ function formatSkipReasons(skipReasons) {
 }
 
 // Add a compliance record — reuse an existing person when the name matches
-function addComplianceRecord(name, role, complianceType, expiryDate, renewalCycle) {
+function addComplianceRecord(
+  name,
+  role,
+  complianceType,
+  expiryDate,
+  renewalCycle,
+  email,
+  managerEmail
+) {
   if (rejectIfReadOnly()) {
     return;
   }
+  const contact = normalizePersonContactFields({ email, managerEmail });
   const record = repository.createComplianceRecord(
     {
       complianceType,
@@ -8097,6 +8163,8 @@ function addComplianceRecord(name, role, complianceType, expiryDate, renewalCycl
   if (existingPerson) {
     existingPerson.name = name;
     existingPerson.role = role;
+    existingPerson.email = contact.email;
+    existingPerson.managerEmail = contact.managerEmail;
     existingPerson.complianceRecords.push(record);
     appendHistoryEntry(
       record,
@@ -8110,6 +8178,8 @@ function addComplianceRecord(name, role, complianceType, expiryDate, renewalCycl
     id: repository.nextPersonId,
     name,
     role,
+    email: contact.email,
+    managerEmail: contact.managerEmail,
     complianceRecords: [record],
   });
   repository.nextPersonId += 1;
@@ -8128,7 +8198,9 @@ async function persistAddComplianceRecord(
   role,
   complianceType,
   expiryDate,
-  renewalCycle
+  renewalCycle,
+  email,
+  managerEmail
 ) {
   if (!canAddComplianceRecord()) {
     notifyAddComplianceRecordBlocked();
@@ -8146,6 +8218,8 @@ async function persistAddComplianceRecord(
     complianceType: repository.normalizeComplianceType(complianceType),
     expiryDate,
     renewalCycle: normalizedCycle,
+    email,
+    managerEmail,
   });
 
   if (!result.ok) {
@@ -8154,9 +8228,11 @@ async function persistAddComplianceRecord(
   }
 
   if (result.status === "validation_error") {
+    const contactMessage = getContactFieldValidationMessage(result.field);
     showMessage(
       addFormMessage,
-      "Could not add record. Check name, role, compliance type, and expiry date.",
+      contactMessage ||
+        "Could not add record. Check name, role, compliance type, and expiry date.",
       "error"
     );
     return;
@@ -8395,10 +8471,19 @@ if (editForm) {
   const recordId = parseEntityId(editRecordIdInput.value);
   const name = document.getElementById("edit-name").value.trim();
   const role = document.getElementById("edit-role").value.trim();
+  const email = document.getElementById("edit-email").value;
+  const managerEmail = document.getElementById("edit-manager-email").value;
   const complianceType = document.getElementById("edit-compliance-type").value;
   const expiryDate = document.getElementById("edit-dbs-expiry").value;
   const notes = document.getElementById("edit-notes").value;
   const renewalCycle = document.getElementById("edit-renewal-cycle").value;
+
+  const contactCheck = validatePersonContact({ email, managerEmail });
+
+  if (!contactCheck.ok) {
+    showMessage(editFormMessage, getContactValidationMessage(contactCheck), "error");
+    return;
+  }
 
   if (isCloudMode()) {
     if (!canEditComplianceRecord()) {
@@ -8428,7 +8513,9 @@ if (editForm) {
       validation.role,
       validation.complianceType,
       validation.expiryDate,
-      validation.renewalCycle
+      validation.renewalCycle,
+      email,
+      managerEmail
     );
     return;
   }
@@ -8445,7 +8532,9 @@ if (editForm) {
     complianceType,
     expiryDate,
     notes,
-    renewalCycle
+    renewalCycle,
+    email,
+    managerEmail
   );
   });
 }
@@ -8549,9 +8638,21 @@ if (form) {
 
   const nameInput = document.getElementById("name");
   const roleInput = document.getElementById("role");
+  const emailInput = document.getElementById("email");
+  const managerEmailInput = document.getElementById("manager-email");
   const complianceTypeInput = document.getElementById("compliance-type");
   const expiryInput = document.getElementById("dbs-expiry");
   const renewalCycleInput = document.getElementById("renewal-cycle");
+
+  const contactCheck = validatePersonContact({
+    email: emailInput.value,
+    managerEmail: managerEmailInput.value,
+  });
+
+  if (!contactCheck.ok) {
+    showMessage(addFormMessage, getContactValidationMessage(contactCheck), "error");
+    return;
+  }
 
   const validation = validatePersonInput(
     nameInput.value,
@@ -8578,7 +8679,9 @@ if (form) {
       validation.role,
       validation.complianceType,
       normalizeExpiryDate(validation.dbsExpiry),
-      renewalCycleInput.value
+      renewalCycleInput.value,
+      emailInput.value,
+      managerEmailInput.value
     );
     return;
   }
@@ -8592,7 +8695,9 @@ if (form) {
     validation.role,
     validation.complianceType,
     normalizeExpiryDate(validation.dbsExpiry),
-    renewalCycleInput.value
+    renewalCycleInput.value,
+    emailInput.value,
+    managerEmailInput.value
   );
 
   savePeople();

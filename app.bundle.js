@@ -21549,6 +21549,17 @@ ${suffix}`;
     }
     return EMAIL_FORMAT_PATTERN.test(normalized);
   }
+  function validatePersonContact(contact = {}) {
+    const normalizedEmail = normalizeEmail(contact.email);
+    if (normalizedEmail !== "" && !EMAIL_FORMAT_PATTERN.test(normalizedEmail)) {
+      return { ok: false, field: "email", reason: "invalid_format" };
+    }
+    const normalizedManagerEmail = normalizeEmail(contact.managerEmail);
+    if (normalizedManagerEmail !== "" && !EMAIL_FORMAT_PATTERN.test(normalizedManagerEmail)) {
+      return { ok: false, field: "managerEmail", reason: "invalid_format" };
+    }
+    return { ok: true };
+  }
   function normalizePersonContactFields(source = {}) {
     const email = typeof source.email === "string" ? normalizeEmail(source.email) : "";
     const managerEmail = typeof source.managerEmail === "string" ? normalizeEmail(source.managerEmail) : typeof source.manager_email === "string" ? normalizeEmail(source.manager_email) : "";
@@ -27527,6 +27538,14 @@ This cannot be undone.`
           <dd>${escapeHtml(person.role)}</dd>
         </div>
         <div class="workspace-info-item">
+          <dt>Email</dt>
+          <dd>${escapeHtml(person.email || "\u2014")}</dd>
+        </div>
+        <div class="workspace-info-item">
+          <dt>Manager Email</dt>
+          <dd>${escapeHtml(person.managerEmail || "\u2014")}</dd>
+        </div>
+        <div class="workspace-info-item">
           <dt>Compliance Type</dt>
           <dd>${escapeHtml(record.complianceType)}</dd>
         </div>
@@ -28943,6 +28962,19 @@ This cannot be undone.`
     }
     return activeDays;
   }
+  function getContactValidationMessage(contactCheck) {
+    const label = contactCheck.field === "managerEmail" ? "Manager email" : "Email";
+    return `${label} format is invalid.`;
+  }
+  function getContactFieldValidationMessage(field) {
+    if (field === "manager_email" || field === "managerEmail") {
+      return "Manager email format is invalid.";
+    }
+    if (field === "email") {
+      return "Email format is invalid.";
+    }
+    return null;
+  }
   function validatePersonInput(name, role, complianceType, dbsExpiry) {
     const errors = [];
     const trimmedName = name.trim();
@@ -29895,6 +29927,8 @@ ${auditLine}` : auditLine;
     editRecordIdInput.value = record.id;
     document.getElementById("edit-name").value = person.name;
     document.getElementById("edit-role").value = person.role;
+    document.getElementById("edit-email").value = person.email || "";
+    document.getElementById("edit-manager-email").value = person.managerEmail || "";
     document.getElementById("edit-compliance-type").value = record.complianceType;
     document.getElementById("edit-dbs-expiry").value = record.expiryDate;
     document.getElementById("edit-renewal-cycle").value = record.renewalCycle || RENEWAL_CYCLE_MANUAL;
@@ -29908,9 +29942,14 @@ ${auditLine}` : auditLine;
     editForm.reset();
     hideMessage(editFormMessage);
   }
-  function updatePerson(personId, recordId, name, role, complianceType, expiryDate, notes, renewalCycle) {
+  function updatePerson(personId, recordId, name, role, complianceType, expiryDate, notes, renewalCycle, email, managerEmail) {
     if (rejectIfReadOnly()) {
       return;
+    }
+    const contactCheck = validatePersonContact({ email, managerEmail });
+    if (!contactCheck.ok) {
+      showMessage(editFormMessage, getContactValidationMessage(contactCheck), "error");
+      return false;
     }
     const validation = validatePersonInput(name, role, complianceType, expiryDate);
     if (!validation.valid) {
@@ -29921,6 +29960,8 @@ ${auditLine}` : auditLine;
     if (!result) return false;
     const { person, record } = result;
     const normalizedCycle = repository.normalizeRenewalCycle(renewalCycle);
+    const normalizedContact = normalizePersonContactFields({ email, managerEmail });
+    const previousContact = normalizePersonContactFields(person);
     const previousCycle = repository.normalizeRenewalCycle(record.renewalCycle);
     const changes = [];
     let cycleChanged = false;
@@ -29929,6 +29970,12 @@ ${auditLine}` : auditLine;
     }
     if (person.role !== validation.role) {
       changes.push(`role to "${validation.role}"`);
+    }
+    if (previousContact.email !== normalizedContact.email) {
+      changes.push("email updated");
+    }
+    if (previousContact.managerEmail !== normalizedContact.managerEmail) {
+      changes.push("manager email updated");
     }
     if (record.complianceType !== validation.complianceType) {
       changes.push(`type to ${validation.complianceType}`);
@@ -29950,6 +29997,8 @@ ${auditLine}` : auditLine;
     }
     person.name = validation.name;
     person.role = validation.role;
+    person.email = normalizedContact.email;
+    person.managerEmail = normalizedContact.managerEmail;
     record.complianceType = validation.complianceType;
     record.expiryDate = normalizedExpiry;
     record.notes = notes;
@@ -29978,7 +30027,7 @@ ${auditLine}` : auditLine;
     renderTable();
     return true;
   }
-  async function persistUpdateComplianceRecord(personId, recordId, name, role, complianceType, expiryDate, renewalCycle) {
+  async function persistUpdateComplianceRecord(personId, recordId, name, role, complianceType, expiryDate, renewalCycle, email, managerEmail) {
     if (!canEditComplianceRecord()) {
       notifyEditComplianceRecordBlocked();
       return;
@@ -29991,16 +30040,19 @@ ${auditLine}` : auditLine;
       role,
       complianceType: repository.normalizeComplianceType(complianceType),
       expiryDate,
-      renewalCycle: normalizedCycle
+      renewalCycle: normalizedCycle,
+      email,
+      managerEmail
     });
     if (!result.ok) {
       showMessage(editFormMessage, result.error || "Could not update record.", "error");
       return;
     }
     if (result.status === "validation_error") {
+      const contactMessage = getContactFieldValidationMessage(result.field);
       showMessage(
         editFormMessage,
-        "Could not update record. Check name, role, compliance type, and expiry date.",
+        contactMessage || "Could not update record. Check name, role, compliance type, and expiry date.",
         "error"
       );
       return;
@@ -31133,10 +31185,11 @@ Your current data will be overwritten. Continue?`
     }
     return parts.join(", ");
   }
-  function addComplianceRecord(name, role, complianceType, expiryDate, renewalCycle) {
+  function addComplianceRecord(name, role, complianceType, expiryDate, renewalCycle, email, managerEmail) {
     if (rejectIfReadOnly()) {
       return;
     }
+    const contact = normalizePersonContactFields({ email, managerEmail });
     const record = repository.createComplianceRecord(
       {
         complianceType,
@@ -31151,6 +31204,8 @@ Your current data will be overwritten. Continue?`
     if (existingPerson) {
       existingPerson.name = name;
       existingPerson.role = role;
+      existingPerson.email = contact.email;
+      existingPerson.managerEmail = contact.managerEmail;
       existingPerson.complianceRecords.push(record);
       appendHistoryEntry(
         record,
@@ -31163,6 +31218,8 @@ Your current data will be overwritten. Continue?`
       id: repository.nextPersonId,
       name,
       role,
+      email: contact.email,
+      managerEmail: contact.managerEmail,
       complianceRecords: [record]
     });
     repository.nextPersonId += 1;
@@ -31173,7 +31230,7 @@ Your current data will be overwritten. Continue?`
     );
     return { isNewPerson: true, record };
   }
-  async function persistAddComplianceRecord(name, role, complianceType, expiryDate, renewalCycle) {
+  async function persistAddComplianceRecord(name, role, complianceType, expiryDate, renewalCycle, email, managerEmail) {
     if (!canAddComplianceRecord()) {
       notifyAddComplianceRecordBlocked();
       return;
@@ -31184,16 +31241,19 @@ Your current data will be overwritten. Continue?`
       role,
       complianceType: repository.normalizeComplianceType(complianceType),
       expiryDate,
-      renewalCycle: normalizedCycle
+      renewalCycle: normalizedCycle,
+      email,
+      managerEmail
     });
     if (!result.ok) {
       showMessage(appMessage, result.error || "Could not add compliance record.", "error");
       return;
     }
     if (result.status === "validation_error") {
+      const contactMessage = getContactFieldValidationMessage(result.field);
       showMessage(
         addFormMessage,
-        "Could not add record. Check name, role, compliance type, and expiry date.",
+        contactMessage || "Could not add record. Check name, role, compliance type, and expiry date.",
         "error"
       );
       return;
@@ -31377,10 +31437,17 @@ Your current data will be overwritten. Continue?`
       const recordId = parseEntityId(editRecordIdInput.value);
       const name = document.getElementById("edit-name").value.trim();
       const role = document.getElementById("edit-role").value.trim();
+      const email = document.getElementById("edit-email").value;
+      const managerEmail = document.getElementById("edit-manager-email").value;
       const complianceType = document.getElementById("edit-compliance-type").value;
       const expiryDate = document.getElementById("edit-dbs-expiry").value;
       const notes = document.getElementById("edit-notes").value;
       const renewalCycle = document.getElementById("edit-renewal-cycle").value;
+      const contactCheck = validatePersonContact({ email, managerEmail });
+      if (!contactCheck.ok) {
+        showMessage(editFormMessage, getContactValidationMessage(contactCheck), "error");
+        return;
+      }
       if (isCloudMode()) {
         if (!canEditComplianceRecord()) {
           notifyEditComplianceRecordBlocked();
@@ -31405,7 +31472,9 @@ Your current data will be overwritten. Continue?`
           validation.role,
           validation.complianceType,
           validation.expiryDate,
-          validation.renewalCycle
+          validation.renewalCycle,
+          email,
+          managerEmail
         );
         return;
       }
@@ -31420,7 +31489,9 @@ Your current data will be overwritten. Continue?`
         complianceType,
         expiryDate,
         notes,
-        renewalCycle
+        renewalCycle,
+        email,
+        managerEmail
       );
     });
   }
@@ -31503,9 +31574,19 @@ Your current data will be overwritten. Continue?`
       event.preventDefault();
       const nameInput = document.getElementById("name");
       const roleInput = document.getElementById("role");
+      const emailInput = document.getElementById("email");
+      const managerEmailInput = document.getElementById("manager-email");
       const complianceTypeInput = document.getElementById("compliance-type");
       const expiryInput = document.getElementById("dbs-expiry");
       const renewalCycleInput = document.getElementById("renewal-cycle");
+      const contactCheck = validatePersonContact({
+        email: emailInput.value,
+        managerEmail: managerEmailInput.value
+      });
+      if (!contactCheck.ok) {
+        showMessage(addFormMessage, getContactValidationMessage(contactCheck), "error");
+        return;
+      }
       const validation = validatePersonInput(
         nameInput.value,
         roleInput.value,
@@ -31527,7 +31608,9 @@ Your current data will be overwritten. Continue?`
           validation.role,
           validation.complianceType,
           normalizeExpiryDate(validation.dbsExpiry),
-          renewalCycleInput.value
+          renewalCycleInput.value,
+          emailInput.value,
+          managerEmailInput.value
         );
         return;
       }
@@ -31539,7 +31622,9 @@ Your current data will be overwritten. Continue?`
         validation.role,
         validation.complianceType,
         normalizeExpiryDate(validation.dbsExpiry),
-        renewalCycleInput.value
+        renewalCycleInput.value,
+        emailInput.value,
+        managerEmailInput.value
       );
       savePeople();
       form.reset();

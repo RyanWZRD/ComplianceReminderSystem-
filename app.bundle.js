@@ -20944,8 +20944,8 @@ ${suffix}`;
   if (shouldShowDeprecationWarning()) console.warn("\u26A0\uFE0F  Node.js 18 and below are deprecated and will no longer be supported in future versions of @supabase/supabase-js. Please upgrade to Node.js 20 or later. For more information, visit: https://github.com/orgs/supabase/discussions/37217");
 
   // js/data/supabase-env.js
-  var SUPABASE_URL = "https://vmrotpztwoeifbdjwdis.supabase.co";
-  var SUPABASE_ANON_KEY = "sb_publishable_lBhDngN7brtfBR84jkEUcQ_hqgQn1sg";
+  var SUPABASE_URL = "";
+  var SUPABASE_ANON_KEY = "";
   var STAGING_APP_HOSTNAMES = [];
 
   // js/data/supabase-client.js

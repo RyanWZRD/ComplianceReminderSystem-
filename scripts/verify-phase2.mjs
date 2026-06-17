@@ -67,6 +67,7 @@ const STEPS = [
   },
   { label: "verify-cloud-update-reminder-settings", script: "verify-cloud-update-reminder-settings" },
   { label: "reset-alpha-staging-post", node: resetScriptPath },
+  { label: "verify-insights-engine", script: "verify-insights-engine" },
   { label: "build", script: "build" },
 ];
 

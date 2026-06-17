@@ -938,6 +938,8 @@ export class CloudComplianceStore extends LocalComplianceStore {
    *   complianceType: string;
    *   expiryDate: string;
    *   renewalCycle?: string;
+   *   email?: string;
+   *   managerEmail?: string;
    * }} input
    * @returns {Promise<
    *   | {
@@ -1028,6 +1030,8 @@ export class CloudComplianceStore extends LocalComplianceStore {
    *   complianceType: string;
    *   expiryDate: string;
    *   renewalCycle: string;
+   *   email?: string;
+   *   managerEmail?: string;
    * }} input
    * @returns {Promise<
    *   | {
@@ -1286,7 +1290,7 @@ async function fetchComplianceData(organisationId) {
     await Promise.all([
       supabase
         .from("people")
-        .select("id, name, role")
+        .select("id, name, role, email, manager_email")
         .eq("organisation_id", organisationId)
         .order("name"),
       supabase

@@ -125,6 +125,8 @@ if (!before) {
 
 const notesBeforeEdit = before.record.notes || "";
 const uniqueRole = `Step11 Role ${Date.now()}`;
+const contactEmail = `jordan.contact.${Date.now()}@example.com`;
+const contactManagerEmail = `jordan.manager.${Date.now()}@example.com`;
 
 const todayLondon = getLondonDateISOString();
 const pastExpiry = "2020-01-15";
@@ -204,6 +206,68 @@ if ((afterRole.record.notes || "") !== notesBeforeEdit) {
   process.exit(1);
 }
 
+const invalidEmailUpdate = await store.updateComplianceRecord({
+  personId: JORDAN_PERSON_ID,
+  recordId: JORDAN_RECORD_ID,
+  name: afterRole.person.name,
+  role: afterRole.person.role,
+  complianceType: afterRole.record.complianceType,
+  expiryDate: afterRole.record.expiryDate,
+  renewalCycle: afterRole.record.renewalCycle || "3-years",
+  email: "bad-email",
+});
+
+if (!invalidEmailUpdate.ok || invalidEmailUpdate.status !== "validation_error") {
+  console.error(
+    `Expected validation_error for invalid email, got ${JSON.stringify(invalidEmailUpdate)}.`
+  );
+  process.exit(1);
+}
+
+if (invalidEmailUpdate.field !== "email" || invalidEmailUpdate.reason !== "invalid_format") {
+  console.error(
+    `Expected email invalid_format validation_error, got field=${invalidEmailUpdate.field} reason=${invalidEmailUpdate.reason}.`
+  );
+  process.exit(1);
+}
+
+const contactUpdate = await store.updateComplianceRecord({
+  personId: JORDAN_PERSON_ID,
+  recordId: JORDAN_RECORD_ID,
+  name: afterRole.person.name,
+  role: afterRole.person.role,
+  complianceType: afterRole.record.complianceType,
+  expiryDate: afterRole.record.expiryDate,
+  renewalCycle: afterRole.record.renewalCycle || "3-years",
+  email: `  ${contactEmail.toUpperCase()}  `,
+  managerEmail: contactManagerEmail,
+});
+
+if (!contactUpdate.ok || contactUpdate.status !== "updated") {
+  console.error(`Contact-field update failed: ${JSON.stringify(contactUpdate)}.`);
+  process.exit(1);
+}
+
+const reloadContact = await store.load();
+
+if (!reloadContact.ok) {
+  console.error(`Reload after contact update failed: ${reloadContact.error?.message}`);
+  process.exit(1);
+}
+
+const afterContact = findRecord(store, JORDAN_RECORD_ID);
+
+if (
+  !afterContact ||
+  afterContact.person.email !== contactEmail ||
+  afterContact.person.managerEmail !== contactManagerEmail
+) {
+  console.error(
+    `Contact fields did not persist after edit.\n  expected email=${contactEmail} managerEmail=${contactManagerEmail}\n  got email=${afterContact?.person.email} managerEmail=${afterContact?.person.managerEmail}`
+  );
+  process.exit(1);
+}
+
 const editedHistory = (afterRole.record.history || []).filter(
   (entry) => entry.action === HISTORY_ACTIONS.EDITED
 );
@@ -214,15 +278,15 @@ if (editedHistory.length === 0) {
 }
 
 const nextComplianceType =
-  afterRole.record.complianceType === "Foundations" ? "Leadership" : "Foundations";
-const nextRenewalCycle = afterRole.record.renewalCycle === "1-year" ? "2-years" : "1-year";
-const nextExpiryDate = afterRole.record.expiryDate === pastExpiry ? "2019-06-01" : pastExpiry;
+  afterContact.record.complianceType === "Foundations" ? "Leadership" : "Foundations";
+const nextRenewalCycle = afterContact.record.renewalCycle === "1-year" ? "2-years" : "1-year";
+const nextExpiryDate = afterContact.record.expiryDate === pastExpiry ? "2019-06-01" : pastExpiry;
 
 const fieldUpdate = await store.updateComplianceRecord({
   personId: JORDAN_PERSON_ID,
   recordId: JORDAN_RECORD_ID,
-  name: afterRole.person.name,
-  role: afterRole.person.role,
+  name: afterContact.person.name,
+  role: afterContact.person.role,
   complianceType: nextComplianceType,
   expiryDate: nextExpiryDate,
   renewalCycle: nextRenewalCycle,
@@ -333,7 +397,9 @@ await signOut();
 console.log("Cloud edit compliance record smoke test: OK");
 console.log(`  Record: Jordan Coordinator -> ${JORDAN_RECORD_ID}`);
 console.log("  Role + compliance field updates persisted");
+console.log("  Contact email fields persisted");
 console.log("  Notes unchanged");
 console.log("  no_changes + name_conflict + validation_error");
+console.log("  Invalid email: validation_error");
 console.log("  Viewer: RPC denied");
 console.log("  canMutateData() remains false in cloud");

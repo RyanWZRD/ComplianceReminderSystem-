@@ -4,6 +4,7 @@
  */
 
 import { isValidExpiryDate, normalizeExpiryDate } from "./dates.js";
+import { normalizeEmail } from "./email.js";
 
 /**
  * @param {{
@@ -73,6 +74,8 @@ export function validateEditComplianceRecordInput(input) {
  *   complianceType: string;
  *   expiryDate: string;
  *   renewalCycle: string;
+ *   email?: string;
+ *   managerEmail?: string;
  * }} input
  * @returns {{
  *   p_person_id: string;
@@ -82,10 +85,12 @@ export function validateEditComplianceRecordInput(input) {
  *   p_compliance_type: string;
  *   p_expiry_date: string;
  *   p_renewal_cycle: string;
+ *   p_email?: string | null;
+ *   p_manager_email?: string | null;
  * }}
  */
 export function mapEditComplianceRecordToRpc(input) {
-  return {
+  const rpcArgs = {
     p_person_id: input.personId,
     p_record_id: input.recordId,
     p_name: input.name,
@@ -94,4 +99,16 @@ export function mapEditComplianceRecordToRpc(input) {
     p_expiry_date: input.expiryDate,
     p_renewal_cycle: input.renewalCycle,
   };
+
+  if (input.email !== undefined) {
+    const normalizedEmail = normalizeEmail(input.email);
+    rpcArgs.p_email = normalizedEmail === "" ? null : normalizedEmail;
+  }
+
+  if (input.managerEmail !== undefined) {
+    const normalizedManagerEmail = normalizeEmail(input.managerEmail);
+    rpcArgs.p_manager_email = normalizedManagerEmail === "" ? null : normalizedManagerEmail;
+  }
+
+  return rpcArgs;
 }

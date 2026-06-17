@@ -1,6 +1,6 @@
 /**
  * v3.0.0 release gate — full automated verification (Phase 2 + Phase 3 cloud writes).
- * Requires .env + staging Supabase with migrations through 20260203000017.
+ * Requires .env + staging Supabase with migrations through 20260301000002.
  * Does not enable CLOUD_WRITES_ENABLED globally; RPC smoke scripts set env internally.
  *
  * RPC migrations (20260203*): 000001 mark_reminder_sent … 000017 set_action_status_in_progress_complete.

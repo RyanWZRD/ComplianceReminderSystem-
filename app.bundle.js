@@ -21530,6 +21530,31 @@ ${suffix}`;
     clearLoginError();
   }
 
+  // js/data/email.js
+  var EMAIL_FORMAT_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  function normalizeEmail(value) {
+    if (value === null || value === void 0) {
+      return "";
+    }
+    const trimmed = String(value).trim();
+    if (trimmed === "") {
+      return "";
+    }
+    return trimmed.toLowerCase();
+  }
+  function isValidEmail(value) {
+    const normalized = normalizeEmail(value);
+    if (normalized === "") {
+      return true;
+    }
+    return EMAIL_FORMAT_PATTERN.test(normalized);
+  }
+  function normalizePersonContactFields(source = {}) {
+    const email = typeof source.email === "string" ? normalizeEmail(source.email) : "";
+    const managerEmail = typeof source.managerEmail === "string" ? normalizeEmail(source.managerEmail) : typeof source.manager_email === "string" ? normalizeEmail(source.manager_email) : "";
+    return { email, managerEmail };
+  }
+
   // js/data/cloud-mapper.js
   function toDateString(dateValue) {
     if (typeof dateValue !== "string" || !dateValue.trim()) {
@@ -21557,6 +21582,7 @@ ${suffix}`;
       id: person.id,
       name: person.name,
       role: person.role,
+      ...normalizePersonContactFields(person),
       complianceRecords: recordsByPerson.get(person.id) || []
     }));
   }
@@ -21858,6 +21884,14 @@ ${suffix}`;
     } else {
       rpcArgs.p_renewal_cycle = DEFAULT_RENEWAL_CYCLE;
     }
+    if (input.email !== void 0) {
+      const normalizedEmail = normalizeEmail(input.email);
+      rpcArgs.p_email = normalizedEmail === "" ? null : normalizedEmail;
+    }
+    if (input.managerEmail !== void 0) {
+      const normalizedManagerEmail = normalizeEmail(input.managerEmail);
+      rpcArgs.p_manager_email = normalizedManagerEmail === "" ? null : normalizedManagerEmail;
+    }
     return rpcArgs;
   }
 
@@ -21897,7 +21931,7 @@ ${suffix}`;
     };
   }
   function mapEditComplianceRecordToRpc(input) {
-    return {
+    const rpcArgs = {
       p_person_id: input.personId,
       p_record_id: input.recordId,
       p_name: input.name,
@@ -21906,6 +21940,15 @@ ${suffix}`;
       p_expiry_date: input.expiryDate,
       p_renewal_cycle: input.renewalCycle
     };
+    if (input.email !== void 0) {
+      const normalizedEmail = normalizeEmail(input.email);
+      rpcArgs.p_email = normalizedEmail === "" ? null : normalizedEmail;
+    }
+    if (input.managerEmail !== void 0) {
+      const normalizedManagerEmail = normalizeEmail(input.managerEmail);
+      rpcArgs.p_manager_email = normalizedManagerEmail === "" ? null : normalizedManagerEmail;
+    }
+    return rpcArgs;
   }
 
   // js/data/update-compliance-record-notes.js
@@ -22193,6 +22236,15 @@ ${suffix}`;
     isLegacyPerson(person) {
       return !Array.isArray(person.complianceRecords) && (typeof person.dbsExpiry === "string" || typeof person.expiryDate === "string");
     }
+    isValidOptionalContactField(value) {
+      if (value === void 0 || value === null) {
+        return true;
+      }
+      if (typeof value !== "string") {
+        return false;
+      }
+      return isValidEmail(value);
+    }
     normalizeComplianceType(value) {
       if (COMPLIANCE_TYPES.includes(value)) {
         return value;
@@ -22226,6 +22278,7 @@ ${suffix}`;
         id: person.id,
         name: person.name,
         role: person.role,
+        ...normalizePersonContactFields(person),
         complianceRecords: [this.createComplianceRecord(person, recordId)]
       };
     }
@@ -22304,6 +22357,7 @@ ${suffix}`;
         id: person.id,
         name: person.name,
         role: person.role,
+        ...normalizePersonContactFields(person),
         complianceRecords: (person.complianceRecords || []).map((record) => ({
           id: record.id,
           complianceType: this.normalizeComplianceType(record.complianceType),
@@ -22326,6 +22380,12 @@ ${suffix}`;
       }
       return data.people.every((person) => {
         if (typeof person.id !== "number" || typeof person.name !== "string" || person.name.trim() === "" || typeof person.role !== "string" || person.role.trim() === "") {
+          return false;
+        }
+        if (!this.isValidOptionalContactField(person.email)) {
+          return false;
+        }
+        if (!this.isValidOptionalContactField(person.managerEmail)) {
           return false;
         }
         if (this.isLegacyPerson(person)) {
@@ -23153,6 +23213,8 @@ ${suffix}`;
      *   complianceType: string;
      *   expiryDate: string;
      *   renewalCycle?: string;
+     *   email?: string;
+     *   managerEmail?: string;
      * }} input
      * @returns {Promise<
      *   | {
@@ -23226,6 +23288,8 @@ ${suffix}`;
      *   complianceType: string;
      *   expiryDate: string;
      *   renewalCycle: string;
+     *   email?: string;
+     *   managerEmail?: string;
      * }} input
      * @returns {Promise<
      *   | {
@@ -23435,7 +23499,7 @@ ${suffix}`;
   async function fetchComplianceData(organisationId) {
     const supabase = getSupabaseClient();
     const [peopleResult, recordsResult, historyResult, evidenceResult, actionsResult, deletedResult] = await Promise.all([
-      supabase.from("people").select("id, name, role").eq("organisation_id", organisationId).order("name"),
+      supabase.from("people").select("id, name, role, email, manager_email").eq("organisation_id", organisationId).order("name"),
       supabase.from("compliance_records").select("id, person_id, compliance_type, expiry_date, renewal_cycle, notes").eq("organisation_id", organisationId),
       supabase.from("history_entries").select("id, record_id, action, description, created_at, actor_id, actor_display_name").eq("organisation_id", organisationId),
       supabase.from("evidence_items").select("id, record_id, name, document_type, added_date, notes, file_name").eq("organisation_id", organisationId),

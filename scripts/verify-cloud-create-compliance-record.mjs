@@ -137,6 +137,9 @@ if (!loadBefore.ok) {
 
 const todayLondon = getLondonDateISOString();
 const newPersonName = `Step10 Verify ${Date.now()}`;
+const contactPersonName = `Step10 Contact ${Date.now()}`;
+const contactEmail = `contact.${Date.now()}@example.com`;
+const contactManagerEmail = `manager.${Date.now()}@example.com`;
 
 const blankValidation = validateCreateComplianceRecordInput({
   name: "",
@@ -263,6 +266,63 @@ if (created.record.complianceType !== "DBS" || created.record.expiryDate !== tod
   process.exit(1);
 }
 
+const invalidEmailResult = await store.createComplianceRecord({
+  name: `Step10 Invalid Email ${Date.now()}`,
+  role: "Volunteer",
+  complianceType: "DBS",
+  expiryDate: todayLondon,
+  email: "not-an-email",
+});
+
+if (!invalidEmailResult.ok || invalidEmailResult.status !== "validation_error") {
+  console.error(
+    `Expected validation_error for invalid email, got ${JSON.stringify(invalidEmailResult)}.`
+  );
+  process.exit(1);
+}
+
+if (invalidEmailResult.field !== "email" || invalidEmailResult.reason !== "invalid_format") {
+  console.error(
+    `Expected email invalid_format validation_error, got field=${invalidEmailResult.field} reason=${invalidEmailResult.reason}.`
+  );
+  process.exit(1);
+}
+
+const contactResult = await store.createComplianceRecord({
+  name: contactPersonName,
+  role: "Coordinator",
+  complianceType: "Foundations",
+  expiryDate: todayLondon,
+  renewalCycle: "2-years",
+  email: `  ${contactEmail.toUpperCase()}  `,
+  managerEmail: contactManagerEmail,
+});
+
+if (!contactResult.ok || contactResult.status !== "created") {
+  console.error(`Contact-field create failed: ${JSON.stringify(contactResult)}.`);
+  process.exit(1);
+}
+
+const reloadContact = await store.load();
+
+if (!reloadContact.ok) {
+  console.error(`Reload after contact create failed: ${reloadContact.error?.message}`);
+  process.exit(1);
+}
+
+const contactCreated = findRecord(store, contactResult.recordId);
+
+if (
+  !contactCreated ||
+  contactCreated.person.email !== contactEmail ||
+  contactCreated.person.managerEmail !== contactManagerEmail
+) {
+  console.error(
+    `Contact fields did not persist after create.\n  expected email=${contactEmail} managerEmail=${contactManagerEmail}\n  got email=${contactCreated?.person.email} managerEmail=${contactCreated?.person.managerEmail}`
+  );
+  process.exit(1);
+}
+
 await signOut();
 
 await signInAs(viewerEmail);
@@ -292,6 +352,8 @@ await signOut();
 console.log("Cloud create compliance record smoke test: OK");
 console.log(`  New person: ${newPersonName} -> ${newPersonResult.recordId}`);
 console.log(`  Existing person merge: alex volunteer -> ${existingResult.recordId}`);
+console.log(`  Contact fields: ${contactPersonName} -> ${contactResult.recordId}`);
 console.log("  Blank name: validation_error");
+console.log("  Invalid email: validation_error");
 console.log("  Viewer: RPC denied");
 console.log("  canMutateData() remains false in cloud");

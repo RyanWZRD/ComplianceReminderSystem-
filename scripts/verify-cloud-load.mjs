@@ -135,6 +135,11 @@ try {
     process.exit(1);
   }
 
+  if (!("email" in firstPerson) || !("managerEmail" in firstPerson)) {
+    console.error("Expected person contact fields (email, managerEmail) on load.");
+    process.exit(1);
+  }
+
   console.log("Cloud compliance load smoke test: OK");
   console.log(`  People: ${counts.people}`);
   console.log(`  Records: ${counts.records}`);

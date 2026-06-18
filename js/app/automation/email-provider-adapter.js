@@ -12,7 +12,7 @@ import { createSmtpEmailProvider } from "./providers/smtp-provider.js";
 /** @typedef {import("./email-provider-config.js").EmailProviderName | "mock"} AdapterProviderName */
 
 /** @type {readonly AdapterProviderName[]} */
-export const UNIMPLEMENTED_EMAIL_PROVIDERS = ["resend", "sendgrid", "smtp"];
+export const UNIMPLEMENTED_EMAIL_PROVIDERS = ["sendgrid", "smtp"];
 
 /** @type {Record<string, (options: { config?: Record<string, unknown> }) => unknown>} */
 const SKELETON_EMAIL_PROVIDER_FACTORIES = {

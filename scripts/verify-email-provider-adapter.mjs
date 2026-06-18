@@ -176,6 +176,27 @@ for (const providerName of UNIMPLEMENTED_EMAIL_PROVIDERS) {
   );
 }
 
+const resendPlaceholderConfig = {
+  provider: "resend",
+  mode: "production",
+  fromEmail: "reminders@example.org",
+  replyToEmail: null,
+  rateLimitPerRun: 50,
+  enabled: true,
+};
+
+const resendPlaceholderProvider = createEmailProviderAdapter({ config: resendPlaceholderConfig });
+const resendPlaceholderHealth = await resendPlaceholderProvider.healthCheck();
+
+assertEqual(resendPlaceholderHealth.status, "invalid_config", "resend adapter placeholder healthCheck status");
+assertEqual(resendPlaceholderHealth.provider, "resend", "resend adapter placeholder healthCheck provider");
+
+await assertRejects(
+  () => resendPlaceholderProvider.sendReminder(sendInput),
+  "Resend email provider configuration is invalid",
+  "resend adapter placeholder sendReminder throws config error"
+);
+
 if (failures.length > 0) {
   console.error("FAILURES:");
   failures.forEach((message) => console.error(`  - ${message}`));

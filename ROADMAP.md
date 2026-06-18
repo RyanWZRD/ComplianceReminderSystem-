@@ -6,6 +6,80 @@ A local-first safeguarding compliance tracker. Runs in the browser with localSto
 
 # Current Release
 
+## v6.0.0-alpha.5 — V6 Resend Provider Release Readiness
+
+**Date:** June 2026
+
+### Summary
+
+Fifth v6 alpha checkpoint: **V6** Resend provider release readiness on top of **v6.0.0-alpha.4** Resend plan foundation. Isolated Resend provider complete (`createResendEmailProvider` with injected `fetchImpl` only), Resend provider foundation verification orchestrator complete (`verify-resend-provider-foundation`), disabled-by-default provider mode — no `app.js` wiring, no UI send button, no automatic delivery execution, no mark-as-sent automation, compliance/action/history mutation, or cloud mutation default changes.
+
+**Documentation:**
+
+- [`docs/v6-email-provider-configuration.md`](docs/v6-email-provider-configuration.md) — V6 phases 10–21 detail and release-readiness note
+- [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md) — V6 phases 1–9 delivery foundation + phases 17–21 Resend provider track
+- [`docs/v5-automated-compliance-operations.md`](docs/v5-automated-compliance-operations.md#v6--reminder-delivery--phase-21-complete) — V6 Resend provider release readiness summary
+
+**Release verification (required before tag):**
+
+- `npm run build` — rebuild `app.bundle.js` after version bump
+- `npm run verify-resend-provider-foundation` — skeleton foundation + Resend plan + Resend provider orchestrator (no live execution)
+
+Application version: **v6.0.0-alpha.5**
+
+**Next slice:** V6 Phase 22 — Operations Log delivery UI + export — see [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md) · [`docs/v6-email-provider-configuration.md`](docs/v6-email-provider-configuration.md)
+
+Status: Release candidate (V6 Phase 21)  
+Tag: **v6.0.0-alpha.5** — not created unless explicitly requested
+
+---
+
+## V6 Phase 20 — Resend Provider Verification Orchestrator
+
+**Date:** June 2026
+
+### Summary
+
+V6 Phase 20 adds `verify-resend-provider-foundation` — one verification command that runs provider skeleton foundation, Resend plan, and isolated Resend provider checks in order. Confirms the Resend implementation remains safe and not wired into app execution. Verification only — no app behaviour changes, UI send button, automatic delivery execution, or mark-as-sent automation.
+
+**Documentation:**
+
+- [`docs/v6-email-provider-configuration.md`](docs/v6-email-provider-configuration.md) — Phase 20 orchestrator
+- [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md) — Phase 20 architecture cross-reference
+- [`docs/v5-automated-compliance-operations.md`](docs/v5-automated-compliance-operations.md#v6--reminder-delivery--phase-20-complete) — Phase 20 summary
+
+**Verification (required):**
+
+- `npm run verify-resend-provider-foundation` — master gate (skeleton foundation + Resend plan + Resend provider)
+
+**Next slice:** V6 Phase 21 — Operations Log delivery UI + export
+
+---
+
+## V6 Phase 19 — Resend Provider Network Implementation
+
+**Date:** June 2026
+
+### Summary
+
+V6 Phase 19 implements `createResendEmailProvider` with injected `fetchImpl` for Resend API calls. The provider module is isolated — no `app.js` wiring, no send button, no mark-as-sent automation, no compliance/action/history mutation, and no automatic delivery execution. Verified with mocked `fetchImpl` in CI (`verify-resend-provider`).
+
+**Documentation:**
+
+- [`docs/v6-email-provider-configuration.md`](docs/v6-email-provider-configuration.md) — Phase 19 Resend network implementation
+- [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md) — Phase 19 architecture cross-reference
+- [`docs/v5-automated-compliance-operations.md`](docs/v5-automated-compliance-operations.md#v6--reminder-delivery--phase-19-complete) — Phase 19 summary
+
+**Verification (required):**
+
+- `npm run verify-email-provider-skeleton-foundation` — phases 12 + 14–15 orchestrator (no live execution)
+- `npm run verify-resend-provider` — Resend provider with mocked `fetchImpl`
+- `npm run verify-resend-provider-plan` — Resend plan documentation + isolated module checks
+
+**Next slice:** V6 Phase 20 — Operations Log delivery UI + export
+
+---
+
 ## v6.0.0-alpha.4 — V6 Resend Plan Release Readiness
 
 **Date:** June 2026
@@ -26,7 +100,7 @@ Fourth v6 alpha checkpoint: **V6** Resend plan release readiness on top of **v6.
 - `npm run verify-email-provider-skeleton-foundation` — V6 phases 12 + 14–15 orchestrator (no live execution)
 - `npm run verify-resend-provider-plan` — Resend plan documentation; skeleton-only provider module
 
-Application version: **v6.0.0-alpha.4**
+Application version: **v6.0.0-alpha.4** (superseded by v6.0.0-alpha.5)
 
 **Next slice:** V6 Phase 19 — Resend network implementation — see [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md) · [`docs/v6-email-provider-configuration.md`](docs/v6-email-provider-configuration.md)
 
@@ -370,6 +444,22 @@ Tag: v3.0.0
 ---
 
 # Next Planned Release
+
+## V6.0.0 Phase 21 — Resend Provider Release Readiness · Complete
+
+**Date:** June 2026
+
+Documentation and verification checkpoint for **v6.0.0-alpha.5**. Version bump, release-readiness docs, `verify-resend-provider-foundation` gate. No application logic changes. Isolated Resend provider complete (`createResendEmailProvider` with injected `fetchImpl` only), Resend provider foundation verification orchestrator complete, disabled-by-default provider mode — no `app.js` wiring, no UI send button, no automatic delivery execution, no mark-as-sent automation, or compliance/action/history mutation.
+
+**Documentation:** [`docs/v6-email-provider-configuration.md`](docs/v6-email-provider-configuration.md) · [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md) · [`docs/v5-automated-compliance-operations.md`](docs/v5-automated-compliance-operations.md#v6--reminder-delivery--phase-21-complete)
+
+**Verification:** `npm run build` · `npm run verify-resend-provider-foundation`
+
+**Release candidate:** **v6.0.0-alpha.5**
+
+**Next slice:** V6 Phase 22 — Operations Log delivery UI + export
+
+---
 
 ## V6.0.0 Phase 18 — Resend Plan Release Readiness · Complete
 
@@ -837,7 +927,7 @@ Scheduled compliance operations: reminder delivery, action orchestration, escala
 
 Read-only compliance insights on the dashboard: health score, risk summary, renewal forecast, and rule-based recommendations. See [`docs/compliance-insights.md`](docs/compliance-insights.md) and [Version Roadmap — v4](#v4--compliance-insights-release-candidate).
 
-Application version: **v6.0.0-alpha.4** in source (V6 Resend plan release readiness alpha); v4 GA target **v4.0.1**.
+Application version: **v6.0.0-alpha.5** in source (V6 Resend provider release readiness alpha); v4 GA target **v4.0.1**.
 
 **RC hardening summary (June 2026):**
 

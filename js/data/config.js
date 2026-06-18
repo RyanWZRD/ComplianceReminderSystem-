@@ -115,4 +115,4 @@ export const AUTOMATION_ENABLED =
   readAutomationFromLocation() ??
   (typeof process !== "undefined" && process.env?.AUTOMATION_ENABLED === "true");
 
-export const APP_VERSION = "v6.0.0-alpha.4";
+export const APP_VERSION = "v6.0.0-alpha.5";

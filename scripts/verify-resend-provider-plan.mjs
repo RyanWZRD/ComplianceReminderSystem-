@@ -1,6 +1,6 @@
 /**
- * V6 Phase 17: Resend implementation plan verification.
- * Static checks for Resend plan documentation and skeleton-only provider module —
+ * V6 Phase 17 + 19: Resend implementation plan verification.
+ * Static checks for Resend plan documentation and isolated provider module —
  * no Supabase, browser, live API calls, production sending, or app wiring.
  */
 
@@ -16,6 +16,7 @@ const root = join(__dirname, "..");
 const providerConfigDocPath = join(root, "docs", "v6-email-provider-configuration.md");
 const deliveryArchDocPath = join(root, "docs", "v6-delivery-architecture.md");
 const resendProviderPath = join(root, "js/app/automation/providers/resend-provider.js");
+const verifyResendProviderPath = join(root, "scripts", "verify-resend-provider.mjs");
 const appJsPath = join(root, "app.js");
 const packageJsonPath = join(root, "package.json");
 
@@ -50,40 +51,12 @@ function assertNotContains(source, needle, label) {
   }
 }
 
-async function assertRejects(fn, expectedMessagePart, label) {
-  try {
-    await fn();
-    fail(`${label}: expected rejection`);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-
-    if (!message.includes(expectedMessagePart)) {
-      fail(
-        `${label}: expected message containing ${JSON.stringify(expectedMessagePart)}, got ${JSON.stringify(message)}`
-      );
-    }
-  }
-}
-
-const forbiddenImplementationNeedles = [
-  "fetch(",
-  "XMLHttpRequest",
-  "api.resend.com",
-  "https://api.resend",
-  "@resend",
-  "nodemailer",
-  "createTransport",
-  "RESEND_API_KEY",
-  "Authorization: Bearer",
-  "markReminderSent",
-  "mark_reminder_sent",
-];
-
 console.log("V6 Phase 17 Resend implementation plan verification (verify-resend-provider-plan)\n");
 
 assert(existsSync(providerConfigDocPath), "docs/v6-email-provider-configuration.md exists");
 assert(existsSync(deliveryArchDocPath), "docs/v6-delivery-architecture.md exists");
 assert(existsSync(resendProviderPath), "js/app/automation/providers/resend-provider.js exists");
+assert(existsSync(verifyResendProviderPath), "scripts/verify-resend-provider.mjs exists");
 
 const providerConfigDoc = readFileSync(providerConfigDocPath, "utf8");
 const deliveryArchDoc = readFileSync(deliveryArchDocPath, "utf8");
@@ -91,12 +64,18 @@ const resendProviderSource = readFileSync(resendProviderPath, "utf8");
 const appJs = readFileSync(appJsPath, "utf8");
 const packageJson = readFileSync(packageJsonPath, "utf8");
 
-assertContains(packageJson, '"verify-resend-provider-plan"', "package.json verify script");
+assertContains(packageJson, '"verify-resend-provider-plan"', "package.json verify-resend-provider-plan script");
+assertContains(packageJson, '"verify-resend-provider"', "package.json verify-resend-provider script");
 
 assertContains(
   providerConfigDoc,
   "## Phase 17 — Resend implementation plan",
   "provider config doc has Resend implementation plan section"
+);
+assertContains(
+  providerConfigDoc,
+  "## Phase 19 — Resend network implementation",
+  "provider config doc has Phase 19 section"
 );
 
 assertContains(providerConfigDoc, "RESEND_API_KEY", "plan documents RESEND_API_KEY");
@@ -111,44 +90,47 @@ assertContains(providerConfigDoc, "### Rollback plan", "plan documents rollback 
 assertContains(providerConfigDoc, "EMAIL_MODE=production", "plan documents production mode gate");
 assertContains(providerConfigDoc, "EMAIL_MODE=test", "plan documents test mode gate");
 assertContains(providerConfigDoc, "resend_rate_limited", "plan documents transient failure mapping");
+assertContains(providerConfigDoc, "verify-resend-provider", "provider config doc references verify-resend-provider");
 
 assertContains(
   deliveryArchDoc,
   "## Phase 17 — Resend implementation plan",
   "delivery architecture doc has Phase 17 section"
 );
-assertContains(deliveryArchDoc, "verify-resend-provider-plan", "delivery architecture references verify script");
+assertContains(
+  deliveryArchDoc,
+  "## Phase 19 — Resend network implementation",
+  "delivery architecture doc has Phase 19 section"
+);
+assertContains(deliveryArchDoc, "verify-resend-provider-plan", "delivery architecture references verify-resend-provider-plan");
+assertContains(deliveryArchDoc, "verify-resend-provider", "delivery architecture references verify-resend-provider");
 
-for (const needle of forbiddenImplementationNeedles) {
+assertContains(resendProviderSource, "fetchImpl", "resend-provider.js uses injected fetchImpl");
+assertNotContains(resendProviderSource, "fetch(", "resend-provider.js has no global fetch(");
+assertContains(resendProviderSource, "api.resend.com", "resend-provider.js references Resend API URL");
+
+const forbiddenWiringNeedles = [
+  "markReminderSent",
+  "mark_reminder_sent",
+  "XMLHttpRequest",
+  "nodemailer",
+  "createTransport",
+];
+
+for (const needle of forbiddenWiringNeedles) {
   assertNotContains(resendProviderSource, needle, `resend-provider.js has no ${needle}`);
 }
 
-assertContains(resendProviderSource, "not_implemented", "resend-provider.js remains skeleton (not_implemented)");
-assertContains(
-  resendProviderSource,
-  "Provider resend is not implemented yet",
-  "resend-provider.js remains skeleton (throws)"
-);
+const invalidProvider = createResendEmailProvider({
+  config: { provider: "resend", enabled: true, mode: "production" },
+});
 
-const provider = createResendEmailProvider({ config: { provider: "resend", enabled: true } });
-const health = await provider.healthCheck();
+const invalidHealth = await invalidProvider.healthCheck();
 
-assertEqual(health.status, "not_implemented", "resend provider runtime healthCheck status");
-assertEqual(health.provider, "resend", "resend provider runtime healthCheck provider");
-
-await assertRejects(
-  () =>
-    provider.sendReminder({
-      to: "safeguarding@example.org",
-      subject: "DBS reminder",
-      bodyText: "Please renew.",
-    }),
-  "Provider resend is not implemented yet",
-  "resend provider runtime sendReminder throws"
-);
+assertEqual(invalidHealth.status, "invalid_config", "resend provider invalid config healthCheck");
 
 assertNotContains(appJs, "resend-provider", "app.js is not wired to resend-provider");
-assertNotContains(appJs, "api.resend.com", "app.js has no Resend API references");
+assertNotContains(appJs, "createResendEmailProvider", "app.js does not import createResendEmailProvider");
 
 if (failures.length > 0) {
   console.error("FAILURES:");

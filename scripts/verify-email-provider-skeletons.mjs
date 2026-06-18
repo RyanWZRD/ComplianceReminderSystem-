@@ -22,12 +22,6 @@ const root = join(__dirname, "..");
 /** @type {readonly { provider: string; path: string; factoryName: string; create: (options?: { config?: Record<string, unknown> }) => { healthCheck: () => Promise<unknown>; sendReminder: (input: unknown) => Promise<unknown> } } }[]} */
 const SKELETON_PROVIDERS = [
   {
-    provider: "resend",
-    path: "js/app/automation/providers/resend-provider.js",
-    factoryName: "createResendEmailProvider",
-    create: createResendEmailProvider,
-  },
-  {
     provider: "sendgrid",
     path: "js/app/automation/providers/sendgrid-provider.js",
     factoryName: "createSendgridEmailProvider",
@@ -42,6 +36,7 @@ const SKELETON_PROVIDERS = [
 ];
 
 const adapterJsPath = join(root, "js/app/automation/email-provider-adapter.js");
+const resendProviderPath = join(root, "js/app/automation/providers/resend-provider.js");
 const appJsPath = join(root, "app.js");
 const packageJsonPath = join(root, "package.json");
 
@@ -121,6 +116,30 @@ const appJs = readFileSync(appJsPath, "utf8");
 const packageJson = readFileSync(packageJsonPath, "utf8");
 
 assertContains(packageJson, '"verify-email-provider-skeletons"', "package.json verify script");
+
+assert(existsSync(resendProviderPath), "js/app/automation/providers/resend-provider.js exists");
+
+const resendProviderSource = readFileSync(resendProviderPath, "utf8");
+
+assertContains(
+  resendProviderSource,
+  "export function createResendEmailProvider",
+  "resend-provider.js exports createResendEmailProvider"
+);
+assertContains(resendProviderSource, "fetchImpl", "resend-provider.js uses fetchImpl");
+assertNotContains(resendProviderSource, "fetch(", "resend-provider.js has no global fetch(");
+assertNotContains(resendProviderSource, "markReminderSent", "resend-provider.js has no markReminderSent");
+assertNotContains(resendProviderSource, "mark_reminder_sent", "resend-provider.js has no mark_reminder_sent");
+
+const resendInvalidProvider = createResendEmailProvider({
+  config: { provider: "resend", enabled: true, mode: "production" },
+});
+const resendInvalidHealth = await resendInvalidProvider.healthCheck();
+
+assertEqual(resendInvalidHealth.status, "invalid_config", "resend provider invalid config healthCheck");
+assertEqual(resendInvalidHealth.provider, "resend", "resend provider healthCheck provider");
+
+assertContains(adapterJs, "createResendEmailProvider", "adapter references createResendEmailProvider");
 
 for (const skeleton of SKELETON_PROVIDERS) {
   const modulePath = join(root, skeleton.path);

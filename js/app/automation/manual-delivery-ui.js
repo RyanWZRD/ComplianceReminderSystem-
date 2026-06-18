@@ -65,15 +65,15 @@ export function getManualDeliveryProviderConfig() {
  *   attempted?: number;
  *   delivered?: number;
  *   failed?: number;
+ *   skipped?: number;
  * }} [executionSummary]
- * @param {{ persisted?: number }} [persistenceSummary]
- * @returns {{ attempted: number; delivered: number; failed: number; persisted: number }}
+ * @returns {{ attempted: number; delivered: number; failed: number; skipped: number }}
  */
-export function buildManualDeliveryResultSummary(executionSummary, persistenceSummary) {
+export function buildManualDeliveryResultSummary(executionSummary) {
   return {
     attempted: Number(executionSummary?.attempted ?? 0),
     delivered: Number(executionSummary?.delivered ?? 0),
     failed: Number(executionSummary?.failed ?? 0),
-    persisted: Number(persistenceSummary?.persisted ?? 0),
+    skipped: Number(executionSummary?.skipped ?? 0),
   };
 }

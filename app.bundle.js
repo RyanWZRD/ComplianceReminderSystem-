@@ -26663,12 +26663,12 @@ ${suffix}`;
   function getManualDeliveryProviderConfig() {
     return getEmailProviderConfig(EMAIL_PROVIDER_RUNTIME);
   }
-  function buildManualDeliveryResultSummary(executionSummary, persistenceSummary) {
+  function buildManualDeliveryResultSummary(executionSummary) {
     return {
       attempted: Number(executionSummary?.attempted ?? 0),
       delivered: Number(executionSummary?.delivered ?? 0),
       failed: Number(executionSummary?.failed ?? 0),
-      persisted: Number(persistenceSummary?.persisted ?? 0)
+      skipped: Number(executionSummary?.skipped ?? 0)
     };
   }
 
@@ -27432,8 +27432,8 @@ ${template.bodyText}`;
     "manual-delivery-test-result-delivered"
   );
   var manualDeliveryTestResultFailed = document.getElementById("manual-delivery-test-result-failed");
-  var manualDeliveryTestResultPersisted = document.getElementById(
-    "manual-delivery-test-result-persisted"
+  var manualDeliveryTestResultSkipped = document.getElementById(
+    "manual-delivery-test-result-skipped"
   );
   var manualDeliveryTestRunBtn = document.getElementById("manual-delivery-test-run-btn");
   var insightStaleEvidence = document.getElementById("insight-stale-evidence");
@@ -32149,7 +32149,7 @@ This cannot be undone.`
     );
   }
   function renderManualDeliveryTest() {
-    if (!manualDeliveryTestSection || !manualDeliveryTestSafetyNote || !manualDeliveryTestTotalCount || !manualDeliveryTestMissingEmailCount || !manualDeliveryTestModeValue || !manualDeliveryTestProviderHint || !manualDeliveryTestLoading || !manualDeliveryTestError || !manualDeliveryTestResult || !manualDeliveryTestResultAttempted || !manualDeliveryTestResultDelivered || !manualDeliveryTestResultFailed || !manualDeliveryTestResultPersisted || !manualDeliveryTestRunBtn) {
+    if (!manualDeliveryTestSection || !manualDeliveryTestSafetyNote || !manualDeliveryTestTotalCount || !manualDeliveryTestMissingEmailCount || !manualDeliveryTestModeValue || !manualDeliveryTestProviderHint || !manualDeliveryTestLoading || !manualDeliveryTestError || !manualDeliveryTestResult || !manualDeliveryTestResultAttempted || !manualDeliveryTestResultDelivered || !manualDeliveryTestResultFailed || !manualDeliveryTestResultSkipped || !manualDeliveryTestRunBtn) {
       return;
     }
     const visible = canRunManualDeliveryTest();
@@ -32214,14 +32214,11 @@ This cannot be undone.`
         organisationName: DEFAULT_ORGANISATION_NAME,
         asOfDate: queue.asOfDate
       });
-      const summary = buildManualDeliveryResultSummary(
-        result.executionSummary,
-        result.persistenceSummary
-      );
+      const summary = buildManualDeliveryResultSummary(result.executionSummary);
       manualDeliveryTestResultAttempted.textContent = String(summary.attempted);
       manualDeliveryTestResultDelivered.textContent = String(summary.delivered);
       manualDeliveryTestResultFailed.textContent = String(summary.failed);
-      manualDeliveryTestResultPersisted.textContent = String(summary.persisted);
+      manualDeliveryTestResultSkipped.textContent = String(summary.skipped);
       manualDeliveryTestResult.classList.remove("hidden");
       await loadDeliveryOperationsLog();
     } catch (error) {

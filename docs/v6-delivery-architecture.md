@@ -1451,7 +1451,42 @@ Browser Manual Delivery UI
 
 **Phase 40 gate:** `npm run verify-edge-delivery-test-deployment` must pass.
 
-**Next slice after Phase 40:** Delivery log persistence from Edge Function outcomes (planned).
+**Next slice after Phase 40:** V6 Phase 41 — test-mode deployment smoke test.
+
+---
+
+## Phase 41 — Test-mode deployment smoke test
+
+**Scope:** Guide and verify the **first safe staging deployment** of `send-reminder-deliveries` with `EMAIL_MODE=test`. Manual smoke checklist, email inbox checks, Supabase dashboard checks, and automated smoke-plan verification — **no delivery log writes, mark-as-sent, or production sends**.
+
+### Phase 41 deliverables
+
+| Item | Location |
+|------|----------|
+| Manual smoke test checklist | [`docs/v6-edge-delivery-test-deployment.md`](v6-edge-delivery-test-deployment.md) § Phase 41 |
+| Smoke plan verification gate | `scripts/verify-edge-delivery-test-smoke-plan.mjs` |
+| UI result summary | `index.html` + `manual-delivery-ui.js` — attempted/delivered/failed/skipped |
+| Contract cross-reference | [`docs/v6-edge-delivery-function.md`](v6-edge-delivery-function.md) § Phase 41 |
+
+**Script:** `scripts/verify-edge-delivery-test-smoke-plan.mjs`
+
+`npm run verify-edge-delivery-test-smoke-plan` verifies:
+
+1. Phase 41 manual smoke checklist documents all required checks (admin sign-in, Edge Function invoke, test redirect, `[TEST]` subject, UI summary, no persistence/mutation)
+2. UI wires skipped count from Edge Function `summary` (replaces persisted for smoke-test path)
+3. `npm run build` succeeds
+4. `npm run verify-edge-delivery-test-deployment` still passes
+
+### Phase 41 constraints
+
+- Test mode only — `EMAIL_MODE=test` in Supabase secrets
+- Manual smoke sign-off after deploy — no automated Resend/Supabase smoke in verify script
+- No `create_reminder_delivery_log` RPC writes
+- No mark-as-sent automation, scheduled execution, or compliance/history mutation
+
+**Phase 41 gate:** `npm run verify-edge-delivery-test-smoke-plan` must pass.
+
+**Next slice after Phase 41:** Delivery log persistence from Edge Function outcomes (planned).
 
 ---
 

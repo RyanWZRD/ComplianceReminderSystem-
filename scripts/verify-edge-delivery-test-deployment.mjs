@@ -103,7 +103,7 @@ assertContains(
   '"verify-edge-delivery-test-deployment"',
   "package.json verify-edge-delivery-test-deployment script",
 );
-assertContains(doc, "# V6 Phase 40 — Edge Function Test-Mode Deployment Readiness", "document title");
+assertContains(doc, "# V6 Edge Function Test-Mode Deployment", "document title");
 assertContains(doc, "No production sending", "document states no production sending");
 assertContains(doc, "No mark-as-sent", "document states no mark-as-sent");
 assertContains(doc, "No delivery log writes", "document states no delivery log writes");
@@ -255,4 +255,4 @@ console.log("verify-edge-delivery-test-deployment: all checks OK");
 console.log("  test mode: redirect to EMAIL_TEST_REDIRECT_TO + [TEST] subject prefix");
 console.log("  secrets: missing RESEND_API_KEY / EMAIL_MODE / config → 503 documented and coded");
 console.log("  browser: Edge Function invoke only — no delivery log / mark-sent / compliance writes");
-console.log("  next: deploy secrets + function, then run local/staging smoke checklists in docs");
+console.log("  next: run verify-edge-delivery-test-smoke-plan, deploy secrets + function, then Phase 41 manual checklist");

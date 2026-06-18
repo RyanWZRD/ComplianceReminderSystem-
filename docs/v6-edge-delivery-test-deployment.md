@@ -1,24 +1,29 @@
-# V6 Phase 40 — Edge Function Test-Mode Deployment Readiness
+# V6 Edge Function Test-Mode Deployment
 
-Prepare **safe deployment and testing** of `send-reminder-deliveries` in Supabase **test mode** only. This phase is documentation, checklists, and verification gates — **no new application logic**.
+Prepare and verify **safe deployment and testing** of `send-reminder-deliveries` in Supabase **test mode** only.
+
+| Phase | Focus |
+|-------|--------|
+| **Phase 40** | Deployment readiness — checklists, secrets, automated gates |
+| **Phase 41** | First staging deployment smoke test — manual sign-off after deploy |
 
 **Baseline:** V6 Phase 39 (browser invoke wiring) on **v6.0.0-beta.1**  
-**Scope:** Deployment readiness for staging/local test sends via Edge Function — **not** production sending.
+**Scope:** Deployment and smoke-test support for staging/local test sends via Edge Function — **not** production sending.
 
 **Related docs:**
 
-- [`docs/v6-edge-delivery-function.md`](v6-edge-delivery-function.md) — Edge Function contract and Phase 38–39 behaviour
+- [`docs/v6-edge-delivery-function.md`](v6-edge-delivery-function.md) — Edge Function contract and Phase 38–41 behaviour
 - [`docs/v6-delivery-architecture.md`](v6-delivery-architecture.md) — delivery domain model and phase cross-reference
 - [`docs/v6-email-provider-configuration.md`](v6-email-provider-configuration.md) — provider env vars and test/production gates
 - [`docs/staging-deployment.md`](staging-deployment.md) — static app staging host and Supabase setup
 
 ---
 
-## Constraints (Phase 40)
+## Constraints (Phase 40–41)
 
 | Rule | Detail |
 |------|--------|
-| **No production sending** | `EMAIL_MODE` must be `test` in Supabase secrets — never `production` for this phase |
+| **No production sending** | `EMAIL_MODE` must be `test` in Supabase secrets — never `production` for these phases |
 | **No mark-as-sent** | Delivery must not auto-mark reminders sent |
 | **No delivery log writes** | Edge Function must not call `create_reminder_delivery_log` yet |
 | **No compliance/history mutation** | Register rows and history entries unchanged by delivery |
@@ -28,15 +33,97 @@ Prepare **safe deployment and testing** of `send-reminder-deliveries` in Supabas
 
 ---
 
-## Automated gate
+## Preflight commands
 
-Run from the repository root:
+Run from the repository root **before** deploying secrets or the Edge Function:
+
+```powershell
+npm run build
+npm run verify-edge-delivery-test-deployment
+npm run verify-edge-delivery-test-smoke-plan
+```
+
+| Command | Purpose |
+|---------|---------|
+| `npm run build` | Fresh `app.bundle.js` with Edge Function invoke wiring |
+| `npm run verify-edge-delivery-test-deployment` | Phase 40 readiness — doc, static safety gates, prerequisite Edge Function scripts |
+| `npm run verify-edge-delivery-test-smoke-plan` | Phase 41 smoke plan — checklist doc, UI summary wiring, then runs build + Phase 40 gate |
+
+---
+
+## Automated gates
+
+### Phase 40 — deployment readiness
 
 ```powershell
 npm run verify-edge-delivery-test-deployment
 ```
 
-This verifies the checklist document is complete, static safety gates pass, and prerequisite Edge Function verify scripts still pass. **No feature code changes required** for this phase unless a bug is found during manual smoke testing.
+Verifies the deployment checklist document is complete, static safety gates pass, and prerequisite Edge Function verify scripts still pass.
+
+### Phase 41 — smoke test plan
+
+```powershell
+npm run verify-edge-delivery-test-smoke-plan
+```
+
+Verifies the Phase 41 manual smoke checklist is documented, UI shows attempted/delivered/failed/skipped, then runs `build` and `verify-edge-delivery-test-deployment`. **No live Supabase deploy or Resend calls** — manual sign-off follows deploy.
+
+---
+
+## Phase 41 — Manual smoke test checklist
+
+**Goal:** Guide and verify the **first safe staging deployment** of `send-reminder-deliveries` with `EMAIL_MODE=test`.
+
+Complete **Deployment checklist** and **Secret checklist** below, then run this checklist on staging (or local static server against staging Supabase).
+
+### Open app
+
+```
+http://127.0.0.1:8877/?backend=cloud&cloudWrites=1
+```
+
+Or staging hostname:
+
+```
+https://YOUR_STAGING_ORIGIN/?backend=cloud&cloudWrites=1
+```
+
+### Manual checks
+
+| # | Check | Expected | Pass |
+|---|--------|----------|:----:|
+| M.1 | **sign in as admin** | Manual Delivery Test card visible | ☐ |
+| M.2 | Run **Manual Delivery Test** (confirm dialog → Run Delivery Test) | Loading state, then result or error | ☐ |
+| M.3 | Network tab: `POST .../functions/v1/send-reminder-deliveries` | Authenticated invoke — **no** `api.resend.com` from browser | ☐ |
+| M.4 | Email arrives **only** at `EMAIL_TEST_REDIRECT_TO` | No email to queue item recipient addresses | ☐ |
+| M.5 | Received email subject starts with **`[TEST]`** | Visual inbox check | ☐ |
+| M.6 | UI shows **attempted**, **delivered**, **failed**, **skipped** | Last test result panel populated from Edge Function `summary` | ☐ |
+| M.7 | **delivery logs unchanged** | `reminder_delivery_logs` row count stable; Delivery Operations Log unchanged | ☐ |
+| M.8 | **compliance/history unchanged** | Register and history spot-check before/after | ☐ |
+| M.9 | **no reminders marked sent** | Queue/register reminder status unchanged | ☐ |
+
+### Before/after snapshot (recommended)
+
+Record these **before** M.2 and confirm **unchanged** after M.9:
+
+1. `reminder_delivery_logs` row count (Supabase Table Editor or Delivery Operations Log UI)
+2. `compliance_records` — spot-check 1–2 rows touched by queue preview
+3. `history` — no new delivery-related entries
+4. Reminder sent status on queued items — still unsent
+
+---
+
+## What to check in email inbox
+
+| # | Check | Pass |
+|---|--------|:----:|
+| E.1 | Email received at **`EMAIL_TEST_REDIRECT_TO`** only | ☐ |
+| E.2 | Subject line starts with **`[TEST]`** | ☐ |
+| E.3 | **From** matches `EMAIL_FROM_ADDRESS` secret | ☐ |
+| E.4 | **Reply-To** matches `EMAIL_REPLY_TO_ADDRESS` when set | ☐ |
+| E.5 | Body content matches reminder template preview (test redirect does not change body) | ☐ |
+| E.6 | **No** email delivered to real staff/recipient addresses from queue | ☐ |
 
 ---
 
@@ -47,7 +134,7 @@ Set these on the **staging** Supabase project (or local `supabase functions serv
 | Secret | Required | Example / notes |
 |--------|:--------:|-----------------|
 | `RESEND_API_KEY` | **Yes** | Resend API key with send scope — missing → `503` `{ error: "provider_not_configured" }` |
-| `EMAIL_MODE` | **Yes** | Must be **`test`** for Phase 40 — any other value → `503` `{ error: "invalid_email_mode" }` |
+| `EMAIL_MODE` | **Yes** | Must be **`test`** for Phase 40–41 — any other value → `503` `{ error: "invalid_email_mode" }` |
 | `EMAIL_FROM_ADDRESS` | **Yes** | Verified sender (e.g. `reminders@yourorg.org` or Resend onboarding domain for staging) — missing → `503` `{ error: "invalid_config" }` |
 | `EMAIL_REPLY_TO_ADDRESS` | Recommended | Safeguarding inbox for replies — optional but recommended |
 | `EMAIL_TEST_REDIRECT_TO` | **Yes** (when `EMAIL_MODE=test`) | Controlled inbox that receives **all** test sends — missing → `503` `{ error: "invalid_config" }` |
@@ -252,9 +339,10 @@ Run these from the repository root **before** manual smoke testing and **after**
 
 ```powershell
 npm run verify-edge-delivery-test-deployment
+npm run verify-edge-delivery-test-smoke-plan
 ```
 
-This orchestrates:
+`verify-edge-delivery-test-deployment` orchestrates:
 
 1. Documentation completeness checks (`docs/v6-edge-delivery-test-deployment.md`)
 2. Static safety gates (test redirect, `[TEST]` prefix, missing-secret failures, browser invoke only, no persistence/mutation hooks)
@@ -263,11 +351,19 @@ This orchestrates:
    - `verify-edge-delivery-resend`
    - `verify-edge-delivery-browser-invoke`
 
+`verify-edge-delivery-test-smoke-plan` orchestrates:
+
+1. Phase 41 manual smoke checklist documentation checks
+2. UI wiring for attempted/delivered/failed/skipped result summary
+3. `npm run build`
+4. `npm run verify-edge-delivery-test-deployment`
+
 ### Full pre-deploy stack (recommended)
 
 ```powershell
 npm run build
 npm run verify-edge-delivery-test-deployment
+npm run verify-edge-delivery-test-smoke-plan
 npm run verify-manual-delivery-e2e-foundation
 npm run sync-env
 npm run verify-staging-config
@@ -277,18 +373,19 @@ npm run verify-staging-config
 
 ```powershell
 supabase secrets set RESEND_API_KEY=... EMAIL_MODE=test EMAIL_FROM_ADDRESS=... EMAIL_REPLY_TO_ADDRESS=... EMAIL_TEST_REDIRECT_TO=... EMAIL_RATE_LIMIT_PER_RUN=10
+supabase secrets list
 supabase functions deploy send-reminder-deliveries --project-ref YOUR_STAGING_REF
 npm run serve
 ```
 
-Then execute **Local smoke test plan** or **Staging smoke test plan** checklists above.
+Then execute **Phase 41 — Manual smoke test checklist** above.
 
 ---
 
 ## Phase 40 non-goals
 
 - `EMAIL_MODE=production` deployment or real-recipient sends
-- Delivery log persistence from Edge Function outcomes (Phase 41+)
+- Delivery log persistence from Edge Function outcomes (Phase 42+)
 - Mark-as-sent automation
 - Scheduled or automatic delivery execution
 - JWT admin-role validation inside Edge Function (deferred — browser gates admin today)
@@ -296,7 +393,21 @@ Then execute **Local smoke test plan** or **Staging smoke test plan** checklists
 
 ---
 
-## Sign-off
+**Next slice after Phase 41:** Delivery log persistence from Edge Function outcomes (planned).
+
+---
+
+## Phase 41 sign-off
+
+| Role | Name | Date | Notes |
+|------|------|------|-------|
+| Engineering | | | `verify-edge-delivery-test-smoke-plan` passes; Edge Function deployed; manual checklist M.1–M.9 complete |
+| Safeguarding / ops | | | Test email at `EMAIL_TEST_REDIRECT_TO` with `[TEST]` prefix only (E.1–E.6) |
+| Admin QA | | | No delivery logs, mark-sent, or register mutation observed |
+
+---
+
+## Phase 40 sign-off
 
 | Role | Name | Date | Notes |
 |------|------|------|-------|

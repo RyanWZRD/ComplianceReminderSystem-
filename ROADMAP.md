@@ -6,7 +6,40 @@ A local-first safeguarding compliance tracker. Runs in the browser with localSto
 
 # Current Release
 
-## V6 Phase 40 — Edge Function Test-Mode Deployment Readiness
+## V6 Phase 41 — Test-Mode Edge Function Deployment Smoke Test
+
+**Date:** June 2026
+
+### Summary
+
+V6 Phase 41 guides and verifies the **first safe staging deployment** of `send-reminder-deliveries` with `EMAIL_MODE=test`. Manual smoke test checklist, email inbox checks, Supabase dashboard checks, UI summary wiring (attempted/delivered/failed/skipped), and automated smoke-plan gate — **no production sending**, no delivery log writes, no mark-as-sent, and no compliance/history mutation.
+
+**Documentation:**
+
+- [`docs/v6-edge-delivery-test-deployment.md`](docs/v6-edge-delivery-test-deployment.md) — Phase 41 manual smoke checklist, preflight commands, deploy steps
+- [`docs/v6-edge-delivery-function.md`](docs/v6-edge-delivery-function.md) — Phase 41 cross-reference
+- [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md) — Phase 41 cross-reference
+- [`docs/v5-automated-compliance-operations.md`](docs/v5-automated-compliance-operations.md#v6--reminder-delivery--phase-41-complete) — Phase 41 summary
+
+**Preflight (required):**
+
+```powershell
+npm run build
+npm run verify-edge-delivery-test-deployment
+npm run verify-edge-delivery-test-smoke-plan
+```
+
+**Manual sign-off (after deploy):**
+
+- Set Supabase Edge Function secrets (`EMAIL_MODE=test`, `EMAIL_TEST_REDIRECT_TO`, etc.)
+- Deploy `send-reminder-deliveries` to staging
+- Run Phase 41 manual smoke checklist in [`docs/v6-edge-delivery-test-deployment.md`](docs/v6-edge-delivery-test-deployment.md)
+
+**Next slice:** Delivery log persistence from Edge Function outcomes (planned)
+
+---
+
+## V6 Phase 40 — Edge Function Test-Mode Deployment Readiness (complete)
 
 **Date:** June 2026
 
@@ -27,13 +60,7 @@ V6 Phase 40 prepares **safe deployment and testing** of `send-reminder-deliverie
 - `npm run verify-edge-delivery-browser-invoke` — browser invoke wiring must still pass
 - `npm run verify-edge-delivery-resend` — server-side Resend integration must still pass
 
-**Manual sign-off (after deploy):**
-
-- Set Supabase Edge Function secrets (`EMAIL_MODE=test`, `EMAIL_TEST_REDIRECT_TO`, etc.)
-- Deploy `send-reminder-deliveries` to staging
-- Run local/staging smoke checklists in [`docs/v6-edge-delivery-test-deployment.md`](docs/v6-edge-delivery-test-deployment.md)
-
-**Next slice:** Delivery log persistence from Edge Function outcomes (planned)
+**Status:** Complete — see V6 Phase 41 (current release) above.
 
 ---
 

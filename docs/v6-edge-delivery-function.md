@@ -453,12 +453,41 @@ The Supabase JS client attaches the signed-in user's JWT (`Authorization: Bearer
 ### Phase 40 non-goals
 
 - `EMAIL_MODE=production` or real-recipient sends
-- Delivery log persistence (Phase 41+)
+- Delivery log persistence (Phase 42+)
 - JWT admin-role validation inside Edge Function (deferred)
 
 **Verification:** `npm run verify-edge-delivery-test-deployment`
 
-**Next slice after Phase 40:** Delivery log persistence from Edge Function outcomes (planned).
+**Next slice after Phase 40:** V6 Phase 41 — test-mode deployment smoke test.
+
+---
+
+## Phase 41 — Test-mode deployment smoke test
+
+**Module:** `supabase/functions/send-reminder-deliveries/index.ts` (deployed + secrets)  
+**Documentation:** [`docs/v6-edge-delivery-test-deployment.md`](v6-edge-delivery-test-deployment.md) § Phase 41
+
+**Status:** Smoke test plan and verification gate — guides first safe staging deploy sign-off.
+
+### Phase 41 scope
+
+| Item | Detail |
+|------|--------|
+| Preflight | `npm run build`, `npm run verify-edge-delivery-test-deployment`, `npm run verify-edge-delivery-test-smoke-plan` |
+| Deploy | `supabase secrets set` + `supabase functions deploy send-reminder-deliveries` with `EMAIL_MODE=test` |
+| Manual smoke | Admin Manual Delivery Test → Edge Function invoke → email at `EMAIL_TEST_REDIRECT_TO` with `[TEST]` subject |
+| UI outcomes | attempted / delivered / failed / skipped from Edge Function `summary` |
+| Safety | No delivery log writes, mark-as-sent, compliance/history mutation, or scheduling |
+
+### Phase 41 non-goals
+
+- `EMAIL_MODE=production` or real-recipient sends
+- Delivery log persistence (Phase 42+)
+- JWT admin-role validation inside Edge Function (deferred)
+
+**Verification:** `npm run verify-edge-delivery-test-smoke-plan`
+
+**Next slice after Phase 41:** Delivery log persistence from Edge Function outcomes (planned).
 
 ---
 
@@ -469,4 +498,4 @@ The Supabase JS client attaches the signed-in user's JWT (`Authorization: Bearer
 | [`v6-delivery-architecture.md`](v6-delivery-architecture.md) | Phase 36 server-side architecture cross-reference |
 | [`v6-email-provider-configuration.md`](v6-email-provider-configuration.md) | Provider env vars, test/production gates, Resend adapter contract |
 | [`v6-beta-validation.md`](v6-beta-validation.md) | Staging validation before implementation |
-| [`v6-edge-delivery-test-deployment.md`](v6-edge-delivery-test-deployment.md) | Phase 40 test-mode deployment checklist and smoke tests |
+| [`v6-edge-delivery-test-deployment.md`](v6-edge-delivery-test-deployment.md) | Phase 40–41 test-mode deployment checklist and smoke tests |

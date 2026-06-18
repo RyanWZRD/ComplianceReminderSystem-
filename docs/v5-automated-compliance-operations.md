@@ -748,6 +748,39 @@ The Reminder Queue Preview section includes a **Digest preview** area wired to `
 
 ---
 
+## V6 — Reminder delivery · Phase 41 complete
+
+**Goal:** Guide and verify the first safe staging deployment of `send-reminder-deliveries` with `EMAIL_MODE=test` — manual smoke checklist, inbox/Supabase checks, and automated smoke-plan gate.
+
+**Status:** Test-mode deployment smoke test plan complete. V6 Phase 41 complete on **v6.0.0-beta.1** baseline.
+
+**Deliverables:**
+
+- [`docs/v6-edge-delivery-test-deployment.md`](v6-edge-delivery-test-deployment.md) — Phase 41 manual smoke checklist, preflight commands, deploy steps, inbox checks
+- `scripts/verify-edge-delivery-test-smoke-plan.mjs` — smoke plan verification gate
+- `npm run verify-edge-delivery-test-smoke-plan`
+- UI result summary — attempted / delivered / failed / skipped from Edge Function `summary`
+
+| Item | Detail |
+|------|--------|
+| Preflight | `npm run build` + `verify-edge-delivery-test-deployment` + `verify-edge-delivery-test-smoke-plan` |
+| Deploy | `supabase secrets set` + `supabase functions deploy send-reminder-deliveries` with `EMAIL_MODE=test` only |
+| Manual smoke | Admin Manual Delivery Test → `/functions/v1/send-reminder-deliveries` → email at redirect inbox with `[TEST]` |
+| Phase 41 scope | Smoke test support — no delivery logs, mark-as-sent, or production sends |
+
+**Constraints:** No production sending, no delivery log RPC writes, no mark-as-sent automation, no scheduled execution, no compliance/history mutation.
+
+**Verification:** `npm run verify-edge-delivery-test-smoke-plan`
+
+| Phase | Deliverable | Status |
+|-------|-------------|--------|
+| 41 | Test-mode deployment smoke test (`verify-edge-delivery-test-smoke-plan`) | **Complete** |
+| 42 | Delivery log persistence from Edge outcomes | Planned |
+
+**Next slice:** Delivery log persistence from Edge Function outcomes (planned).
+
+---
+
 ## V6 — Reminder delivery · Phase 40 complete
 
 **Goal:** Prepare safe deployment and testing of `send-reminder-deliveries` in Supabase **test mode** — deployment checklist, secret checklist, smoke test plans, and automated readiness gate.
@@ -775,7 +808,8 @@ The Reminder Queue Preview section includes a **Digest preview** area wired to `
 | Phase | Deliverable | Status |
 |-------|-------------|--------|
 | 40 | Test-mode deployment readiness (`verify-edge-delivery-test-deployment`) | **Complete** |
-| 41 | Delivery log persistence from Edge outcomes | Planned |
+| 41 | Test-mode deployment smoke test (`verify-edge-delivery-test-smoke-plan`) | **Complete** |
+| 42 | Delivery log persistence from Edge outcomes | Planned |
 
 **Next slice:** Delivery log persistence from Edge Function outcomes (planned).
 

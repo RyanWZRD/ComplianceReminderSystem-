@@ -200,15 +200,17 @@ assertEqual(formatManualDeliveryModeLabel("test"), "test", "mode label test");
 assertEqual(formatManualDeliveryModeLabel("production"), "production", "mode label production");
 assertEqual(formatManualDeliveryModeLabel("disabled"), "disabled", "mode label disabled");
 
-const resultSummary = buildManualDeliveryResultSummary(
-  { attempted: 2, delivered: 1, failed: 1 },
-  { persisted: 2 }
-);
+const resultSummary = buildManualDeliveryResultSummary({
+  attempted: 2,
+  delivered: 1,
+  failed: 1,
+  skipped: 3,
+});
 
 assertEqual(resultSummary.attempted, 2, "result summary attempted");
 assertEqual(resultSummary.delivered, 1, "result summary delivered");
 assertEqual(resultSummary.failed, 1, "result summary failed");
-assertEqual(resultSummary.persisted, 2, "result summary persisted");
+assertEqual(resultSummary.skipped, 3, "result summary skipped");
 
 assertContains(MANUAL_DELIVERY_CONFIRMATION_MESSAGE, "Emails may be sent", "confirmation mentions emails may be sent");
 assertContains(

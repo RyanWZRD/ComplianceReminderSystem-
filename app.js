@@ -460,8 +460,8 @@ const manualDeliveryTestResultDelivered = document.getElementById(
   "manual-delivery-test-result-delivered"
 );
 const manualDeliveryTestResultFailed = document.getElementById("manual-delivery-test-result-failed");
-const manualDeliveryTestResultPersisted = document.getElementById(
-  "manual-delivery-test-result-persisted"
+const manualDeliveryTestResultSkipped = document.getElementById(
+  "manual-delivery-test-result-skipped"
 );
 const manualDeliveryTestRunBtn = document.getElementById("manual-delivery-test-run-btn");
 const insightStaleEvidence = document.getElementById("insight-stale-evidence");
@@ -6674,7 +6674,7 @@ function renderManualDeliveryTest() {
     !manualDeliveryTestResultAttempted ||
     !manualDeliveryTestResultDelivered ||
     !manualDeliveryTestResultFailed ||
-    !manualDeliveryTestResultPersisted ||
+    !manualDeliveryTestResultSkipped ||
     !manualDeliveryTestRunBtn
   ) {
     return;
@@ -6760,15 +6760,12 @@ async function handleManualDeliveryTestRun() {
       asOfDate: queue.asOfDate,
     });
 
-    const summary = buildManualDeliveryResultSummary(
-      result.executionSummary,
-      result.persistenceSummary
-    );
+    const summary = buildManualDeliveryResultSummary(result.executionSummary);
 
     manualDeliveryTestResultAttempted.textContent = String(summary.attempted);
     manualDeliveryTestResultDelivered.textContent = String(summary.delivered);
     manualDeliveryTestResultFailed.textContent = String(summary.failed);
-    manualDeliveryTestResultPersisted.textContent = String(summary.persisted);
+    manualDeliveryTestResultSkipped.textContent = String(summary.skipped);
     manualDeliveryTestResult.classList.remove("hidden");
 
     await loadDeliveryOperationsLog();

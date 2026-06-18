@@ -297,30 +297,48 @@ const mockSupabase = {
       };
     },
   },
-  functions: {
-    async invoke(_functionName, { body }) {
-      const records = Array.isArray(body?.deliveryRecords) ? body.deliveryRecords : [];
-      const attempted = records.filter((record) => String(record.recipientEmail ?? "").trim()).length;
+};
 
-      return {
-        data: {
-          status: "ok",
-          summary: {
-            total: records.length,
-            attempted,
-            delivered: attempted,
-            failed: 0,
-            skipped: records.length - attempted,
-          },
-          results: records.map((record) => ({
-            queueItemId: record.queueItemId,
-            deliveryStatus: String(record.recipientEmail ?? "").trim() ? "delivered" : "skipped",
-          })),
-        },
-        error: null,
-      };
+const originalFetch = globalThis.fetch;
+
+globalThis.fetch = async (_url, init) => {
+  const headers = new Headers(init?.headers);
+  const authorization = headers.get("Authorization");
+
+  if (!authorization || !authorization.startsWith("Bearer test-access-token")) {
+    throw new Error("Manual delivery test fetch is missing Authorization Bearer session token.");
+  }
+
+  const records = (() => {
+    try {
+      const body = JSON.parse(String(init?.body ?? "{}"));
+      return Array.isArray(body?.deliveryRecords) ? body.deliveryRecords : [];
+    } catch {
+      return [];
+    }
+  })();
+  const attempted = records.filter((record) => String(record.recipientEmail ?? "").trim()).length;
+
+  return new Response(
+    JSON.stringify({
+      status: "ok",
+      summary: {
+        total: records.length,
+        attempted,
+        delivered: attempted,
+        failed: 0,
+        skipped: records.length - attempted,
+      },
+      results: records.map((record) => ({
+        queueItemId: record.queueItemId,
+        deliveryStatus: String(record.recipientEmail ?? "").trim() ? "delivered" : "skipped",
+      })),
+    }),
+    {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
     },
-  },
+  );
 };
 
 try {
@@ -358,6 +376,8 @@ try {
   assertEqual(executionResult.persistenceSummary.persisted, 0, "execution coordinator skips delivery log writes in Phase 39");
 } catch (error) {
   fail(`executeManualDeliveryTest smoke: ${error instanceof Error ? error.message : String(error)}`);
+} finally {
+  globalThis.fetch = originalFetch;
 }
 
 if (failures.length > 0) {

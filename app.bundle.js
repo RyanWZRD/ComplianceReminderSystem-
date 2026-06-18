@@ -26241,6 +26241,13 @@ ${suffix}`;
 
   // js/app/automation/edge-delivery-invoke.js
   var SEND_REMINDER_DELIVERIES_FUNCTION = "send-reminder-deliveries";
+  function buildSendReminderDeliveriesUrl() {
+    const baseUrl = String(SUPABASE_URL ?? "").trim().replace(/\/+$/, "");
+    if (!baseUrl) {
+      throw new Error("SUPABASE_URL is required for Edge Function delivery invoke.");
+    }
+    return `${baseUrl}/functions/v1/${SEND_REMINDER_DELIVERIES_FUNCTION}`;
+  }
   async function resolveInvokeAccessToken(supabase) {
     const { data, error } = await supabase.auth.getSession();
     if (error) {
@@ -26252,6 +26259,36 @@ ${suffix}`;
     }
     return accessToken;
   }
+  function buildEdgeDeliveryInvokeHeaders(accessToken) {
+    const resolvedToken = String(accessToken ?? "").trim();
+    const anonKey = String(SUPABASE_ANON_KEY ?? "").trim();
+    if (!resolvedToken) {
+      throw new Error("Active Supabase session access_token is required for Edge Function delivery invoke.");
+    }
+    if (!anonKey) {
+      throw new Error("SUPABASE_ANON_KEY is required for Edge Function delivery invoke.");
+    }
+    return {
+      apikey: anonKey,
+      Authorization: `Bearer ${resolvedToken}`,
+      "Content-Type": "application/json"
+    };
+  }
+  function assertEdgeDeliveryInvokeHeaders(headers) {
+    const normalized = new Headers(headers);
+    const authorization = String(normalized.get("Authorization") ?? "").trim();
+    if (!authorization.toLowerCase().startsWith("bearer ")) {
+      throw new Error("Edge Function invoke request is missing Authorization Bearer header.");
+    }
+    const token = authorization.slice("Bearer ".length).trim();
+    if (!token) {
+      throw new Error("Edge Function invoke request has empty Bearer access_token.");
+    }
+    if (!String(normalized.get("apikey") ?? "").trim()) {
+      throw new Error("Edge Function invoke request is missing apikey header.");
+    }
+    return { authorization, token };
+  }
   function mapDeliveryRecordsForEdgeInvoke(records) {
     return (Array.isArray(records) ? records : []).map((record) => ({
       queueItemId: record.queueItemId,
@@ -26261,13 +26298,36 @@ ${suffix}`;
       metadata: record.metadata
     }));
   }
+  async function throwEdgeFunctionHttpError(response) {
+    let message = `Edge Function invoke failed with status ${response.status}.`;
+    try {
+      const body = await response.json();
+      if (body && typeof body === "object") {
+        const record = (
+          /** @type {Record<string, unknown>} */
+          body
+        );
+        const detail = record.message ?? record.error ?? record.code;
+        if (detail) {
+          message = String(detail);
+        }
+      }
+    } catch {
+      const text = await response.text().catch(() => "");
+      if (text.trim()) {
+        message = text.trim();
+      }
+    }
+    throw new Error(message);
+  }
   async function invokeSendReminderDeliveries({
     supabase,
     organisationId,
     automationRunId,
-    deliveryRecords
+    deliveryRecords,
+    fetchImpl = fetch
   }) {
-    if (!supabase?.functions?.invoke) {
+    if (!supabase?.auth?.getSession) {
       throw new Error("Supabase client is required for Edge Function delivery invoke.");
     }
     const resolvedOrganisationId = String(organisationId ?? "").trim();
@@ -26279,18 +26339,25 @@ ${suffix}`;
       throw new Error("automationRunId is required for Edge Function delivery invoke.");
     }
     const accessToken = await resolveInvokeAccessToken(supabase);
-    const { data, error } = await supabase.functions.invoke(SEND_REMINDER_DELIVERIES_FUNCTION, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`
-      },
-      body: {
+    const headers = buildEdgeDeliveryInvokeHeaders(accessToken);
+    assertEdgeDeliveryInvokeHeaders(headers);
+    const response = await fetchImpl(buildSendReminderDeliveriesUrl(), {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
         organisationId: resolvedOrganisationId,
         automationRunId: resolvedAutomationRunId,
         deliveryRecords: Array.isArray(deliveryRecords) ? deliveryRecords : []
-      }
+      })
     });
-    if (error) {
-      throw new Error(error.message || "Edge Function invoke failed.");
+    if (!response.ok) {
+      await throwEdgeFunctionHttpError(response);
+    }
+    let data;
+    try {
+      data = await response.json();
+    } catch {
+      throw new Error("Edge Function returned an invalid response.");
     }
     if (!data || typeof data !== "object" || Array.isArray(data)) {
       throw new Error("Edge Function returned an invalid response.");

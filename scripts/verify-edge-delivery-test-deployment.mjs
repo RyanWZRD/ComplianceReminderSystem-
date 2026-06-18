@@ -173,8 +173,18 @@ const emailProviderEnvJs = readFileSync(emailProviderEnvPath, "utf8");
 
 assertContains(
   edgeDeliveryInvokeJs,
+  "functions/v1/",
+  "edge-delivery-invoke.js calls /functions/v1/send-reminder-deliveries directly",
+);
+assertContains(
+  edgeDeliveryInvokeJs,
+  "buildEdgeDeliveryInvokeHeaders",
+  "edge-delivery-invoke.js builds explicit invoke headers",
+);
+assertNotContains(
+  edgeDeliveryInvokeJs,
   "functions.invoke",
-  "edge-delivery-invoke.js uses supabase.functions.invoke",
+  "edge-delivery-invoke.js must not use supabase.functions.invoke",
 );
 assertContains(
   edgeDeliveryInvokeJs,

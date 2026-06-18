@@ -7,6 +7,12 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  assertEdgeDeliveryInvokeHeaders,
+  buildEdgeDeliveryInvokeHeaders,
+  buildSendReminderDeliveriesUrl,
+  invokeSendReminderDeliveries,
+} from "../js/app/automation/edge-delivery-invoke.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, "..");
@@ -126,8 +132,23 @@ assertContains(
 );
 assertContains(
   edgeDeliveryInvokeJs,
+  "functions/v1/",
+  "edge-delivery-invoke.js calls /functions/v1/send-reminder-deliveries directly",
+);
+assertContains(
+  edgeDeliveryInvokeJs,
+  "buildEdgeDeliveryInvokeHeaders",
+  "edge-delivery-invoke.js builds explicit invoke headers",
+);
+assertContains(
+  edgeDeliveryInvokeJs,
+  "assertEdgeDeliveryInvokeHeaders",
+  "edge-delivery-invoke.js asserts Authorization header before fetch",
+);
+assertNotContains(
+  edgeDeliveryInvokeJs,
   "functions.invoke",
-  "edge-delivery-invoke.js uses supabase.functions.invoke",
+  "edge-delivery-invoke.js must not use supabase.functions.invoke",
 );
 assertContains(
   edgeDeliveryInvokeJs,
@@ -165,12 +186,17 @@ assertContains(
 assertContains(
   edgeDeliveryInvokeJs,
   "Authorization",
-  "edge-delivery-invoke.js sets Authorization header on invoke",
+  "edge-delivery-invoke.js sets Authorization header on fetch",
 );
 assertContains(
   edgeDeliveryInvokeJs,
   "Bearer",
-  "edge-delivery-invoke.js sends Bearer JWT on invoke",
+  "edge-delivery-invoke.js sends Bearer JWT on fetch",
+);
+assertContains(
+  edgeDeliveryInvokeJs,
+  "apikey",
+  "edge-delivery-invoke.js sets apikey header on fetch",
 );
 assertNotContains(
   edgeDeliveryInvokeJs,
@@ -369,6 +395,93 @@ assertContains(
   "manual-delivery-execution.js returns executionSummary from Edge Function",
 );
 
+console.log("--- runtime invoke header verification (required) ---");
+
+const builtHeaders = buildEdgeDeliveryInvokeHeaders("runtime-test-access-token");
+const assertedHeaders = assertEdgeDeliveryInvokeHeaders(builtHeaders);
+
+assert(
+  assertedHeaders.authorization === "Bearer runtime-test-access-token",
+  "buildEdgeDeliveryInvokeHeaders produces Authorization Bearer JWT",
+);
+assert(
+  builtHeaders.apikey && builtHeaders.apikey.trim().length > 0,
+  "buildEdgeDeliveryInvokeHeaders includes apikey",
+);
+
+const invokeUrl = buildSendReminderDeliveriesUrl();
+assert(
+  invokeUrl.endsWith("/functions/v1/send-reminder-deliveries"),
+  "buildSendReminderDeliveriesUrl targets send-reminder-deliveries",
+);
+
+/** @type {Array<{ url: string; headers: Headers }>} */
+const capturedRequests = [];
+
+const mockSupabase = {
+  auth: {
+    async getSession() {
+      return {
+        data: { session: { access_token: "runtime-test-access-token" } },
+        error: null,
+      };
+    },
+  },
+};
+
+await invokeSendReminderDeliveries({
+  supabase: mockSupabase,
+  organisationId: "11111111-1111-4111-8111-111111111111",
+  automationRunId: "22222222-2222-4222-8222-222222222222",
+  deliveryRecords: [],
+  fetchImpl: async (url, init) => {
+    capturedRequests.push({
+      url: String(url),
+      headers: new Headers(init?.headers),
+    });
+
+    return new Response(
+      JSON.stringify({
+        status: "ok",
+        summary: { total: 0, attempted: 0, delivered: 0, failed: 0, skipped: 0 },
+        results: [],
+      }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      },
+    );
+  },
+});
+
+assert(capturedRequests.length === 1, "invokeSendReminderDeliveries issues exactly one fetch request");
+
+const captured = capturedRequests[0];
+const capturedAuthorization = captured.headers.get("Authorization");
+
+assert(
+  captured.url.endsWith("/functions/v1/send-reminder-deliveries"),
+  "runtime invoke fetch targets send-reminder-deliveries",
+);
+assert(
+  capturedAuthorization === "Bearer runtime-test-access-token",
+  "runtime invoke fetch includes Authorization Bearer session access_token",
+);
+assert(
+  String(captured.headers.get("apikey") ?? "").trim().length > 0,
+  "runtime invoke fetch includes apikey header",
+);
+
+try {
+  buildEdgeDeliveryInvokeHeaders("");
+  fail("buildEdgeDeliveryInvokeHeaders must reject empty access_token");
+} catch (error) {
+  assert(
+    error instanceof Error && error.message.includes("access_token"),
+    "buildEdgeDeliveryInvokeHeaders rejects empty access_token",
+  );
+}
+
 console.log("--- documentation ---");
 
 assertContains(
@@ -404,7 +517,7 @@ if (failures.length > 0) {
 }
 
 console.log("\nverify-edge-delivery-browser-invoke: all checks OK");
-console.log("  browser: manual delivery invokes send-reminder-deliveries with Authorization Bearer JWT");
+console.log("  browser: manual delivery fetches send-reminder-deliveries with Authorization Bearer JWT + apikey");
 console.log("  browser: session access_token required; no service role key in execution path");
 console.log("  browser: no createResendEmailProvider, RESEND_API_KEY, or api.resend.com in execution path");
 console.log("  server: resend-provider.js retained as deprecated scaffold only");

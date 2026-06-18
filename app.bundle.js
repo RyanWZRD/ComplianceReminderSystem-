@@ -26289,75 +26289,6 @@ ${suffix}`;
     );
   }
 
-  // js/app/automation/email-provider-config.js
-  var SUPPORTED_EMAIL_PROVIDERS = ["none", "resend", "sendgrid", "smtp"];
-  var SUPPORTED_EMAIL_MODES = ["disabled", "test", "production"];
-  var DEFAULT_EMAIL_RATE_LIMIT_PER_RUN = 50;
-  function parseBooleanEnv(value) {
-    return value === "true" || value === "1";
-  }
-  function parsePositiveIntEnv(value, fallback) {
-    const parsed = Number.parseInt(String(value ?? ""), 10);
-    if (!Number.isFinite(parsed) || parsed < 1) {
-      return fallback;
-    }
-    return parsed;
-  }
-  function parseProvider(value) {
-    const normalized = String(value ?? "none").trim().toLowerCase();
-    if (SUPPORTED_EMAIL_PROVIDERS.includes(normalized)) {
-      return (
-        /** @type {EmailProviderName} */
-        normalized
-      );
-    }
-    return "none";
-  }
-  function parseMode(value) {
-    const normalized = String(value ?? "disabled").trim().toLowerCase();
-    if (SUPPORTED_EMAIL_MODES.includes(normalized)) {
-      return (
-        /** @type {EmailProviderMode} */
-        normalized
-      );
-    }
-    return "disabled";
-  }
-  function getEmailProviderConfig(env) {
-    const source = env ?? (typeof process !== "undefined" && process.env ? process.env : (
-      /** @type {Record<string, string | undefined>} */
-      {}
-    ));
-    const provider = parseProvider(source.EMAIL_PROVIDER);
-    const mode = parseMode(source.EMAIL_MODE);
-    const fromEmail = String(source.EMAIL_FROM_ADDRESS ?? "").trim() || null;
-    const replyToEmail = String(source.EMAIL_REPLY_TO_ADDRESS ?? "").trim() || null;
-    const rateLimitPerRun = parsePositiveIntEnv(
-      source.EMAIL_RATE_LIMIT_PER_RUN,
-      DEFAULT_EMAIL_RATE_LIMIT_PER_RUN
-    );
-    const explicitlyEnabled = parseBooleanEnv(source.EMAIL_PROVIDER_ENABLED);
-    const enabled = explicitlyEnabled && provider !== "none" && mode !== "disabled";
-    if (source.EMAIL_PROVIDER === void 0 && source.EMAIL_MODE === void 0 && source.EMAIL_PROVIDER_ENABLED === void 0 && source.EMAIL_FROM_ADDRESS === void 0 && source.EMAIL_REPLY_TO_ADDRESS === void 0 && source.EMAIL_RATE_LIMIT_PER_RUN === void 0) {
-      return {
-        provider: "none",
-        mode: "disabled",
-        fromEmail: null,
-        replyToEmail: null,
-        rateLimitPerRun: DEFAULT_EMAIL_RATE_LIMIT_PER_RUN,
-        enabled: false
-      };
-    }
-    return {
-      provider,
-      mode,
-      fromEmail,
-      replyToEmail,
-      rateLimitPerRun,
-      enabled
-    };
-  }
-
   // js/app/automation/reminder-template-builder.js
   function getReminderWindowCopy2(reminderWindow, reminderType) {
     if (reminderWindow === "expired" || reminderType === REMINDER_UI_LABELS.expired) {
@@ -26539,18 +26470,6 @@ ${suffix}`;
     });
   }
 
-  // js/data/email-provider-env.js
-  var EMAIL_PROVIDER_RUNTIME = {
-    EMAIL_PROVIDER: void 0,
-    EMAIL_MODE: void 0,
-    EMAIL_PROVIDER_ENABLED: void 0,
-    EMAIL_FROM_ADDRESS: void 0,
-    EMAIL_REPLY_TO_ADDRESS: void 0,
-    EMAIL_RATE_LIMIT_PER_RUN: void 0,
-    EMAIL_TEST_REDIRECT_TO: void 0,
-    RESEND_API_KEY: void 0
-  };
-
   // js/app/automation/manual-delivery-execution.js
   var MANUAL_DELIVERY_RUN_TYPE = "manual_delivery_test";
   var MANUAL_DELIVERY_RUN_SOURCE = "admin_manual_delivery_ui";
@@ -26583,10 +26502,6 @@ ${suffix}`;
     if (!db || typeof db.createAutomationRun !== "function") {
       throw new Error("Manual delivery test requires an automation store with createAutomationRun.");
     }
-    const providerConfig = getEmailProviderConfig(EMAIL_PROVIDER_RUNTIME);
-    if (!providerConfig.enabled) {
-      throw new Error("Email provider is not enabled for manual delivery tests.");
-    }
     const resolvedOrganisationId = String(organisationId ?? "").trim();
     if (!resolvedOrganisationId) {
       throw new Error("Manual delivery test requires organisationId.");
@@ -26598,7 +26513,7 @@ ${suffix}`;
         source: MANUAL_DELIVERY_RUN_SOURCE,
         organisationId: resolvedOrganisationId,
         queueItemCount: Array.isArray(queueItems) ? queueItems.length : 0,
-        providerMode: providerConfig.mode,
+        providerMode: "edge_function",
         deliveryPath: "edge_function"
       }
     });
@@ -26633,6 +26548,7 @@ ${suffix}`;
   // js/app/automation/manual-delivery-ui.js
   var MANUAL_DELIVERY_TEST_SAFETY_NOTE = "Manual test execution only. No scheduling is enabled.";
   var MANUAL_DELIVERY_RUN_BUTTON_LABEL = "Run Delivery Test";
+  var MANUAL_DELIVERY_DELIVERY_MODE = "edge_function";
   var MANUAL_DELIVERY_CONFIRMATION_MESSAGE = [
     "Run a manual delivery test using the current reminder preview queue?",
     "",
@@ -26642,10 +26558,16 @@ ${suffix}`;
     "\u2022 This action cannot be undone."
   ].join("\n");
   function formatManualDeliveryModeLabel(mode) {
+    if (mode === "edge_function" || mode === "edge function") {
+      return "edge function";
+    }
     if (mode === "test" || mode === "production") {
       return mode;
     }
     return "disabled";
+  }
+  function getManualDeliveryDeliveryModeLabel() {
+    return formatManualDeliveryModeLabel(MANUAL_DELIVERY_DELIVERY_MODE);
   }
   function computeManualDeliveryQueueSummary(queueItems) {
     const items = Array.isArray(queueItems) ? queueItems : [];
@@ -26659,9 +26581,6 @@ ${suffix}`;
       totalQueued: items.length,
       missingEmail
     };
-  }
-  function getManualDeliveryProviderConfig() {
-    return getEmailProviderConfig(EMAIL_PROVIDER_RUNTIME);
   }
   function buildManualDeliveryResultSummary(executionSummary) {
     return {
@@ -32161,14 +32080,13 @@ This cannot be undone.`
     manualDeliveryTestRunBtn.textContent = MANUAL_DELIVERY_RUN_BUTTON_LABEL;
     const queue = buildReminderQueuePreviewData();
     const queueSummary = computeManualDeliveryQueueSummary(queue.items);
-    const providerConfig = getManualDeliveryProviderConfig();
     manualDeliveryTestTotalCount.textContent = String(queueSummary.totalQueued);
     manualDeliveryTestMissingEmailCount.textContent = String(queueSummary.missingEmail);
-    manualDeliveryTestModeValue.textContent = formatManualDeliveryModeLabel(providerConfig.mode);
+    manualDeliveryTestModeValue.textContent = getManualDeliveryDeliveryModeLabel();
     const isRunning = manualDeliveryTestExecutionState === "running";
     manualDeliveryTestLoading.classList.toggle("hidden", !isRunning);
-    manualDeliveryTestRunBtn.disabled = isRunning || !providerConfig.enabled;
-    manualDeliveryTestProviderHint.classList.toggle("hidden", providerConfig.enabled);
+    manualDeliveryTestRunBtn.disabled = isRunning;
+    manualDeliveryTestProviderHint.classList.add("hidden");
     if (manualDeliveryTestErrorMessage) {
       manualDeliveryTestError.textContent = manualDeliveryTestErrorMessage;
       manualDeliveryTestError.classList.remove("hidden");
@@ -32179,12 +32097,6 @@ This cannot be undone.`
   }
   async function handleManualDeliveryTestRun() {
     if (!canRunManualDeliveryTest() || manualDeliveryTestExecutionState === "running") {
-      return;
-    }
-    const providerConfig = getManualDeliveryProviderConfig();
-    if (!providerConfig.enabled) {
-      manualDeliveryTestErrorMessage = "Email provider is not enabled. Configure provider settings before running a delivery test.";
-      renderManualDeliveryTest();
       return;
     }
     const confirmed = confirm(MANUAL_DELIVERY_CONFIRMATION_MESSAGE);

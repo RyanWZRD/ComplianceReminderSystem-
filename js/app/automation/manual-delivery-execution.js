@@ -12,9 +12,7 @@ import {
   invokeSendReminderDeliveries,
   mapDeliveryRecordsForEdgeInvoke,
 } from "./edge-delivery-invoke.js";
-import { getEmailProviderConfig } from "./email-provider-config.js";
 import { buildReminderDeliveryRecords } from "./reminder-delivery-record-builder.js";
-import { EMAIL_PROVIDER_RUNTIME } from "../../data/email-provider-env.js";
 import { getSupabaseClient } from "../../data/supabase-client.js";
 
 export const MANUAL_DELIVERY_RUN_TYPE = "manual_delivery_test";
@@ -72,12 +70,6 @@ export async function executeManualDeliveryTest({
     throw new Error("Manual delivery test requires an automation store with createAutomationRun.");
   }
 
-  const providerConfig = getEmailProviderConfig(EMAIL_PROVIDER_RUNTIME);
-
-  if (!providerConfig.enabled) {
-    throw new Error("Email provider is not enabled for manual delivery tests.");
-  }
-
   const resolvedOrganisationId = String(organisationId ?? "").trim();
 
   if (!resolvedOrganisationId) {
@@ -91,7 +83,7 @@ export async function executeManualDeliveryTest({
       source: MANUAL_DELIVERY_RUN_SOURCE,
       organisationId: resolvedOrganisationId,
       queueItemCount: Array.isArray(queueItems) ? queueItems.length : 0,
-      providerMode: providerConfig.mode,
+      providerMode: "edge_function",
       deliveryPath: "edge_function",
     },
   });

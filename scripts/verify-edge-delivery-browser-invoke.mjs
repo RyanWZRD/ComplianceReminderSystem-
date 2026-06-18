@@ -160,6 +160,77 @@ assertContains(
   "manual-delivery-execution.js maps delivery records for Edge Function",
 );
 
+console.log("--- no browser email provider gate (Phase 39+) ---");
+
+assertNotContains(
+  manualDeliveryExecutionJs,
+  "Email provider is not enabled",
+  "manual-delivery-execution.js must not gate on browser email provider enabled",
+);
+assertNotContains(
+  manualDeliveryExecutionJs,
+  "getEmailProviderConfig",
+  "manual-delivery-execution.js must not read browser email provider config",
+);
+assertNotContains(
+  manualDeliveryExecutionJs,
+  "EMAIL_PROVIDER_RUNTIME",
+  "manual-delivery-execution.js must not read EMAIL_PROVIDER_RUNTIME",
+);
+
+function extractFunctionBody(source, functionName) {
+  const start = source.indexOf(`function ${functionName}(`);
+  if (start === -1) {
+    return "";
+  }
+
+  const braceStart = source.indexOf("{", start);
+  if (braceStart === -1) {
+    return "";
+  }
+
+  let depth = 0;
+  for (let index = braceStart; index < source.length; index += 1) {
+    const char = source[index];
+
+    if (char === "{") {
+      depth += 1;
+    } else if (char === "}") {
+      depth -= 1;
+
+      if (depth === 0) {
+        return source.slice(start, index + 1);
+      }
+    }
+  }
+
+  return "";
+}
+
+const manualDeliveryRunBody = extractFunctionBody(appJs, "handleManualDeliveryTestRun");
+const manualDeliveryRenderBody = extractFunctionBody(appJs, "renderManualDeliveryTest");
+
+assertNotContains(
+  manualDeliveryRunBody,
+  "Email provider is not enabled",
+  "handleManualDeliveryTestRun must not block on browser email provider enabled",
+);
+assertNotContains(
+  manualDeliveryRunBody,
+  "providerConfig.enabled",
+  "handleManualDeliveryTestRun must not gate on providerConfig.enabled",
+);
+assertNotContains(
+  manualDeliveryRenderBody,
+  "providerConfig.enabled",
+  "renderManualDeliveryTest must not disable run button on providerConfig.enabled",
+);
+assertNotContains(
+  appJs,
+  "getManualDeliveryProviderConfig",
+  "app.js must not use getManualDeliveryProviderConfig for manual delivery",
+);
+
 console.log("--- no legacy browser Resend path (required) ---");
 
 assertNotContains(

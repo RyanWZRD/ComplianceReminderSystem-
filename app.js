@@ -141,8 +141,7 @@ import {
   MANUAL_DELIVERY_TEST_SAFETY_NOTE,
   buildManualDeliveryResultSummary,
   computeManualDeliveryQueueSummary,
-  formatManualDeliveryModeLabel,
-  getManualDeliveryProviderConfig,
+  getManualDeliveryDeliveryModeLabel,
 } from "./js/app/automation/manual-delivery-ui.js";
 import { computeAutomationDryRun } from "./js/app/automation/automation-dry-run.js";
 import { buildReminderQueueFromDryRun } from "./js/app/automation/reminder-queue.js";
@@ -6692,16 +6691,15 @@ function renderManualDeliveryTest() {
 
   const queue = buildReminderQueuePreviewData();
   const queueSummary = computeManualDeliveryQueueSummary(queue.items);
-  const providerConfig = getManualDeliveryProviderConfig();
 
   manualDeliveryTestTotalCount.textContent = String(queueSummary.totalQueued);
   manualDeliveryTestMissingEmailCount.textContent = String(queueSummary.missingEmail);
-  manualDeliveryTestModeValue.textContent = formatManualDeliveryModeLabel(providerConfig.mode);
+  manualDeliveryTestModeValue.textContent = getManualDeliveryDeliveryModeLabel();
 
   const isRunning = manualDeliveryTestExecutionState === "running";
   manualDeliveryTestLoading.classList.toggle("hidden", !isRunning);
-  manualDeliveryTestRunBtn.disabled = isRunning || !providerConfig.enabled;
-  manualDeliveryTestProviderHint.classList.toggle("hidden", providerConfig.enabled);
+  manualDeliveryTestRunBtn.disabled = isRunning;
+  manualDeliveryTestProviderHint.classList.add("hidden");
 
   if (manualDeliveryTestErrorMessage) {
     manualDeliveryTestError.textContent = manualDeliveryTestErrorMessage;
@@ -6714,15 +6712,6 @@ function renderManualDeliveryTest() {
 
 async function handleManualDeliveryTestRun() {
   if (!canRunManualDeliveryTest() || manualDeliveryTestExecutionState === "running") {
-    return;
-  }
-
-  const providerConfig = getManualDeliveryProviderConfig();
-
-  if (!providerConfig.enabled) {
-    manualDeliveryTestErrorMessage =
-      "Email provider is not enabled. Configure provider settings before running a delivery test.";
-    renderManualDeliveryTest();
     return;
   }
 

@@ -1,15 +1,17 @@
 /**
  * V6 Phase 33: Manual delivery test UI helpers.
  * Admin-only manual execution surface — no scheduling, mark-as-sent, or compliance mutation.
+ *
+ * Phase 39+: Manual delivery invokes send-reminder-deliveries via Supabase Edge Function.
+ * Browser email provider settings and Resend API keys are not required.
  */
-
-import { getEmailProviderConfig } from "./email-provider-config.js";
-import { EMAIL_PROVIDER_RUNTIME } from "../../data/email-provider-env.js";
 
 export const MANUAL_DELIVERY_TEST_SAFETY_NOTE =
   "Manual test execution only. No scheduling is enabled.";
 
 export const MANUAL_DELIVERY_RUN_BUTTON_LABEL = "Run Delivery Test";
+
+export const MANUAL_DELIVERY_DELIVERY_MODE = "edge_function";
 
 export const MANUAL_DELIVERY_CONFIRMATION_MESSAGE = [
   "Run a manual delivery test using the current reminder preview queue?",
@@ -21,15 +23,28 @@ export const MANUAL_DELIVERY_CONFIRMATION_MESSAGE = [
 ].join("\n");
 
 /**
- * @param {import("./email-provider-config.js").EmailProviderMode | string} mode
+ * @param {string} [mode]
  * @returns {string}
  */
 export function formatManualDeliveryModeLabel(mode) {
+  if (mode === "edge_function" || mode === "edge function") {
+    return "edge function";
+  }
+
   if (mode === "test" || mode === "production") {
     return mode;
   }
 
   return "disabled";
+}
+
+/**
+ * Delivery mode label for the Manual Delivery Test card (Edge Function invoke path).
+ *
+ * @returns {string}
+ */
+export function getManualDeliveryDeliveryModeLabel() {
+  return formatManualDeliveryModeLabel(MANUAL_DELIVERY_DELIVERY_MODE);
 }
 
 /**
@@ -51,13 +66,6 @@ export function computeManualDeliveryQueueSummary(queueItems) {
     totalQueued: items.length,
     missingEmail,
   };
-}
-
-/**
- * @returns {ReturnType<typeof getEmailProviderConfig>}
- */
-export function getManualDeliveryProviderConfig() {
-  return getEmailProviderConfig(EMAIL_PROVIDER_RUNTIME);
 }
 
 /**

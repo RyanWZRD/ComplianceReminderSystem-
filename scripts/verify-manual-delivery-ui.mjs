@@ -10,11 +10,13 @@ import { fileURLToPath } from "node:url";
 
 import {
   MANUAL_DELIVERY_CONFIRMATION_MESSAGE,
+  MANUAL_DELIVERY_DELIVERY_MODE,
   MANUAL_DELIVERY_RUN_BUTTON_LABEL,
   MANUAL_DELIVERY_TEST_SAFETY_NOTE,
   buildManualDeliveryResultSummary,
   computeManualDeliveryQueueSummary,
   formatManualDeliveryModeLabel,
+  getManualDeliveryDeliveryModeLabel,
 } from "../js/app/automation/manual-delivery-ui.js";
 import { executeManualDeliveryTest } from "../js/app/automation/manual-delivery-execution.js";
 import {
@@ -22,7 +24,6 @@ import {
   REMINDER_QUEUE_STATUS,
 } from "../js/app/automation/reminder-queue.js";
 import { REMINDER_UI_LABELS } from "../js/data/reminder-sent.js";
-import { EMAIL_PROVIDER_RUNTIME } from "../js/data/email-provider-env.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, "..");
@@ -112,6 +113,7 @@ assertContains(indexHtml, MANUAL_DELIVERY_TEST_SAFETY_NOTE, "index.html manual d
 assertContains(indexHtml, 'id="manual-delivery-test-total-count"', "index.html manual delivery total queued");
 assertContains(indexHtml, 'id="manual-delivery-test-missing-email-count"', "index.html manual delivery missing email");
 assertContains(indexHtml, 'id="manual-delivery-test-mode-value"', "index.html manual delivery mode");
+assertContains(indexHtml, "edge function", "index.html manual delivery mode defaults to edge function");
 assertContains(indexHtml, 'id="manual-delivery-test-run-btn"', "index.html manual delivery run button");
 assertContains(indexHtml, MANUAL_DELIVERY_RUN_BUTTON_LABEL, "index.html run delivery test button label");
 assertContains(
@@ -140,9 +142,42 @@ assertContains(appJs, "getOrganisationId", "manual delivery resolves organisatio
 
 assertContains(manualDeliveryExecutionJs, "invokeSendReminderDeliveries", "execution module invokes Edge Function client");
 assertContains(manualDeliveryExecutionJs, "send-reminder-deliveries", "execution module references send-reminder-deliveries");
+assertNotContains(
+  manualDeliveryExecutionJs,
+  "getEmailProviderConfig",
+  "manual-delivery-execution.js must not read browser email provider config",
+);
+assertNotContains(
+  manualDeliveryExecutionJs,
+  "Email provider is not enabled",
+  "manual-delivery-execution.js must not gate on browser email provider enabled",
+);
 assertContains(manualDeliveryUiJs, "export function computeManualDeliveryQueueSummary", "UI module queue summary");
 assertContains(manualDeliveryUiJs, "MANUAL_DELIVERY_CONFIRMATION_MESSAGE", "UI module confirmation constant");
 assertContains(manualDeliveryUiJs, "Emails may be sent", "UI module confirmation mentions sending");
+assertContains(manualDeliveryUiJs, "MANUAL_DELIVERY_DELIVERY_MODE", "UI module exports Edge Function delivery mode");
+assertContains(manualDeliveryUiJs, "getManualDeliveryDeliveryModeLabel", "UI module exports Edge Function mode label");
+assertNotContains(
+  manualDeliveryUiJs,
+  "EMAIL_PROVIDER_RUNTIME",
+  "manual-delivery-ui.js must not read EMAIL_PROVIDER_RUNTIME",
+);
+assertNotContains(
+  manualDeliveryUiJs,
+  "getEmailProviderConfig",
+  "manual-delivery-ui.js must not read browser email provider config",
+);
+assertContains(appJs, "getManualDeliveryDeliveryModeLabel", "app.js uses Edge Function delivery mode label");
+assertNotContains(
+  appJs,
+  "getManualDeliveryProviderConfig",
+  "app.js must not use browser provider config for manual delivery",
+);
+assertNotContains(
+  appJs,
+  "Email provider is not enabled",
+  "app.js must not show browser email provider enabled guard",
+);
 
 const renderBody = extractFunctionBody(appJs, "renderManualDeliveryTest");
 assertContains(renderBody, "canRunManualDeliveryTest()", "render gates admin-only visibility");
@@ -151,6 +186,16 @@ assertContains(renderBody, 'classList.toggle("hidden", !visible)', "render hides
 const runBody = extractFunctionBody(appJs, "handleManualDeliveryTestRun");
 assertContains(runBody, "confirm(", "run handler uses confirmation dialog");
 assertContains(runBody, "executeManualDeliveryTest", "run handler invokes execution coordinator");
+assertNotContains(
+  runBody,
+  "providerConfig.enabled",
+  "run handler must not gate on browser email provider enabled",
+);
+assertNotContains(
+  runBody,
+  "Email provider is not enabled",
+  "run handler must not block with browser email provider message",
+);
 
 const forbiddenHooks = [
   "markReminderSent",
@@ -196,9 +241,16 @@ const queueSummary = computeManualDeliveryQueueSummary([
 assertEqual(queueSummary.totalQueued, 2, "queue summary total queued");
 assertEqual(queueSummary.missingEmail, 1, "queue summary missing email");
 
+assertEqual(formatManualDeliveryModeLabel("edge_function"), "edge function", "mode label edge function");
 assertEqual(formatManualDeliveryModeLabel("test"), "test", "mode label test");
 assertEqual(formatManualDeliveryModeLabel("production"), "production", "mode label production");
 assertEqual(formatManualDeliveryModeLabel("disabled"), "disabled", "mode label disabled");
+assertEqual(
+  getManualDeliveryDeliveryModeLabel(),
+  "edge function",
+  "manual delivery delivery mode label is edge function",
+);
+assertEqual(MANUAL_DELIVERY_DELIVERY_MODE, "edge_function", "manual delivery delivery mode constant");
 
 const resultSummary = buildManualDeliveryResultSummary({
   attempted: 2,
@@ -226,14 +278,6 @@ assertContains(
 
 const organisationId = "11111111-1111-4111-8111-111111111111";
 const automationRunId = "22222222-2222-4222-8222-222222222222";
-
-Object.assign(EMAIL_PROVIDER_RUNTIME, {
-  EMAIL_PROVIDER: "resend",
-  EMAIL_MODE: "test",
-  EMAIL_PROVIDER_ENABLED: "true",
-  EMAIL_FROM_ADDRESS: "onboarding@resend.dev",
-  EMAIL_TEST_REDIRECT_TO: "staging-inbox@example.org",
-});
 
 const db = {
   async createAutomationRun() {

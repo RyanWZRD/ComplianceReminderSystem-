@@ -1,7 +1,9 @@
 /**
  * V6 Phase 19: Resend email provider adapter.
- * Network implementation isolated from app execution — uses injected fetchImpl only.
- * No mark-as-sent automation, compliance/action/history mutation, or app wiring.
+ * LEGACY BROWSER MODULE — used by manual-delivery-execution.js until Phase 39 Edge Function wiring.
+ * Network implementation uses injected fetchImpl only (browser fetch when wired from manual delivery UI).
+ * Server-side sends use the Supabase Edge Function — not this module.
+ * No mark-as-sent automation, compliance/action/history mutation, or app wiring beyond manual delivery.
  */
 
 const RESEND_EMAILS_URL = "https://api.resend.com/emails";

@@ -1,6 +1,17 @@
 /**
  * V6 Phase 33: Manual delivery test execution coordinator.
  * Invokes runManualDeliveryPipeline for admin-initiated tests only.
+ *
+ * LEGACY BROWSER SEND PATH (pre-Phase 39):
+ * Still wired to the Manual Delivery UI via app.js → executeManualDeliveryTest.
+ * When email-provider-env.js is synced from .env with provider enabled + RESEND_API_KEY,
+ * this path calls createResendEmailProvider with browser fetch (CORS-blocked; key exposure risk).
+ * Committed git defaults keep the provider disabled — see email-provider-env.js.
+ *
+ * Phase 38+ production sends must use the Supabase Edge Function (server-side Resend).
+ * Phase 39 will replace this browser provider with Edge Function invoke — do not use browser
+ * fetch to api.resend.com as the production sending path after Phase 39.
+ *
  * No scheduling, mark-as-sent automation, or compliance/history mutation.
  */
 

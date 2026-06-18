@@ -91,6 +91,10 @@
     "verify-manual-delivery-foundation": "node scripts/verify-manual-delivery-foundation.mjs",
     "verify-manual-delivery-ui": "node scripts/verify-manual-delivery-ui.mjs",
     "verify-manual-delivery-e2e-foundation": "node scripts/verify-manual-delivery-e2e-foundation.mjs",
+    "verify-beta-validation-checklist": "node scripts/verify-beta-validation-checklist.mjs",
+    "verify-edge-delivery-plan": "node scripts/verify-edge-delivery-plan.mjs",
+    "verify-edge-delivery-function-skeleton": "node scripts/verify-edge-delivery-function-skeleton.mjs",
+    "verify-edge-delivery-resend": "node scripts/verify-edge-delivery-resend.mjs",
     "verify:phase2": "node scripts/verify-phase2.mjs"
   },
   "dependencies": {

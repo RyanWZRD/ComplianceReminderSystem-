@@ -6,6 +6,95 @@ A local-first safeguarding compliance tracker. Runs in the browser with localSto
 
 # Current Release
 
+## V6 Phase 38 — Edge Function Resend Integration
+
+**Date:** June 2026
+
+### Summary
+
+V6 Phase 38 implements **server-side Resend sending** in `supabase/functions/send-reminder-deliveries/index.ts`. Legacy browser provider scaffold remains wired but **inert in committed defaults** (`email-provider-env.js` all `undefined`). **No browser invoke wiring yet.**
+
+**Documentation:**
+
+- [`docs/v6-edge-delivery-function.md`](docs/v6-edge-delivery-function.md) — Phase 38 Resend integration behaviour
+- [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md) — Phase 38 cross-reference
+- [`docs/v5-automated-compliance-operations.md`](docs/v5-automated-compliance-operations.md#v6--reminder-delivery--phase-38-complete) — Phase 38 summary
+
+**Verification (required):**
+
+- `npm run verify-edge-delivery-resend` — server-side Resend integration and safety gates
+- `npm run verify-edge-delivery-function-skeleton` — structural skeleton checks must still pass
+
+**Next slice:** V6 Phase 39 — Browser invoke wiring (planned)
+
+---
+
+## V6 Phase 37 — Edge Function Skeleton (`send-reminder-deliveries`) (complete)
+
+**Date:** June 2026
+
+### Summary
+
+V6 Phase 37 adds the **Supabase Edge Function skeleton** at `supabase/functions/send-reminder-deliveries/index.ts`. Handles POST validation and OPTIONS CORS preflight. Extended by Phase 38 Resend integration.
+
+**Documentation:**
+
+- [`docs/v6-edge-delivery-function.md`](docs/v6-edge-delivery-function.md) — Phase 37 skeleton behaviour and CORS placeholder
+- [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md) — Phase 37 cross-reference
+- [`docs/v5-automated-compliance-operations.md`](docs/v5-automated-compliance-operations.md#v6--reminder-delivery--phase-37-complete) — Phase 37 summary
+
+**Verification (required):**
+
+- `npm run verify-edge-delivery-function-skeleton` — skeleton handler, validation, safety gates
+
+**Status:** Complete — see V6 Phase 38 (current release) above.
+
+---
+
+## V6 Phase 36 — Server-side Delivery Architecture Plan (complete)
+
+**Date:** June 2026
+
+### Summary
+
+First **post-beta** architecture checkpoint: document why browser → Resend direct delivery fails (CORS + exposed API key) and define the replacement path through a Supabase Edge Function (`send-reminder-deliveries`). **Planning only** — see Phase 37 for skeleton implementation.
+
+**Documentation:**
+
+- [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md) — Phase 36 server-side architecture cross-reference
+- [`docs/v6-edge-delivery-function.md`](docs/v6-edge-delivery-function.md) — Edge Function contract (payload, auth, secrets, persistence, rollback)
+- [`docs/v5-automated-compliance-operations.md`](docs/v5-automated-compliance-operations.md#v6--reminder-delivery--phase-36-complete) — Phase 36 summary
+
+**Verification (required):**
+
+- `npm run verify-edge-delivery-plan` — architecture docs, CORS/secret safety
+
+**Status:** Complete — see V6 Phase 37 (current release) above.
+
+---
+
+## V6.1 Phase 1 — Beta Validation
+
+**Date:** June 2026
+
+### Summary
+
+First **V6.1** checkpoint: controlled staging validation of the complete manual delivery workflow before mark-as-sent automation. Checklist document (`docs/v6-beta-validation.md`) and verification gate (`verify-beta-validation-checklist`) cover queue/template preview, manual delivery UI, test-mode Resend, delivery logs, CSV export, permissions, and safety invariants. **No new features, schema changes, RPC changes, or UI changes** unless a bug is found.
+
+**Documentation:**
+
+- [`docs/v6-beta-validation.md`](docs/v6-beta-validation.md) — beta validation checklist (10 test areas)
+- [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md) — V6.1 Phase 1 cross-reference
+- [`docs/v5-automated-compliance-operations.md`](docs/v5-automated-compliance-operations.md#v61--beta-validation--phase-1-complete) — V6.1 Phase 1 summary
+
+**Verification (required):**
+
+- `npm run verify-beta-validation-checklist` — checklist completeness + automated test-area scripts
+
+**Status:** Complete — see V6 Phase 36 (current release) above.
+
+---
+
 ## v6.0.0-beta.1 — V6 Manual Delivery E2E Release Readiness
 
 **Date:** June 2026
@@ -789,7 +878,7 @@ Documentation and version bump (`v6.0.0-beta.1`) confirming the admin-only manua
 
 **Release candidate:** **v6.0.0-beta.1**
 
-**Next slice:** V6 Phase 36 — Mark-as-sent on confirmed delivery (policy-gated)
+**Next slice:** V6 Phase 36 — Server-side delivery architecture plan (see current release)
 
 ---
 

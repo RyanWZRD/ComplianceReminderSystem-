@@ -3,7 +3,7 @@
 **Theme:** Move from *knowing* what needs attention (V4 Compliance Insights) to *acting on it automatically* — scheduled reminders, orchestrated actions, escalations, and auditable operations.
 
 **Target:** v5.0.0 (major release)  
-**Current alpha:** v6.0.0-beta.1 — V6 Manual Delivery E2E Release Readiness (see release-readiness note below)  
+**Current alpha:** V6.1 Phase 1 — Beta Validation (baseline **v6.0.0-beta.1**; see [`docs/v6-beta-validation.md`](v6-beta-validation.md))  
 **Prior alpha:** v5.0.0-alpha.5 — V5-2 Template & Digest Foundation; v5.0.0-alpha.4 — V5-1 Reminder Queue Foundation; v5.0.0-alpha.3 — V5-0 Automation Platform Foundation; v5.0.0-alpha.2 — V5-1A + V5-1B (see [`docs/v5-0-0-alpha-2-release-notes.md`](v5-0-0-alpha-2-release-notes.md))  
 **Prerequisites:** v4.0.1 GA, v3.1.0 cloud follow-on (evidence Storage, restore/bulk ops, production cloud-writes policy)  
 **Date:** Planned — post v4.0.1 sign-off (June 2026+)
@@ -711,7 +711,139 @@ The Reminder Queue Preview section includes a **Digest preview** area wired to `
 
 **Constraints:** Verification orchestrator only. No scheduled execution, automatic execution, mark-as-sent automation, or compliance/history mutation.
 
-**Next slice:** V6 Phase 35 — Manual delivery E2E release readiness.
+**Next slice:** V6.1 Phase 1 — Beta validation.
+
+---
+
+## V6.1 — Beta validation · Phase 1 complete
+
+**Goal:** Validate the complete manual delivery workflow in a controlled staging environment before implementing mark-as-sent automation.
+
+**Status:** Beta validation checklist and verification gate complete. V6.1 Phase 1 complete on **v6.0.0-beta.1** baseline.
+
+**Deliverables:**
+
+- `docs/v6-beta-validation.md` — ten test areas with automated + manual staging steps
+- `scripts/verify-beta-validation-checklist.mjs` — checklist completeness + mapped automated scripts
+- `npm run verify-beta-validation-checklist`
+
+| Area | Automated coverage |
+|------|-------------------|
+| Queue generation | `verify-reminder-queue`, `verify-reminder-queue-ui` |
+| Template / digest | `verify-reminder-template-builder`, `verify-reminder-digest-builder`, preview UI scripts |
+| Manual delivery UI | `verify-manual-delivery-ui` |
+| Test-mode delivery | `verify-resend-provider` |
+| Real Resend send | `verify-manual-delivery-runner`, `verify-manual-delivery-foundation`, persistence + ops log |
+| Missing email | `verify-reminder-delivery-record-builder` |
+| Invalid email | `verify-resend-provider` (permanent failure mapping) |
+| CSV export | `verify-delivery-operations-log-ui` |
+| Permission checks | `verify-manual-delivery-ui`, `verify-manual-delivery-e2e-foundation` |
+| Safety checks | `verify-manual-delivery-e2e-foundation`, `verify-manual-delivery-runner` |
+
+**Constraints:** No new features, schema changes, RPC changes, or UI changes unless a bug is found. No mark-as-sent automation.
+
+**Verification:** `npm run verify-beta-validation-checklist`
+
+**Next slice:** V6 Phase 36 — Server-side delivery architecture plan — after manual staging sign-off.
+
+---
+
+## V6 — Reminder delivery · Phase 38 complete
+
+**Goal:** Implement server-side Resend sending inside `send-reminder-deliveries` Edge Function with test/production gates, rate limiting, and failure mapping — no browser wiring.
+
+**Status:** Edge Function Resend integration complete. V6 Phase 38 complete on **v6.0.0-beta.1** baseline.
+
+**Deliverables:**
+
+- `supabase/functions/send-reminder-deliveries/index.ts` — Resend `POST /emails` integration
+- `scripts/verify-edge-delivery-resend.mjs` — Resend integration verification gate
+- `npm run verify-edge-delivery-resend`
+
+| Item | Detail |
+|------|--------|
+| Secrets | `RESEND_API_KEY`, `EMAIL_MODE`, `EMAIL_FROM_ADDRESS`, `EMAIL_REPLY_TO_ADDRESS`, `EMAIL_TEST_REDIRECT_TO`, `EMAIL_RATE_LIMIT_PER_RUN` |
+| Test mode | Redirect to `EMAIL_TEST_REDIRECT_TO`; `[TEST]` subject prefix |
+| Failure mapping | `2xx` delivered; `429`/`5xx` transient; `4xx` permanent |
+| Phase 38 scope | Edge Function only — no delivery logs, no UI wiring; legacy browser path inert in git |
+| Dual-path | Server Edge Function authoritative; browser scaffold disabled until sync-env |
+
+**Constraints:** No browser invoke wiring, no delivery log RPC writes, no mark-as-sent automation, no scheduled execution. Legacy browser Resend scaffold retained but inert in committed defaults — see dual-path transition in `docs/v6-edge-delivery-function.md`.
+
+**Verification:** `npm run verify-edge-delivery-resend` and `npm run verify-edge-delivery-function-skeleton`
+
+| Phase | Deliverable | Status |
+|-------|-------------|--------|
+| 38 | Edge Function Resend integration (`verify-edge-delivery-resend`) | **Complete** |
+| 39 | Browser invoke wiring | Planned |
+
+**Next slice:** V6 Phase 39 — Browser invoke wiring (planned).
+
+---
+
+## V6 — Reminder delivery · Phase 37 complete
+
+**Goal:** Create the `send-reminder-deliveries` Edge Function skeleton with POST validation, OPTIONS CORS, and `not_implemented` response — no Resend calls or delivery log writes.
+
+**Status:** Edge Function skeleton complete. V6 Phase 37 complete on **v6.0.0-beta.1** baseline.
+
+**Deliverables:**
+
+- `supabase/functions/send-reminder-deliveries/index.ts` — Deno Edge Function skeleton
+- `scripts/verify-edge-delivery-function-skeleton.mjs` — skeleton verification gate
+- `npm run verify-edge-delivery-function-skeleton`
+
+| Item | Detail |
+|------|--------|
+| POST handler | Validates `Authorization`, `organisationId`, `automationRunId`, `deliveryRecords` |
+| OPTIONS handler | CORS preflight for localhost origins |
+| Response | `200` `{ status: "not_implemented", ... }` |
+| Phase 37 scope | Skeleton only — no Resend, no delivery logs, no UI wiring |
+
+**Constraints:** No Resend API calls, no `RESEND_API_KEY`, no delivery log writes, no mark-as-sent automation, no app UI changes.
+
+**Verification:** `npm run verify-edge-delivery-function-skeleton` and `npm run verify-edge-delivery-plan`
+
+| Phase | Deliverable | Status |
+|-------|-------------|--------|
+| 37 | Edge Function skeleton (`verify-edge-delivery-function-skeleton`) | **Complete** |
+| 38 | Resend integration + browser invoke wiring | Planned |
+
+**Next slice:** V6 Phase 38 — Edge Function Resend integration (see Phase 38 complete above).
+
+---
+
+## V6 — Reminder delivery · Phase 36 complete
+
+**Goal:** Document the server-side delivery architecture before implementing Supabase Edge Function sends. Replace blocked browser → Resend path with browser → Edge Function → Resend → `create_reminder_delivery_log`.
+
+**Status:** Server-side delivery architecture plan complete. V6 Phase 36 complete on **v6.0.0-beta.1** baseline.
+
+**Deliverables:**
+
+- `docs/v6-delivery-architecture.md` — Phase 36 section (CORS, API key exposure, new architecture)
+- `docs/v6-edge-delivery-function.md` — `send-reminder-deliveries` contract
+- `scripts/verify-edge-delivery-plan.mjs` — plan verification gate
+- `npm run verify-edge-delivery-plan`
+
+| Item | Detail |
+|------|--------|
+| CORS failure | Resend API blocks browser-origin requests — documented |
+| API key exposure | `RESEND_API_KEY` must live only in Edge Function secrets |
+| New path | Manual Delivery UI → Edge Function → Resend → delivery log RPC |
+| Phase 36 scope | Planning only — no deployed function, no browser invoke wiring |
+
+**Constraints:** No Edge Function deploy, no browser send-path changes, no live Resend calls, no mark-as-sent automation.
+
+**Verification:** `npm run verify-edge-delivery-plan` and `npm run verify-manual-delivery-e2e-foundation`
+
+| Phase | Deliverable | Status |
+|-------|-------------|--------|
+| 36 | Server-side delivery architecture plan (`verify-edge-delivery-plan`) | **Complete** |
+| 37 | Edge Function skeleton (`verify-edge-delivery-function-skeleton`) | **Complete** |
+| 38 | Mark-as-sent on confirmed delivery (policy-gated) | Planned |
+
+**Next slice:** V6 Phase 37 — Edge Function skeleton (see Phase 37 complete above).
 
 ---
 
@@ -732,7 +864,9 @@ The Reminder Queue Preview section includes a **Digest preview** area wired to `
 | Phase | Deliverable | Status |
 |-------|-------------|--------|
 | 35 | Manual delivery E2E release readiness (`v6.0.0-beta.1`) | **Complete** |
-| 36 | Mark-as-sent on confirmed delivery (policy-gated) | Planned |
+| 36 | Server-side delivery architecture plan (`verify-edge-delivery-plan`) | **Complete** |
+| 37 | Edge Function skeleton (`verify-edge-delivery-function-skeleton`) | **Complete** |
+| 38 | Mark-as-sent on confirmed delivery (policy-gated) | Planned |
 
 **Release candidate:** **v6.0.0-beta.1**
 
@@ -741,7 +875,7 @@ The Reminder Queue Preview section includes a **Digest preview** area wired to `
 - `npm run build` — rebuild `app.bundle.js` after version bump
 - `npm run verify-manual-delivery-e2e-foundation` — full manual delivery E2E foundation stack
 
-**Next slice:** V6 Phase 36 — Mark-as-sent on confirmed delivery.
+**Next slice:** V6.1 Phase 1 — Beta validation.
 
 ---
 
@@ -1407,6 +1541,7 @@ Extend the existing pattern from V3/V4:
 | `npm run verify-manual-delivery-foundation` | V6 Phase 31 — manual delivery foundation orchestrator (pipeline + manual runner stack) |
 | `npm run verify-manual-delivery-ui` | V6 Phase 33 — admin manual delivery test UI (confirmation + manual runner wiring) |
 | `npm run verify-manual-delivery-e2e-foundation` | V6 Phase 34 — manual delivery E2E foundation orchestrator (UI + provider + pipeline + ops log) |
+| `npm run verify-beta-validation-checklist` | V6.1 Phase 1 — beta validation checklist completeness + automated test-area scripts |
 | `npm run verify-automation-schema` | V5-0 migrations + RPC |
 | `npm run verify-automation-reminders` | V5-1 queue + mark sent |
 | `npm run verify-automation-actions` | V5-2 policy apply |

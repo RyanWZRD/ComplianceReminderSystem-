@@ -3,8 +3,8 @@
 **Theme:** Define how reminder emails would be sent and audited — lifecycle, records, duplicate prevention, retries, and provider abstraction — **without** implementing delivery.
 
 **Target:** v6.0.0 (major release)  
-**Current phase:** V6 Phase 35 — Manual Delivery E2E Release Readiness  
-**Release candidate:** v6.0.0-beta.1  
+**Current phase:** V6.1 Phase 1 — Beta Validation  
+**Release candidate:** v6.0.0-beta.1 (baseline for beta validation)  
 **Prerequisites:** v5.0.0-alpha.5 (V5-2 template & digest foundation)  
 **Date:** Planned — June 2026+
 
@@ -412,6 +412,10 @@ interface HealthCheckResult {
 | `npm run verify-manual-delivery-foundation` | Phase 31 — manual delivery foundation orchestrator (pipeline + manual runner stack) |
 | `npm run verify-manual-delivery-ui` | Phase 33 — admin manual delivery test UI (confirmation + manual runner wiring) |
 | `npm run verify-manual-delivery-e2e-foundation` | Phase 34 — manual delivery E2E foundation orchestrator (UI + provider + pipeline + ops log) |
+| `npm run verify-beta-validation-checklist` | V6.1 Phase 1 — beta validation checklist completeness + automated test-area scripts |
+| `npm run verify-edge-delivery-plan` | Phase 36 — server-side delivery architecture plan, CORS/secret safety |
+| `npm run verify-edge-delivery-function-skeleton` | Phase 37 — Edge Function skeleton, validation, CORS, no delivery logs |
+| `npm run verify-edge-delivery-resend` | Phase 38 — server-side Resend sends, test/production gates, failure mapping, no browser wiring |
 
 **Phase 1 gate:** `npm run verify-delivery-architecture` must pass. No Supabase or browser required.
 
@@ -476,6 +480,14 @@ interface HealthCheckResult {
 **Phase 34 gate:** `npm run verify-manual-delivery-e2e-foundation` must pass. E2E foundation orchestrator only — no scheduled execution, automatic execution, mark-as-sent automation, or compliance/history mutation.
 
 **Phase 35 gate:** `npm run build` and `npm run verify-manual-delivery-e2e-foundation` must pass. Documentation and version bump only — no mark-as-sent automation yet.
+
+**V6.1 Phase 1 gate:** `npm run verify-beta-validation-checklist` must pass. Checklist documentation and automated validation only — no new features, schema changes, RPC changes, or UI changes unless a bug is found.
+
+**Phase 36 gate:** `npm run verify-edge-delivery-plan` must pass. Planning documentation — architecture and safety rules documented.
+
+**Phase 37 gate:** `npm run verify-edge-delivery-function-skeleton` must pass. Edge Function skeleton — POST/OPTIONS handlers, field validation, no delivery log writes.
+
+**Phase 38 gate:** `npm run verify-edge-delivery-resend` must pass. Server-side Resend integration only — no delivery log writes, browser invoke wiring, mark-as-sent automation, or schema/RPC changes.
 
 ---
 
@@ -1126,11 +1138,248 @@ Worker flow unchanged from Phase 1 contract: `prepared` → `sending` → `deliv
 | 33 | Admin manual delivery UI (`Manual Delivery Test` card) | **Complete** |
 | 34 | Manual delivery E2E foundation verification (`verify-manual-delivery-e2e-foundation`) | **Complete** |
 | 35 | Manual delivery E2E release readiness (`v6.0.0-beta.1`) | **Complete** |
-| 36 | Mark-as-sent on confirmed delivery (policy-gated) | Planned |
+| V6.1-1 | Beta validation checklist (`verify-beta-validation-checklist`) | **Complete** |
+| 36 | Server-side delivery architecture plan (`verify-edge-delivery-plan`) | **Complete** |
+| 37 | Edge Function skeleton (`send-reminder-deliveries`, `verify-edge-delivery-function-skeleton`) | **Complete** |
+| 38 | Edge Function Resend integration (`verify-edge-delivery-resend`) | **Complete** |
+| 39 | Browser invoke wiring + delivery log persistence | Planned |
+
+**Constraints (V6.1 Phase 1):** Checklist documentation and verification only. Validates complete manual delivery workflow in staging before mark-as-sent automation. No new features, schema changes, RPC changes, or UI changes unless a bug is found.
+
+**Next slice after V6.1 Phase 1:** V6 Phase 36 — Server-side delivery architecture plan (this phase).
+
+---
+
+## V6.1 Phase 1 — Beta validation
+
+**Scope:** Controlled staging validation checklist for the manual delivery workflow on top of **v6.0.0-beta.1**. Documents ten test areas (queue, template/digest, manual delivery UI, test-mode Resend, real send path, missing/invalid email, CSV export, permissions, safety invariants) and runs mapped automated verification scripts.
+
+**Deliverables:**
+
+| Item | Location |
+|------|----------|
+| Beta validation checklist | `docs/v6-beta-validation.md` |
+| Checklist verification | `scripts/verify-beta-validation-checklist.mjs` |
+
+**Verification (required):**
+
+- `npm run verify-beta-validation-checklist` — checklist completeness + automated test-area scripts
+
+### V6.1 Phase 1 constraints
+
+- Validation and documentation only — no mark-as-sent automation
+- No new features, schema changes, RPC changes, or UI changes unless a bug is found
+- Manual staging sign-off required for sections 3, 4, 5, 9, and 10 before Edge Function implementation
+
+**Next slice after Phase 35:** V6.1 Phase 1 — Beta validation (this phase).
+
+---
+
+## Phase 36 — Server-side delivery architecture plan
+
+**Scope:** Document why browser → Resend direct calls fail (CORS + exposed API key) and define the replacement path: **Browser Manual Delivery UI → Supabase Edge Function `send-reminder-deliveries` → Resend API → `create_reminder_delivery_log` RPC**. **Planning and safety only** — no deployed Edge Function, no browser invoke wiring, no live sends.
+
+### Why browser → Resend failed
+
+| Problem | Detail |
+|---------|--------|
+| **CORS** | Resend's REST API (`https://api.resend.com`) does not allow browser-origin requests. A `fetch` from the Manual Delivery UI is blocked by the browser preflight policy before the request reaches Resend. |
+| **Exposed API key** | `RESEND_API_KEY` synced into `email-provider-env.js` is bundled in `app.bundle.js` and readable in DevTools by any user who can load the app — including non-admin roles if the bundle is shared. API keys must never ship to clients. |
+
+### New architecture (planned)
+
+```
+Browser Manual Delivery UI
+  → supabase.functions.invoke("send-reminder-deliveries")
+  → Supabase Edge Function (holds RESEND_API_KEY in secrets)
+  → Resend API POST /emails
+  → create_reminder_delivery_log RPC → reminder_delivery_logs table
+```
+
+| Layer | Responsibility |
+|-------|----------------|
+| **Browser** | Build delivery records, admin confirmation, invoke Edge Function with JWT — **no** `api.resend.com` calls, **no** `RESEND_API_KEY` |
+| **Edge Function** | Admin auth, test/production gates, Resend HTTP, delivery log persistence |
+| **Postgres** | Immutable audit via existing `create_reminder_delivery_log` RPC |
+
+### Secret handling rule
+
+**`RESEND_API_KEY` must live only in Supabase Edge Function secrets** (`supabase secrets set`). The browser must never contain, read, or transmit the Resend API key. Non-secret provider settings (`EMAIL_MODE`, `EMAIL_FROM_ADDRESS`, `EMAIL_TEST_REDIRECT_TO`) may remain in `email-provider-env.js` for UI display.
+
+### Phase 36 deliverables
+
+| Item | Location |
+|------|----------|
+| Server-side architecture plan | This document § Phase 36 |
+| Edge Function contract | [`docs/v6-edge-delivery-function.md`](v6-edge-delivery-function.md) |
+| Plan verification | `scripts/verify-edge-delivery-plan.mjs` |
+
+**Script:** `scripts/verify-edge-delivery-plan.mjs`
+
+`npm run verify-edge-delivery-plan` verifies:
+
+1. Architecture and Edge Function plan documents exist
+2. CORS failure and API key exposure documented
+3. Browser must not call Resend directly (documented requirement)
+4. `RESEND_API_KEY` server-side-only rule documented
+5. Edge Function `send-reminder-deliveries` architecture documented
+6. No Edge Function implementation, no new `supabase/functions` deploy artefacts, no browser send-path changes in this phase
+
+### Phase 36 constraints
+
+- Planning documentation and verification only — no app behaviour changes
+- No deployed Edge Function, no `supabase.functions.invoke` wiring, no live Resend calls
+- No mark-as-sent automation, schema changes, or RPC changes
+- Existing in-browser `createResendEmailProvider` remains for unit tests with mocked `fetchImpl` until Phase 37+ implementation
+
+**Phase 36 gate:** `npm run verify-edge-delivery-plan` must pass.
+
+**Next slice after Phase 36:** V6 Phase 37 — Edge Function skeleton (`send-reminder-deliveries`).
+
+---
+
+## Phase 37 — Edge Function skeleton
+
+**Scope:** Create `supabase/functions/send-reminder-deliveries/index.ts` — POST-only handler with Authorization header check, JSON body parsing, required field validation (`organisationId`, `automationRunId`, `deliveryRecords`), OPTIONS CORS preflight, and `200` response `{ status: "not_implemented", message: "Server-side delivery is not implemented yet" }`. **Skeleton only** — no Resend API calls, no `RESEND_API_KEY` reads, no delivery log writes, no browser invoke wiring.
+
+### Skeleton behaviour
+
+| Method | Response |
+|--------|----------|
+| `OPTIONS` | `200` with CORS headers (localhost `127.0.0.1:8877` / `localhost:8877`; staging origins via future `EDGE_DELIVERY_ALLOWED_ORIGINS` secret) |
+| `POST` (missing `Authorization`) | `401` |
+| `POST` (invalid JSON / missing fields) | `400` |
+| `POST` (valid body) | `200` `{ status: "not_implemented", message: "Server-side delivery is not implemented yet" }` |
+| Other methods | `405` |
+
+### Phase 37 deliverables
+
+| Item | Location |
+|------|----------|
+| Edge Function skeleton | `supabase/functions/send-reminder-deliveries/index.ts` |
+| Skeleton verification | `scripts/verify-edge-delivery-function-skeleton.mjs` |
+| Contract cross-reference | [`docs/v6-edge-delivery-function.md`](v6-edge-delivery-function.md) § Phase 37 |
+
+**Script:** `scripts/verify-edge-delivery-function-skeleton.mjs`
+
+`npm run verify-edge-delivery-function-skeleton` verifies:
+
+1. `index.ts` exists with `Deno.serve`, POST and OPTIONS handlers
+2. Required field validation for `organisationId`, `automationRunId`, `deliveryRecords`
+3. Returns `not_implemented` response on valid POST
+4. No Resend API call, `RESEND_API_KEY`, delivery log writes, or mark-as-sent/compliance/history mutation
+5. No browser invoke wiring in `manual-delivery-execution.js`
+
+### Phase 37 constraints
+
+- Edge Function skeleton only — no Resend calls, no real email sending
+- No delivery log RPC writes, no mark-as-sent automation
+- No app UI changes, no `supabase.functions.invoke` wiring
+- Deploy to Supabase is optional in this phase — local `supabase functions serve` for manual smoke only
+
+**Phase 37 gate:** `npm run verify-edge-delivery-function-skeleton` must pass.
+
+**Next slice after Phase 37:** V6 Phase 38 — Edge Function Resend integration (this phase).
+
+---
+
+## Phase 38 — Edge Function Resend integration
+
+**Scope:** Implement server-side Resend sending in `supabase/functions/send-reminder-deliveries/index.ts`. Reads `RESEND_API_KEY`, `EMAIL_MODE`, `EMAIL_FROM_ADDRESS`, `EMAIL_REPLY_TO_ADDRESS`, `EMAIL_TEST_REDIRECT_TO`, and `EMAIL_RATE_LIMIT_PER_RUN` from Edge Function secrets. **Edge Function only** — no browser `supabase.functions.invoke` wiring, no delivery log RPC writes, no mark-as-sent automation.
+
+### Provider configuration (fail closed)
+
+| Check | Failure |
+|-------|---------|
+| Missing `RESEND_API_KEY` | `503` `{ error: "provider_not_configured" }` |
+| `EMAIL_MODE` not `test` or `production` | `503` `{ error: "invalid_email_mode" }` |
+| Missing `EMAIL_FROM_ADDRESS` | `503` `{ error: "invalid_config" }` |
+| `EMAIL_MODE=test` without `EMAIL_TEST_REDIRECT_TO` | `503` `{ error: "invalid_config" }` |
+
+### Test vs production mode
+
+| Mode | Behaviour |
+|------|-----------|
+| `test` | Redirect all recipients to `EMAIL_TEST_REDIRECT_TO`; prefix subject with `[TEST]` |
+| `production` | Send to real `recipientEmail` (requires explicit `EMAIL_MODE=production` secret) |
+
+### Sending and failure mapping
+
+- `POST https://api.resend.com/emails` from Edge Function only
+- `2xx` → per-record `delivered` with `providerMessageId`
+- `429` / `5xx` → `failed` with `failureType: "transient"`
+- Other `4xx` → `failed` with `failureType: "permanent"`
+- Network errors → `failed` with `failureReason: "resend_network_error"`
+
+### Rate limit
+
+`EMAIL_RATE_LIMIT_PER_RUN` caps send attempts per invocation (default `50`). Additional prepared records are `skipped` with `skipReason: "rate_limit_exceeded"`.
+
+### Response shape
+
+```json
+{
+  "status": "ok",
+  "summary": {
+    "total": 2,
+    "attempted": 2,
+    "delivered": 2,
+    "failed": 0,
+    "skipped": 0
+  },
+  "results": [
+    {
+      "queueItemId": "queue-item-1",
+      "deliveryStatus": "delivered",
+      "providerMessageId": "re_abc123"
+    }
+  ]
+}
+```
+
+### Phase 38 deliverables
+
+| Item | Location |
+|------|----------|
+| Resend integration | `supabase/functions/send-reminder-deliveries/index.ts` |
+| Resend verification | `scripts/verify-edge-delivery-resend.mjs` |
+| Contract cross-reference | [`docs/v6-edge-delivery-function.md`](v6-edge-delivery-function.md) § Phase 38 |
+
+**Script:** `scripts/verify-edge-delivery-resend.mjs`
+
+`npm run verify-edge-delivery-resend` verifies:
+
+1. Edge Function reads `RESEND_API_KEY` and provider env vars server-side
+2. Calls Resend API with test redirect, `[TEST]` prefix, and failure mapping
+3. Returns `summary` and per-record `results`
+4. No delivery log writes, mark-as-sent hooks, or browser invoke wiring
+
+### Phase 38 constraints
+
+- Edge Function Resend integration only — no `supabase.functions.invoke` wiring in app yet
+- Legacy browser provider scaffold retained in `manual-delivery-execution.js` / `resend-provider.js` for pre-Phase-39 staging; **inert when committed `email-provider-env.js` is all `undefined`**
+- No `create_reminder_delivery_log` RPC writes yet
+- No mark-as-sent automation, scheduled execution, or compliance/history mutation
+- **After Phase 39:** browser must not be the production sending path — Manual Delivery UI invokes Edge Function only
+
+### Dual-path transition (Phase 38)
+
+| Path | Active in committed git? | Production use |
+|------|--------------------------|----------------|
+| Edge Function `send-reminder-deliveries` | Code present; requires deploy + secrets | **Yes** (authoritative after Phase 39 wiring) |
+| Browser `createResendEmailProvider` | **No** — `email-provider-env.js` disables provider | **No** — legacy scaffold only until Phase 39 removes browser sends |
+
+`verify-edge-delivery-resend` distinguishes forbidden committed secrets and premature Edge invoke from allowed legacy scaffold.
+
+**Phase 38 gate:** `npm run verify-edge-delivery-resend` must pass.
+
+**Next slice after Phase 38:** V6 Phase 39 — Browser invoke wiring (planned).
+
+---
 
 **Constraints (Phase 35):** Documentation and version bump only. Admin-only manual delivery UI and E2E verification gate complete. No scheduled execution, automatic execution, or mark-as-sent automation yet.
 
-**Next slice after Phase 35:** V6 Phase 36 — Mark-as-sent on confirmed delivery (policy-gated).
+**Next slice after Phase 35:** V6.1 Phase 1 — Beta validation.
 
 ---
 
@@ -1728,6 +1977,7 @@ Stops on first failure. Prints section headings. Final success: `V6 Resend provi
 | Document | When |
 |----------|------|
 | `docs/v6-delivery-architecture.md` | V6 Phase 1 — this document |
+| `docs/v6-edge-delivery-function.md` | V6 Phase 36 — Edge Function `send-reminder-deliveries` contract |
 | `docs/v6-email-provider-configuration.md` | V6 Phase 10 — provider configuration architecture |
 | `docs/v6-delivery-schema.md` | V6 Phase 3+ — migrations and RPC reference (planned) |
 | `docs/v6-release-notes.md` | v6.0.0 GA (planned) |

@@ -570,6 +570,32 @@ export const EXPECTED_INSIGHTS = {
   },
 };
 
+/** V5-0 Phase 5 dry-run scan expectations for LOCAL_FIXTURE_ROWS / FIXTURE_AS_OF_DATE. */
+export const EXPECTED_AUTOMATION_DRY_RUN = {
+  asOfDate: FIXTURE_AS_OF_DATE,
+  totalRecords: 6,
+  reminderCandidates: {
+    total: 3,
+    byType: {
+      "30-day": 1,
+      "14-day": 1,
+      "7-day": 0,
+      expired: 1,
+    },
+    withEmail: 0,
+    missingEmail: 3,
+  },
+  actionCandidates: {
+    expiredRecords: 1,
+    criticalEvidenceGaps: 3,
+    missingFollowUp: 3,
+  },
+  escalationCandidates: {
+    expiredNoFollowUp: 1,
+    missingEmailInReminderWindow: 3,
+  },
+};
+
 export const EXPECTED_RECOMMENDATIONS = [
   {
     id: "expiry-expired-records",

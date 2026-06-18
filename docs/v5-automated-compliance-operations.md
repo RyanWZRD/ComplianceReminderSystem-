@@ -148,6 +148,44 @@ Slices are ordered **V5-1A (contact foundation) → V5-1B (preview) → V5-0 →
 
 **Goal:** Schema, RPC contracts, and run infrastructure without user-visible automation yet.
 
+**Implementation phases (incremental):**
+
+| Phase | Deliverable | Status |
+|-------|-------------|--------|
+| 1 | `automation_policies` + `automation_runs` tables, `AUTOMATION_ENABLED` flag | **COMPLETE** |
+| 2 | RPC `get_automation_policies` / `upsert_automation_policy` | **COMPLETE** |
+| 3 | RPC `list_automation_runs` / `get_automation_run` | **COMPLETE** |
+| 4 | RPC `create_automation_run` (audit record only) | **COMPLETE** |
+| 5 | Dry-run scan engine (`js/app/automation/automation-dry-run.js`) | **COMPLETE** |
+
+**Phase 5 dry-run output shape:**
+
+```json
+{
+  "asOfDate": "2026-06-17",
+  "totalRecords": 6,
+  "reminderCandidates": {
+    "total": 3,
+    "byType": { "30-day": 1, "14-day": 1, "7-day": 0, "expired": 1 },
+    "withEmail": 0,
+    "missingEmail": 3
+  },
+  "actionCandidates": {
+    "expiredRecords": 1,
+    "criticalEvidenceGaps": 3,
+    "missingFollowUp": 3
+  },
+  "escalationCandidates": {
+    "expiredNoFollowUp": 1,
+    "missingEmailInReminderWindow": 3
+  }
+}
+```
+
+Reuses existing insights logic: reminder window detection, Contact Readiness, Evidence Gap tiers, Operational Health missing follow-up, and Compliance Insights normalisation. **No writes** — no email delivery, notification queue, cron, Edge Functions, action creation, reminder mark-sent updates, policy execution, or UI.
+
+**Verification:** `npm run verify-automation-dry-run` (no Supabase).
+
 | ID | Deliverable | Notes |
 |----|-------------|-------|
 | V5-0A | `automation_policies` table | Org-scoped; JSON policy document; enabled flag; version |
@@ -320,6 +358,11 @@ Extend the existing pattern from V3/V4:
 | `npm run verify-reminder-template-preview` | V5-1B Phase 1 — template module, output shape, no delivery hooks |
 | `npm run verify-reminder-template-preview-ui` | V5-1B Phase 2 — preview modal, Action Required/workspace wiring, no delivery hooks |
 | `npm run verify-reminder-template-preview-actions` | V5-1B Phase 3 — copy/export actions, full email text, no delivery hooks |
+| `npm run verify-automation-foundation` | V5-0 Phase 1 — schema tables + feature flag |
+| `npm run verify-automation-policies` | V5-0 Phase 2 — policy admin RPCs |
+| `npm run verify-automation-runs` | V5-0 Phase 3 — run read RPCs |
+| `npm run verify-automation-run-create` | V5-0 Phase 4 — create run RPC |
+| `npm run verify-automation-dry-run` | V5-0 Phase 5 — dry-run scan engine, no execution hooks |
 | `npm run verify-automation-schema` | V5-0 migrations + RPC |
 | `npm run verify-automation-reminders` | V5-1 queue + mark sent |
 | `npm run verify-automation-actions` | V5-2 policy apply |
@@ -416,7 +459,7 @@ Secrets (SMTP API keys) live in Supabase Edge Function secrets only — never in
 |-------|--------|---------|
 | V5-1A | **COMPLETE** | Contact Management — email fields, insights, drilldown-to-edit; **v5.0.0-alpha.1** |
 | V5-1B | **COMPLETE** | Reminder Template Preview — template, UI, copy/export, dashboard; **v5.0.0-alpha.2** |
-| V5-0 | **PLANNED** | Automation platform foundation |
+| V5-0 | **IN PROGRESS** | Automation platform foundation — Phases 1–5 complete (schema, RPCs, dry-run scan) |
 | V5-1 (automation) | **PLANNED** | Automated reminders & digests (post V5-0) |
 | V5-2 | **PLANNED** | Automated action orchestration |
 | V5-3 | **PLANNED** | Escalation & operational closure |

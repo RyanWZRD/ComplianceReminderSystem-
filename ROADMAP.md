@@ -130,11 +130,21 @@ Tag: v3.0.0
 
 ## V5-0 — Automation Platform Foundation
 
-Schema, RPC contracts, daily scan skeleton, and feature flags without user-visible automation yet. Prerequisite for V5-1 automated reminders and digests.
+Schema, RPC contracts, dry-run scan engine, and feature flags without user-visible automation yet. Prerequisite for V5-1 automated reminders and digests.
 
 **Documentation:** [`docs/v5-automated-compliance-operations.md`](docs/v5-automated-compliance-operations.md) (V5-0 section)
 
 **Prior alpha:** v5.0.0-alpha.2 — V5-1A + V5-1B complete; see [`docs/v5-0-0-alpha-2-release-notes.md`](docs/v5-0-0-alpha-2-release-notes.md)
+
+| Phase | Deliverable | Status |
+|-------|-------------|--------|
+| 1 | `automation_policies` + `automation_runs` tables, `AUTOMATION_ENABLED` | **Complete** |
+| 2 | Policy admin RPCs (`get_automation_policies`, `upsert_automation_policy`) | **Complete** |
+| 3 | Run read RPCs (`get_automation_runs`, `get_automation_run`) | **Complete** |
+| 4 | Run creation RPC (`create_automation_run`) | **Complete** |
+| 5 | Dry-run scan engine (`computeAutomationDryRun`) | **Complete** |
+
+**Verification:** `npm run verify-automation-foundation`, `verify-automation-policies`, `verify-automation-runs`, `verify-automation-run-create`, `verify-automation-dry-run`
 
 ---
 
@@ -761,7 +771,7 @@ V4 answers *what needs attention*. V5 **acts on it automatically** once the auto
 |-------|--------|---------|
 | V5-1A | **COMPLETE** | Contact Management — email fields, Contact Readiness insights, drilldown-to-edit; **v5.0.0-alpha.1** |
 | V5-1B | **COMPLETE** | Reminder Template Preview — template, preview UI, copy/export, dashboard; **v5.0.0-alpha.2** |
-| V5-0 | **PLANNED** | Automation platform — schema, RPCs, daily scan skeleton, feature flags |
+| V5-0 | **IN PROGRESS** | Automation platform — schema, RPCs, dry-run scan engine (Phases 1–5 complete) |
 | V5-1 | **PLANNED** | Automated reminders & digests — queue, email delivery, mark sent on delivery |
 | V5-2 | **PLANNED** | Automated action orchestration — policies map V4 recommendations → `add_default_actions` |
 | V5-3 | **PLANNED** | Escalation & operational closure — missing follow-up → admin notify + audit |

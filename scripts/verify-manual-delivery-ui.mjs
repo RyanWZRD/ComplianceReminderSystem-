@@ -138,7 +138,8 @@ assertContains(appJs, "confirm(MANUAL_DELIVERY_CONFIRMATION_MESSAGE)", "app.js c
 assertContains(appJs, "buildReminderQueuePreviewData", "manual delivery uses reminder preview queue");
 assertContains(appJs, "getOrganisationId", "manual delivery resolves organisation id");
 
-assertContains(manualDeliveryExecutionJs, "runManualDeliveryPipeline", "execution module calls manual runner");
+assertContains(manualDeliveryExecutionJs, "invokeSendReminderDeliveries", "execution module invokes Edge Function client");
+assertContains(manualDeliveryExecutionJs, "send-reminder-deliveries", "execution module references send-reminder-deliveries");
 assertContains(manualDeliveryUiJs, "export function computeManualDeliveryQueueSummary", "UI module queue summary");
 assertContains(manualDeliveryUiJs, "MANUAL_DELIVERY_CONFIRMATION_MESSAGE", "UI module confirmation constant");
 assertContains(manualDeliveryUiJs, "Emails may be sent", "UI module confirmation mentions sending");
@@ -184,7 +185,8 @@ for (const needle of forbiddenHooks) {
 
 assertContains(stylesCss, ".manual-delivery-test-section", "styles include manual delivery test section");
 assertContains(appBundleJs, "executeManualDeliveryTest", "bundle includes manual delivery execution");
-assertContains(appBundleJs, "runManualDeliveryPipeline", "bundle includes manual delivery runner");
+assertContains(appBundleJs, "invokeSendReminderDeliveries", "bundle includes Edge Function delivery invoke");
+assertContains(appBundleJs, "send-reminder-deliveries", "bundle includes send-reminder-deliveries function name");
 
 const queueSummary = computeManualDeliveryQueueSummary([
   { email: "a@example.com", emailMissing: false },
@@ -229,7 +231,6 @@ Object.assign(EMAIL_PROVIDER_RUNTIME, {
   EMAIL_PROVIDER_ENABLED: "true",
   EMAIL_FROM_ADDRESS: "onboarding@resend.dev",
   EMAIL_TEST_REDIRECT_TO: "staging-inbox@example.org",
-  RESEND_API_KEY: "re_test_key",
 });
 
 const db = {
@@ -239,26 +240,34 @@ const db = {
       run: { id: automationRunId },
     };
   },
-  async createReminderDeliveryLog(payload) {
-    return {
-      ok: true,
-      log: {
-        id: "log-1",
-        deliveryStatus: payload.p_delivery_status,
-        createdAt: "2026-06-18T10:00:00.000Z",
-      },
-    };
-  },
 };
 
-const originalFetch = globalThis.fetch;
+const mockSupabase = {
+  functions: {
+    async invoke(_functionName, { body }) {
+      const records = Array.isArray(body?.deliveryRecords) ? body.deliveryRecords : [];
+      const attempted = records.filter((record) => String(record.recipientEmail ?? "").trim()).length;
 
-globalThis.fetch = async () => ({
-  status: 200,
-  async json() {
-    return { id: "email_test_123" };
+      return {
+        data: {
+          status: "ok",
+          summary: {
+            total: records.length,
+            attempted,
+            delivered: attempted,
+            failed: 0,
+            skipped: records.length - attempted,
+          },
+          results: records.map((record) => ({
+            queueItemId: record.queueItemId,
+            deliveryStatus: String(record.recipientEmail ?? "").trim() ? "delivered" : "skipped",
+          })),
+        },
+        error: null,
+      };
+    },
   },
-});
+};
 
 try {
   const executionResult = await executeManualDeliveryTest({
@@ -288,15 +297,13 @@ try {
     organisationId,
     organisationName: "Test Org",
     asOfDate: "2026-06-18",
-    now: "2026-06-18T10:00:00.000Z",
+    supabase: mockSupabase,
   });
 
   assertEqual(executionResult.executionSummary.attempted, 1, "execution coordinator attempted count");
-  assertEqual(executionResult.persistenceSummary.persisted, 1, "execution coordinator persisted count");
+  assertEqual(executionResult.persistenceSummary.persisted, 0, "execution coordinator skips delivery log writes in Phase 39");
 } catch (error) {
   fail(`executeManualDeliveryTest smoke: ${error instanceof Error ? error.message : String(error)}`);
-} finally {
-  globalThis.fetch = originalFetch;
 }
 
 if (failures.length > 0) {

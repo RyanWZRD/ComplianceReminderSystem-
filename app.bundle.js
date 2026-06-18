@@ -26239,280 +26239,54 @@ ${suffix}`;
     return [headerRow, ...dataRows].join("\n");
   }
 
-  // js/app/automation/mock-email-provider.js
-  var MOCK_EMAIL_PROVIDER_MODES = [
-    "success",
-    "transient_failure",
-    "permanent_failure"
-  ];
-  var mockMessageSequence = 0;
-  function nextMockProviderMessageId(prefix) {
-    mockMessageSequence += 1;
-    return `${prefix}-${mockMessageSequence}`;
+  // js/app/automation/edge-delivery-invoke.js
+  var SEND_REMINDER_DELIVERIES_FUNCTION = "send-reminder-deliveries";
+  function mapDeliveryRecordsForEdgeInvoke(records) {
+    return (Array.isArray(records) ? records : []).map((record) => ({
+      queueItemId: record.queueItemId,
+      recipientEmail: record.recipientEmail,
+      subject: record.subject,
+      bodyText: record.bodyText,
+      metadata: record.metadata
+    }));
   }
-  function createMockEmailProvider({ mode = "success" } = {}) {
-    if (!MOCK_EMAIL_PROVIDER_MODES.includes(mode)) {
-      throw new Error(`Invalid mock email provider mode "${String(mode)}".`);
+  async function invokeSendReminderDeliveries({
+    supabase,
+    organisationId,
+    automationRunId,
+    deliveryRecords
+  }) {
+    if (!supabase?.functions?.invoke) {
+      throw new Error("Supabase client is required for Edge Function delivery invoke.");
     }
-    return {
-      /**
-       * @param {{
-       *   to: string;
-       *   subject: string;
-       *   bodyText: string;
-       *   metadata?: Record<string, unknown>;
-       * }} input
-       */
-      async sendReminder({ to, subject, bodyText, metadata }) {
-        if (!String(to ?? "").trim()) {
-          throw new Error("sendReminder requires a recipient address.");
-        }
-        if (!String(subject ?? "").trim()) {
-          throw new Error("sendReminder requires a subject.");
-        }
-        if (!String(bodyText ?? "").trim()) {
-          throw new Error("sendReminder requires bodyText.");
-        }
-        void metadata;
-        if (mode === "success") {
-          return {
-            status: "delivered",
-            providerMessageId: nextMockProviderMessageId("mock"),
-            deliveredAt: (/* @__PURE__ */ new Date()).toISOString()
-          };
-        }
-        if (mode === "transient_failure") {
-          return {
-            status: "failed",
-            failureType: "transient",
-            failureReason: "mock_transient_provider_error"
-          };
-        }
-        return {
-          status: "failed",
-          failureType: "permanent",
-          failureReason: "mock_permanent_provider_error"
-        };
-      },
-      async healthCheck() {
-        return {
-          status: "ok",
-          provider: "mock"
-        };
+    const resolvedOrganisationId = String(organisationId ?? "").trim();
+    const resolvedAutomationRunId = String(automationRunId ?? "").trim();
+    if (!resolvedOrganisationId) {
+      throw new Error("organisationId is required for Edge Function delivery invoke.");
+    }
+    if (!resolvedAutomationRunId) {
+      throw new Error("automationRunId is required for Edge Function delivery invoke.");
+    }
+    const { data, error } = await supabase.functions.invoke(SEND_REMINDER_DELIVERIES_FUNCTION, {
+      body: {
+        organisationId: resolvedOrganisationId,
+        automationRunId: resolvedAutomationRunId,
+        deliveryRecords: Array.isArray(deliveryRecords) ? deliveryRecords : []
       }
-    };
-  }
-
-  // js/app/automation/providers/resend-provider.js
-  var RESEND_EMAILS_URL = "https://api.resend.com/emails";
-  var TRANSIENT_HTTP_STATUS_CODES = /* @__PURE__ */ new Set([429, 500, 502, 503, 504]);
-  var PERMANENT_HTTP_STATUS_CODES = /* @__PURE__ */ new Set([400, 401, 403, 404, 422]);
-  function resolveResendConfigHealth(config) {
-    if (!config || config.enabled !== true) {
-      return { status: "disabled", provider: "resend" };
+    });
+    if (error) {
+      throw new Error(error.message || "Edge Function invoke failed.");
     }
-    if (config.provider !== "resend") {
-      return { status: "invalid_config", provider: "resend" };
+    if (!data || typeof data !== "object" || Array.isArray(data)) {
+      throw new Error("Edge Function returned an invalid response.");
     }
-    if (config.mode !== "test" && config.mode !== "production") {
-      return { status: "invalid_config", provider: "resend" };
+    if ("error" in data && data.error && !("summary" in data)) {
+      throw new Error(String(data.error));
     }
-    if (!String(config.apiKey ?? "").trim()) {
-      return { status: "invalid_config", provider: "resend" };
-    }
-    if (!String(config.fromEmail ?? "").trim()) {
-      return { status: "invalid_config", provider: "resend" };
-    }
-    if (config.mode === "test" && !String(config.testRedirectTo ?? "").trim()) {
-      return { status: "invalid_config", provider: "resend" };
-    }
-    return {
-      status: "ok",
-      provider: "resend",
-      mode: String(config.mode)
-    };
-  }
-  function assertResendConfigForSend(config) {
-    const health = resolveResendConfigHealth(config);
-    if (health.status === "disabled") {
-      throw new Error("Resend email provider is disabled");
-    }
-    if (health.status === "invalid_config") {
-      throw new Error("Resend email provider configuration is invalid");
-    }
-    return health.mode;
-  }
-  function mapResendHttpFailure(status) {
-    if (TRANSIENT_HTTP_STATUS_CODES.has(status)) {
-      return {
-        failureType: "transient",
-        failureReason: `resend_http_${status}`
-      };
-    }
-    if (PERMANENT_HTTP_STATUS_CODES.has(status)) {
-      return {
-        failureType: "permanent",
-        failureReason: `resend_http_${status}`
-      };
-    }
-    return {
-      failureType: "transient",
-      failureReason: `resend_http_${status}`
-    };
-  }
-  function createResendEmailProvider({ config, fetchImpl } = {}) {
-    return {
-      async healthCheck() {
-        return resolveResendConfigHealth(config);
-      },
-      /**
-       * @param {{
-       *   to: string;
-       *   subject: string;
-       *   bodyText: string;
-       *   metadata?: Record<string, unknown>;
-       * }} input
-       */
-      async sendReminder({ to, subject, bodyText, metadata }) {
-        const mode = assertResendConfigForSend(config);
-        const recipient = String(to ?? "").trim();
-        if (!recipient) {
-          throw new Error("sendReminder requires a recipient address.");
-        }
-        if (!String(subject ?? "").trim()) {
-          throw new Error("sendReminder requires a subject.");
-        }
-        if (!String(bodyText ?? "").trim()) {
-          throw new Error("sendReminder requires bodyText.");
-        }
-        void metadata;
-        if (typeof fetchImpl !== "function") {
-          throw new Error("Resend email provider requires fetchImpl");
-        }
-        const resolvedRecipient = mode === "test" ? String(config.testRedirectTo).trim() : recipient;
-        const resolvedSubject = mode === "test" ? `[TEST] ${String(subject).trim()}` : String(subject).trim();
-        const payload = {
-          from: String(config.fromEmail).trim(),
-          to: [resolvedRecipient],
-          subject: resolvedSubject,
-          text: String(bodyText).trim()
-        };
-        const replyTo = String(config.replyToEmail ?? "").trim();
-        if (replyTo) {
-          payload.reply_to = replyTo;
-        }
-        let response;
-        try {
-          response = await fetchImpl(RESEND_EMAILS_URL, {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${String(config.apiKey).trim()}`,
-              "Content-Type": "application/json"
-            },
-            body: JSON.stringify(payload)
-          });
-        } catch (error) {
-          return {
-            status: "failed",
-            failureType: "transient",
-            failureReason: "resend_network_error"
-          };
-        }
-        if (response.status >= 200 && response.status < 300) {
-          let responseBody = {};
-          try {
-            responseBody = await response.json();
-          } catch {
-            responseBody = {};
-          }
-          const providerMessageId = typeof responseBody.id === "string" && responseBody.id.length > 0 ? responseBody.id : `resend-${Date.now()}`;
-          return {
-            status: "delivered",
-            providerMessageId,
-            deliveredAt: (/* @__PURE__ */ new Date()).toISOString()
-          };
-        }
-        const failure = mapResendHttpFailure(response.status);
-        return {
-          status: "failed",
-          failureType: failure.failureType,
-          failureReason: failure.failureReason
-        };
-      }
-    };
-  }
-
-  // js/app/automation/providers/sendgrid-provider.js
-  function createSendgridEmailProvider({ config } = {}) {
-    void config;
-    return {
-      async healthCheck() {
-        return {
-          status: "not_implemented",
-          provider: "sendgrid"
-        };
-      },
-      async sendReminder() {
-        throw new Error("Provider sendgrid is not implemented yet");
-      }
-    };
-  }
-
-  // js/app/automation/providers/smtp-provider.js
-  function createSmtpEmailProvider({ config } = {}) {
-    void config;
-    return {
-      async healthCheck() {
-        return {
-          status: "not_implemented",
-          provider: "smtp"
-        };
-      },
-      async sendReminder() {
-        throw new Error("Provider smtp is not implemented yet");
-      }
-    };
-  }
-
-  // js/app/automation/email-provider-adapter.js
-  var SKELETON_EMAIL_PROVIDER_FACTORIES = {
-    resend: createResendEmailProvider,
-    sendgrid: createSendgridEmailProvider,
-    smtp: createSmtpEmailProvider
-  };
-  function createDisabledEmailProvider() {
-    return {
-      async healthCheck() {
-        return {
-          status: "disabled",
-          provider: "none"
-        };
-      },
-      async sendReminder() {
-        throw new Error("Email provider is disabled");
-      }
-    };
-  }
-  function createEmailProviderAdapter({ config, mockProvider } = {}) {
-    const resolvedConfig = config ?? {
-      provider: "none",
-      mode: "disabled",
-      fromEmail: null,
-      replyToEmail: null,
-      rateLimitPerRun: 50,
-      enabled: false
-    };
-    if (!resolvedConfig.enabled) {
-      return createDisabledEmailProvider();
-    }
-    if (resolvedConfig.provider === "mock") {
-      return mockProvider ?? createMockEmailProvider({ mode: "success" });
-    }
-    const skeletonFactory = SKELETON_EMAIL_PROVIDER_FACTORIES[resolvedConfig.provider];
-    if (skeletonFactory) {
-      return skeletonFactory({ config: resolvedConfig });
-    }
-    return createDisabledEmailProvider();
+    return (
+      /** @type {{ status?: string; summary?: Record<string, number>; results?: Array<Record<string, unknown>> }} */
+      data
+    );
   }
 
   // js/app/automation/email-provider-config.js
@@ -26581,368 +26355,6 @@ ${suffix}`;
       replyToEmail,
       rateLimitPerRun,
       enabled
-    };
-  }
-
-  // js/app/automation/delivery-log-persistence-service.js
-  function resolveErrorMessage(error) {
-    if (error instanceof Error) {
-      return error.message;
-    }
-    return String(error);
-  }
-  async function persistDeliveryLogPayloads({ db, payloads }) {
-    const inputPayloads = Array.isArray(payloads) ? payloads : [];
-    if (!db || typeof db.createReminderDeliveryLog !== "function") {
-      throw new Error(
-        "persistDeliveryLogPayloads requires db with createReminderDeliveryLog."
-      );
-    }
-    const results = [];
-    let persisted = 0;
-    let failed = 0;
-    for (const payload of inputPayloads) {
-      try {
-        const result = await db.createReminderDeliveryLog(payload);
-        if (result.ok) {
-          results.push({
-            ok: true,
-            payload,
-            log: result.log
-          });
-          persisted += 1;
-          continue;
-        }
-        results.push({
-          ok: false,
-          payload,
-          error: result.error
-        });
-        failed += 1;
-      } catch (error) {
-        results.push({
-          ok: false,
-          payload,
-          error: resolveErrorMessage(error)
-        });
-        failed += 1;
-      }
-    }
-    return {
-      results,
-      summary: {
-        total: inputPayloads.length,
-        persisted,
-        failed
-      }
-    };
-  }
-
-  // js/app/automation/reminder-delivery-state-machine.js
-  var DELIVERY_STATUSES = [
-    "queued",
-    "prepared",
-    "sending",
-    "delivered",
-    "failed",
-    "cancelled"
-  ];
-  var VALID_TRANSITIONS = {
-    queued: ["prepared", "cancelled"],
-    prepared: ["sending", "cancelled", "failed"],
-    sending: ["delivered", "failed"],
-    delivered: [],
-    failed: ["queued", "cancelled"],
-    cancelled: []
-  };
-  function isValidReminderDeliveryTransition(currentStatus, nextStatus) {
-    const allowed = VALID_TRANSITIONS[currentStatus];
-    if (!allowed) {
-      return false;
-    }
-    return allowed.includes(nextStatus);
-  }
-  function resolveTransitionTimestamp(at) {
-    const resolvedAt = String(at ?? "").trim();
-    if (resolvedAt) {
-      return resolvedAt;
-    }
-    return (/* @__PURE__ */ new Date()).toISOString();
-  }
-  function applyStatusTimestampFields(record, nextStatus, at, reason) {
-    const resolvedReason = reason != null && String(reason).trim() ? String(reason).trim() : null;
-    if (nextStatus === "prepared") {
-      return {
-        ...record,
-        preparedAt: record.preparedAt ?? at
-      };
-    }
-    if (nextStatus === "sending") {
-      return {
-        ...record,
-        sentAt: record.sentAt ?? at
-      };
-    }
-    if (nextStatus === "delivered") {
-      return {
-        ...record,
-        deliveredAt: at
-      };
-    }
-    if (nextStatus === "failed") {
-      return {
-        ...record,
-        failedAt: at,
-        failureReason: resolvedReason
-      };
-    }
-    if (nextStatus === "cancelled") {
-      return {
-        ...record,
-        cancelledAt: at,
-        cancellationReason: resolvedReason
-      };
-    }
-    return record;
-  }
-  function transitionReminderDeliveryRecord({
-    record,
-    nextStatus,
-    reason,
-    at
-  }) {
-    if (!record || typeof record !== "object") {
-      throw new Error("transitionReminderDeliveryRecord requires a record object.");
-    }
-    const currentStatus = record.deliveryStatus;
-    if (!DELIVERY_STATUSES.includes(currentStatus)) {
-      throw new Error(
-        `Invalid current delivery status "${String(currentStatus)}".`
-      );
-    }
-    if (!DELIVERY_STATUSES.includes(nextStatus)) {
-      throw new Error(`Invalid next delivery status "${String(nextStatus)}".`);
-    }
-    if (!isValidReminderDeliveryTransition(currentStatus, nextStatus)) {
-      throw new Error(
-        `Invalid delivery status transition from "${currentStatus}" to "${nextStatus}".`
-      );
-    }
-    const transitionAt = resolveTransitionTimestamp(at);
-    const priorHistory = Array.isArray(record.statusHistory) ? [...record.statusHistory] : [];
-    const withStatus = {
-      ...record,
-      deliveryStatus: nextStatus,
-      statusHistory: [
-        ...priorHistory,
-        {
-          from: currentStatus,
-          to: nextStatus,
-          at: transitionAt,
-          reason: reason != null && String(reason).trim() ? String(reason).trim() : null
-        }
-      ]
-    };
-    return applyStatusTimestampFields(withStatus, nextStatus, transitionAt, reason);
-  }
-
-  // js/app/automation/delivery-worker.js
-  var MISSING_RECIPIENT_EMAIL_REASON = "missing_recipient_email";
-  function isMissingRecipientEmailFailure(record) {
-    return record.deliveryStatus === "failed" && record.failureReason === MISSING_RECIPIENT_EMAIL_REASON;
-  }
-  function isSkippedRecord(record) {
-    return record.deliveryStatus === "delivered" || record.deliveryStatus === "cancelled" || isMissingRecipientEmailFailure(record);
-  }
-  async function executeReminderDeliveries({
-    records,
-    provider,
-    transitionRecord = transitionReminderDeliveryRecord,
-    now
-  }) {
-    const inputRecords = Array.isArray(records) ? records : [];
-    if (!provider || typeof provider.sendReminder !== "function") {
-      throw new Error("executeReminderDeliveries requires a provider with sendReminder.");
-    }
-    if (typeof transitionRecord !== "function") {
-      throw new Error("executeReminderDeliveries requires transitionRecord.");
-    }
-    const updatedRecords = [];
-    let attempted = 0;
-    let delivered = 0;
-    let failed = 0;
-    let skipped = 0;
-    for (const record of inputRecords) {
-      if (isSkippedRecord(record) || record.deliveryStatus !== "prepared") {
-        updatedRecords.push(record);
-        skipped += 1;
-        continue;
-      }
-      attempted += 1;
-      let current = transitionRecord({
-        record,
-        nextStatus: "sending",
-        at: now
-      });
-      const result = await provider.sendReminder({
-        to: String(current.recipientEmail ?? ""),
-        subject: current.subject,
-        bodyText: current.bodyText,
-        metadata: current.metadata
-      });
-      if (result.status === "delivered") {
-        current = transitionRecord({
-          record: current,
-          nextStatus: "delivered",
-          at: result.deliveredAt ?? now
-        });
-        delivered += 1;
-      } else {
-        current = transitionRecord({
-          record: current,
-          nextStatus: "failed",
-          reason: result.failureReason,
-          at: now
-        });
-        failed += 1;
-      }
-      updatedRecords.push(current);
-    }
-    return {
-      records: updatedRecords,
-      summary: {
-        total: inputRecords.length,
-        attempted,
-        delivered,
-        failed,
-        skipped
-      }
-    };
-  }
-
-  // js/app/automation/delivery-worker-persistence.js
-  var PRESERVED_METADATA_KEYS = [
-    "providerMessageId",
-    "provider",
-    "failureType",
-    "reminderWindow",
-    "complianceType",
-    "expiryDate",
-    "source",
-    "emailMissing"
-  ];
-  function resolveOptionalId(value) {
-    if (value == null) {
-      return null;
-    }
-    const trimmed = String(value).trim();
-    return trimmed || null;
-  }
-  function resolveOptionalText(value) {
-    if (value == null) {
-      return null;
-    }
-    const trimmed = String(value).trim();
-    return trimmed || null;
-  }
-  function resolveOrganisationId(organisationId, recordOrganisationId) {
-    const resolved = resolveOptionalId(organisationId) ?? resolveOptionalId(recordOrganisationId);
-    if (!resolved) {
-      throw new Error("buildDeliveryLogPayloads requires organisationId.");
-    }
-    return resolved;
-  }
-  function buildDeliveryLogMetadata(record) {
-    const base = record.metadata && typeof record.metadata === "object" && !Array.isArray(record.metadata) ? record.metadata : {};
-    const metadata = {};
-    for (const key of PRESERVED_METADATA_KEYS) {
-      if (Object.prototype.hasOwnProperty.call(base, key)) {
-        metadata[key] = base[key];
-      }
-    }
-    const statusHistory = Array.isArray(record.statusHistory) ? record.statusHistory : Array.isArray(base.statusHistory) ? base.statusHistory : null;
-    if (statusHistory && statusHistory.length > 0) {
-      metadata.statusHistory = statusHistory.map(
-        (entry) => entry && typeof entry === "object" ? { ...entry } : entry
-      );
-    }
-    return metadata;
-  }
-  function buildDeliveryLogPayload(record, organisationId, automationRunId) {
-    const resolvedAutomationRunId = automationRunId ?? resolveOptionalId(record.automationRunId);
-    return {
-      p_organisation_id: organisationId,
-      p_automation_run_id: resolvedAutomationRunId,
-      p_queue_item_id: String(record.queueItemId ?? "").trim(),
-      p_compliance_record_id: resolveOptionalId(record.complianceRecordId),
-      p_person_id: resolveOptionalId(record.personId),
-      p_recipient_email: resolveOptionalText(record.recipientEmail),
-      p_subject: String(record.subject ?? "").trim(),
-      p_body_text: String(record.bodyText ?? "").trim(),
-      p_delivery_status: String(record.deliveryStatus ?? "").trim(),
-      p_prepared_at: resolveOptionalText(record.preparedAt),
-      p_sent_at: resolveOptionalText(record.sentAt),
-      p_delivered_at: resolveOptionalText(record.deliveredAt),
-      p_failed_at: resolveOptionalText(record.failedAt),
-      p_failure_reason: resolveOptionalText(record.failureReason),
-      p_metadata: buildDeliveryLogMetadata(record)
-    };
-  }
-  function buildDeliveryLogPayloads({ records, organisationId, automationRunId }) {
-    const inputRecords = Array.isArray(records) ? records : [];
-    const resolvedOrganisationId = resolveOrganisationId(organisationId, null);
-    const resolvedAutomationRunId = resolveOptionalId(automationRunId);
-    return inputRecords.map(
-      (record) => buildDeliveryLogPayload(
-        record,
-        resolvedOrganisationId,
-        resolvedAutomationRunId ?? resolveOptionalId(record.automationRunId)
-      )
-    );
-  }
-
-  // js/app/automation/delivery-pipeline-service.js
-  function resolveOrganisationId2(organisationId) {
-    const resolved = String(organisationId ?? "").trim();
-    if (!resolved) {
-      throw new Error("runDeliveryPipeline requires organisationId.");
-    }
-    return resolved;
-  }
-  async function runDeliveryPipeline({
-    records,
-    provider,
-    db,
-    organisationId,
-    automationRunId,
-    now
-  }) {
-    const resolvedOrganisationId = resolveOrganisationId2(organisationId);
-    if (!provider || typeof provider.sendReminder !== "function") {
-      throw new Error("runDeliveryPipeline requires provider with sendReminder.");
-    }
-    if (!db || typeof db.createReminderDeliveryLog !== "function") {
-      throw new Error("runDeliveryPipeline requires db with createReminderDeliveryLog.");
-    }
-    const executed = await executeReminderDeliveries({
-      records,
-      provider,
-      now
-    });
-    const payloads = buildDeliveryLogPayloads({
-      records: executed.records,
-      organisationId: resolvedOrganisationId,
-      automationRunId
-    });
-    const persisted = await persistDeliveryLogPayloads({
-      db,
-      payloads
-    });
-    return {
-      records: executed.records,
-      executionSummary: executed.summary,
-      persistenceSummary: persisted.summary,
-      persistenceResults: persisted.results
     };
   }
 
@@ -27038,7 +26450,7 @@ ${suffix}`;
   }
 
   // js/app/automation/reminder-delivery-record-builder.js
-  var MISSING_RECIPIENT_EMAIL_REASON2 = "missing_recipient_email";
+  var MISSING_RECIPIENT_EMAIL_REASON = "missing_recipient_email";
   function createDeliveryRecordId() {
     if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
       return crypto.randomUUID();
@@ -27104,7 +26516,7 @@ ${suffix}`;
           sentAt: null,
           deliveredAt: null,
           failedAt: recordTimestamp,
-          failureReason: MISSING_RECIPIENT_EMAIL_REASON2,
+          failureReason: MISSING_RECIPIENT_EMAIL_REASON,
           metadata
         };
       }
@@ -27127,62 +26539,6 @@ ${suffix}`;
     });
   }
 
-  // js/app/automation/manual-delivery-runner.js
-  function resolveOrganisationId3(organisationId) {
-    const resolved = String(organisationId ?? "").trim();
-    if (!resolved) {
-      throw new Error("runManualDeliveryPipeline requires organisationId.");
-    }
-    return resolved;
-  }
-  function resolveAutomationRunId(automationRunId) {
-    const resolved = String(automationRunId ?? "").trim();
-    if (!resolved) {
-      throw new Error("runManualDeliveryPipeline requires automationRunId.");
-    }
-    return resolved;
-  }
-  async function runManualDeliveryPipeline({
-    queueItems,
-    provider,
-    db,
-    organisationId,
-    automationRunId,
-    organisationName,
-    asOfDate,
-    now
-  }) {
-    const resolvedOrganisationId = resolveOrganisationId3(organisationId);
-    const resolvedAutomationRunId = resolveAutomationRunId(automationRunId);
-    if (!provider || typeof provider.sendReminder !== "function") {
-      throw new Error("runManualDeliveryPipeline requires provider with sendReminder.");
-    }
-    if (!db || typeof db.createReminderDeliveryLog !== "function") {
-      throw new Error("runManualDeliveryPipeline requires db with createReminderDeliveryLog.");
-    }
-    const deliveryRecords = buildReminderDeliveryRecords({
-      queueItems,
-      organisationId: resolvedOrganisationId,
-      automationRunId: resolvedAutomationRunId,
-      organisationName,
-      asOfDate
-    });
-    const pipelineResult = await runDeliveryPipeline({
-      records: deliveryRecords,
-      provider,
-      db,
-      organisationId: resolvedOrganisationId,
-      automationRunId: resolvedAutomationRunId,
-      now
-    });
-    return {
-      deliveryRecords: pipelineResult.records,
-      executionSummary: pipelineResult.executionSummary,
-      persistenceSummary: pipelineResult.persistenceSummary,
-      persistenceResults: pipelineResult.persistenceResults
-    };
-  }
-
   // js/data/email-provider-env.js
   var EMAIL_PROVIDER_RUNTIME = {
     EMAIL_PROVIDER: void 0,
@@ -27198,27 +26554,23 @@ ${suffix}`;
   // js/app/automation/manual-delivery-execution.js
   var MANUAL_DELIVERY_RUN_TYPE = "manual_delivery_test";
   var MANUAL_DELIVERY_RUN_SOURCE = "admin_manual_delivery_ui";
-  function buildProviderAdapterConfig() {
-    const base = getEmailProviderConfig(EMAIL_PROVIDER_RUNTIME);
-    if (!base.enabled || base.provider !== "resend") {
-      return { ...base };
-    }
+  var EMPTY_PERSISTENCE_SUMMARY = {
+    total: 0,
+    persisted: 0,
+    failed: 0
+  };
+  function mapEdgeResponseToExecutionSummary(edgeResponse, recordCount) {
+    const summary = edgeResponse.summary && typeof edgeResponse.summary === "object" ? (
+      /** @type {Record<string, unknown>} */
+      edgeResponse.summary
+    ) : {};
     return {
-      ...base,
-      apiKey: String(EMAIL_PROVIDER_RUNTIME.RESEND_API_KEY ?? "").trim(),
-      testRedirectTo: String(EMAIL_PROVIDER_RUNTIME.EMAIL_TEST_REDIRECT_TO ?? "").trim()
+      total: Number(summary.total ?? recordCount),
+      attempted: Number(summary.attempted ?? 0),
+      delivered: Number(summary.delivered ?? 0),
+      failed: Number(summary.failed ?? 0),
+      skipped: Number(summary.skipped ?? 0)
     };
-  }
-  function createManualDeliveryEmailProvider() {
-    const config = buildProviderAdapterConfig();
-    if (!config.enabled) {
-      return createEmailProviderAdapter({ config });
-    }
-    if (config.provider === "resend") {
-      const fetchImpl = typeof fetch === "function" ? fetch.bind(globalThis) : void 0;
-      return createResendEmailProvider({ config, fetchImpl });
-    }
-    return createEmailProviderAdapter({ config });
   }
   async function executeManualDeliveryTest({
     queueItems,
@@ -27226,42 +26578,56 @@ ${suffix}`;
     organisationId,
     organisationName,
     asOfDate,
-    now
+    supabase
   }) {
     if (!db || typeof db.createAutomationRun !== "function") {
       throw new Error("Manual delivery test requires an automation store with createAutomationRun.");
     }
-    if (!db || typeof db.createReminderDeliveryLog !== "function") {
-      throw new Error("Manual delivery test requires an automation store with createReminderDeliveryLog.");
-    }
-    const providerConfig = buildProviderAdapterConfig();
+    const providerConfig = getEmailProviderConfig(EMAIL_PROVIDER_RUNTIME);
     if (!providerConfig.enabled) {
       throw new Error("Email provider is not enabled for manual delivery tests.");
+    }
+    const resolvedOrganisationId = String(organisationId ?? "").trim();
+    if (!resolvedOrganisationId) {
+      throw new Error("Manual delivery test requires organisationId.");
     }
     const runResult = await db.createAutomationRun({
       status: "completed",
       summary: {
         runType: MANUAL_DELIVERY_RUN_TYPE,
         source: MANUAL_DELIVERY_RUN_SOURCE,
-        organisationId,
+        organisationId: resolvedOrganisationId,
         queueItemCount: Array.isArray(queueItems) ? queueItems.length : 0,
-        providerMode: providerConfig.mode
+        providerMode: providerConfig.mode,
+        deliveryPath: "edge_function"
       }
     });
     if (!runResult.ok || !runResult.run?.id) {
       throw new Error(runResult.error ?? "Could not create automation run for manual delivery test.");
     }
-    const provider = createManualDeliveryEmailProvider();
-    return runManualDeliveryPipeline({
+    const deliveryRecords = buildReminderDeliveryRecords({
       queueItems,
-      provider,
-      db,
-      organisationId,
+      organisationId: resolvedOrganisationId,
       automationRunId: runResult.run.id,
       organisationName,
-      asOfDate,
-      now
+      asOfDate
     });
+    const edgeRecords = mapDeliveryRecordsForEdgeInvoke(deliveryRecords);
+    const client2 = supabase ?? getSupabaseClient();
+    const edgeResponse = await invokeSendReminderDeliveries({
+      supabase: client2,
+      organisationId: resolvedOrganisationId,
+      automationRunId: runResult.run.id,
+      deliveryRecords: edgeRecords
+    });
+    return {
+      deliveryRecords,
+      executionSummary: mapEdgeResponseToExecutionSummary(edgeResponse, deliveryRecords.length),
+      persistenceSummary: EMPTY_PERSISTENCE_SUMMARY,
+      persistenceResults: [],
+      edgeStatus: edgeResponse.status,
+      edgeResults: edgeResponse.results
+    };
   }
 
   // js/app/automation/manual-delivery-ui.js
@@ -27272,7 +26638,7 @@ ${suffix}`;
     "",
     "\u2022 Emails may be sent through the configured provider.",
     "\u2022 In test mode, recipients are redirected to the staging inbox.",
-    "\u2022 Delivery log rows will be written; reminders will not be marked sent.",
+    "\u2022 Delivery outcomes come from the server Edge Function; delivery logs are not written in this phase.",
     "\u2022 This action cannot be undone."
   ].join("\n");
   function formatManualDeliveryModeLabel(mode) {

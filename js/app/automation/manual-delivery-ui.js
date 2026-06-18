@@ -16,7 +16,7 @@ export const MANUAL_DELIVERY_CONFIRMATION_MESSAGE = [
   "",
   "• Emails may be sent through the configured provider.",
   "• In test mode, recipients are redirected to the staging inbox.",
-  "• Delivery log rows will be written; reminders will not be marked sent.",
+  "• Delivery outcomes come from the server Edge Function; delivery logs are not written in this phase.",
   "• This action cannot be undone.",
 ].join("\n");
 

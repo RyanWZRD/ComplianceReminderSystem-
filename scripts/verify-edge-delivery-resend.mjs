@@ -1,6 +1,6 @@
 /**
- * V6 Phase 38: Edge Function Resend integration verification.
- * Static checks for server-side Resend sends, dual-path transition safety, and no Phase 39 wiring —
+ * V6 Phase 38 + 39: Edge Function Resend integration verification.
+ * Static checks for server-side Resend sends and post-Phase-39 browser invoke safety —
  * no delivery log writes, no mark-as-sent automation.
  */
 
@@ -172,7 +172,7 @@ for (const needle of forbiddenFunctionNeedles) {
   assertNotContains(functionSource, needle, `index.ts has no ${needle}`);
 }
 
-console.log("--- browser transition safety ---");
+console.log("--- browser transition safety (Phase 39) ---");
 
 const envResendKey = readResendApiKeyLiteral(emailProviderEnvJs);
 
@@ -198,42 +198,41 @@ assert(
   "ALLOWED: committed email-provider-env.js keeps RESEND_API_KEY undefined",
 );
 
-assertContains(
+assertNotContains(
   manualDeliveryExecutionJs,
   "createResendEmailProvider",
-  "ALLOWED: legacy browser provider scaffold retained in manual-delivery-execution.js",
+  "manual-delivery-execution.js must not use createResendEmailProvider after Phase 39",
+);
+assertNotContains(
+  manualDeliveryExecutionJs,
+  "RESEND_API_KEY",
+  "manual-delivery-execution.js must not read RESEND_API_KEY after Phase 39",
+);
+assertNotContains(
+  manualDeliveryExecutionJs,
+  "api.resend.com",
+  "manual-delivery-execution.js must not fetch api.resend.com after Phase 39",
 );
 assertContains(
   manualDeliveryExecutionJs,
-  "EMAIL_PROVIDER_RUNTIME.RESEND_API_KEY",
-  "legacy path reads RESEND_API_KEY from email-provider-env only",
+  "invokeSendReminderDeliveries",
+  "manual-delivery-execution.js invokes send-reminder-deliveries client after Phase 39",
 );
-assertContains(resendProviderJs, "fetchImpl", "ALLOWED: resend-provider.js uses injected fetchImpl scaffold");
+assertContains(resendProviderJs, "fetchImpl", "ALLOWED: resend-provider.js legacy scaffold retained");
 assertContains(
   resendProviderJs,
   "https://api.resend.com/emails",
-  "legacy browser module references Resend API URL",
-);
-
-assertNotContains(
-  manualDeliveryExecutionJs,
-  "functions.invoke",
-  "FORBIDDEN before Phase 39: manual-delivery-execution.js must not invoke Edge Function yet",
-);
-assertNotContains(
-  manualDeliveryExecutionJs,
-  "send-reminder-deliveries",
-  "FORBIDDEN before Phase 39: manual-delivery-execution.js must not reference send-reminder-deliveries yet",
+  "legacy browser module references Resend API URL (inert scaffold)",
 );
 assertNotContains(
   appJs,
   "send-reminder-deliveries",
-  "FORBIDDEN before Phase 39: app.js must not wire send-reminder-deliveries yet",
+  "app.js delegates delivery invoke to manual-delivery-execution.js",
 );
 assertNotContains(
   appJs,
   "functions.invoke",
-  "FORBIDDEN before Phase 39: app.js must not invoke Edge Functions for delivery yet",
+  "app.js does not invoke Edge Functions directly",
 );
 
 console.log("--- documentation ---");
@@ -250,8 +249,8 @@ assertContains(
 );
 assertContains(
   edgeDeliveryDoc,
-  "Dual-path transition",
-  "edge delivery doc documents dual-path transition",
+  "## Phase 39 — Browser invoke wiring",
+  "edge delivery doc has Phase 39 section",
 );
 assertContains(
   deliveryArchDoc,
@@ -263,6 +262,11 @@ assertContains(
   "verify-edge-delivery-resend",
   "edge delivery doc references verify-edge-delivery-resend",
 );
+assertContains(
+  edgeDeliveryDoc,
+  "verify-edge-delivery-browser-invoke",
+  "edge delivery doc references verify-edge-delivery-browser-invoke",
+);
 
 if (failures.length > 0) {
   console.error("FAILURES:");
@@ -272,4 +276,4 @@ if (failures.length > 0) {
 
 console.log("\nverify-edge-delivery-resend: all checks OK");
 console.log("  server-side: Edge Function uses Deno.env RESEND_API_KEY + Resend API");
-console.log("  browser: legacy scaffold allowed; committed key empty; no Phase 39 invoke");
+console.log("  browser: Phase 39 Edge invoke wired; no browser Resend in manual execution path");

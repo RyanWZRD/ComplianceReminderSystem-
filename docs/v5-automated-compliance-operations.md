@@ -748,6 +748,40 @@ The Reminder Queue Preview section includes a **Digest preview** area wired to `
 
 ---
 
+## V6 — Reminder delivery · Phase 39 complete
+
+**Goal:** Wire Manual Delivery UI to invoke `send-reminder-deliveries` via authenticated Supabase session — no browser Resend fetch or `RESEND_API_KEY` exposure.
+
+**Status:** Browser invoke wiring complete. V6 Phase 39 complete on **v6.0.0-beta.1** baseline.
+
+**Deliverables:**
+
+- `js/app/automation/edge-delivery-invoke.js` — `supabase.functions.invoke` client
+- `js/app/automation/manual-delivery-execution.js` — Edge Function execution coordinator
+- `scripts/verify-edge-delivery-browser-invoke.mjs` — browser invoke verification gate
+- `npm run verify-edge-delivery-browser-invoke`
+
+| Item | Detail |
+|------|--------|
+| Invoke payload | `organisationId`, `automationRunId`, `deliveryRecords` |
+| Auth | Supabase session JWT via `getSupabaseClient()` |
+| UI outcomes | `executionSummary` from Edge Function `summary` (`attempted`, `delivered`, `failed`, `skipped`) |
+| Phase 39 scope | Browser invoke only — no delivery logs, no mark-as-sent, no scheduling |
+| Legacy scaffold | `resend-provider.js` retained but not used by manual execution |
+
+**Constraints:** No delivery log RPC writes, no mark-as-sent automation, no scheduled execution, no deploy of production Resend secrets yet.
+
+**Verification:** `npm run verify-edge-delivery-browser-invoke`, `npm run verify-edge-delivery-resend`, and `npm run verify-edge-delivery-function-skeleton`
+
+| Phase | Deliverable | Status |
+|-------|-------------|--------|
+| 39 | Browser invoke wiring (`verify-edge-delivery-browser-invoke`) | **Complete** |
+| 40 | Delivery log persistence from Edge outcomes | Planned |
+
+**Next slice:** Delivery log persistence from Edge Function outcomes (planned).
+
+---
+
 ## V6 — Reminder delivery · Phase 38 complete
 
 **Goal:** Implement server-side Resend sending inside `send-reminder-deliveries` Edge Function with test/production gates, rate limiting, and failure mapping — no browser wiring.
@@ -775,9 +809,9 @@ The Reminder Queue Preview section includes a **Digest preview** area wired to `
 | Phase | Deliverable | Status |
 |-------|-------------|--------|
 | 38 | Edge Function Resend integration (`verify-edge-delivery-resend`) | **Complete** |
-| 39 | Browser invoke wiring | Planned |
+| 39 | Browser invoke wiring (`verify-edge-delivery-browser-invoke`) | **Complete** |
 
-**Next slice:** V6 Phase 39 — Browser invoke wiring (planned).
+**Next slice:** Delivery log persistence from Edge Function outcomes (planned).
 
 ---
 

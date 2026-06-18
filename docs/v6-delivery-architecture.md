@@ -1373,7 +1373,49 @@ Browser Manual Delivery UI
 
 **Phase 38 gate:** `npm run verify-edge-delivery-resend` must pass.
 
-**Next slice after Phase 38:** V6 Phase 39 — Browser invoke wiring (planned).
+---
+
+## Phase 39 — Browser invoke wiring
+
+**Scope:** Wire Manual Delivery UI to invoke `send-reminder-deliveries` via authenticated `supabase.functions.invoke`. Browser no longer sends directly to Resend.
+
+### Phase 39 deliverables
+
+| Item | Location |
+|------|----------|
+| Edge invoke client | `js/app/automation/edge-delivery-invoke.js` |
+| Manual execution coordinator | `js/app/automation/manual-delivery-execution.js` |
+| Browser invoke verification | `scripts/verify-edge-delivery-browser-invoke.mjs` |
+| Contract cross-reference | [`docs/v6-edge-delivery-function.md`](v6-edge-delivery-function.md) § Phase 39 |
+
+**Script:** `scripts/verify-edge-delivery-browser-invoke.mjs`
+
+`npm run verify-edge-delivery-browser-invoke` verifies:
+
+1. `manual-delivery-execution.js` invokes `send-reminder-deliveries` with `organisationId`, `automationRunId`, and `deliveryRecords`
+2. No `createResendEmailProvider`, `RESEND_API_KEY`, or `api.resend.com` in manual execution path
+3. `resend-provider.js` retained but not used by manual execution
+4. No delivery log writes, mark-as-sent hooks, or compliance/history mutation in manual execution
+5. Phase 37/38 Edge Function checks still pass via sibling verify scripts
+
+### Phase 39 constraints
+
+- Browser invoke wiring only — no `create_reminder_delivery_log` RPC writes yet
+- No mark-as-sent automation, scheduled execution, or compliance/history mutation
+- **Browser must not be the production sending path** — Manual Delivery invokes Edge Function only
+- `RESEND_API_KEY` in Supabase Edge Function secrets only — not in browser bundle
+
+### Post-Phase-39 path model
+
+| Path | Active in committed git? | Production use |
+|------|--------------------------|----------------|
+| Edge Function `send-reminder-deliveries` | Code present; requires deploy + secrets | **Yes** (authoritative) |
+| Browser `edge-delivery-invoke.js` | Wired to Manual Delivery UI | **Yes** (invoke only) |
+| Browser `createResendEmailProvider` | Scaffold retained in `resend-provider.js` | **No** — deprecated/inert |
+
+**Phase 39 gate:** `npm run verify-edge-delivery-browser-invoke` must pass.
+
+**Next slice after Phase 39:** Delivery log persistence from Edge Function outcomes (planned).
 
 ---
 

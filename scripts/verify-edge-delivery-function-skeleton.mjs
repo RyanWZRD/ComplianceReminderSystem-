@@ -96,12 +96,17 @@ for (const needle of forbiddenNeedles) {
 assertNotContains(
   manualDeliveryExecutionJs,
   "functions.invoke",
-  "manual-delivery-execution.js must not wire Edge Function invoke yet",
+  "manual-delivery-execution.js delegates invoke to edge-delivery-invoke.js",
 );
-assertNotContains(
+assertContains(
+  manualDeliveryExecutionJs,
+  "invokeSendReminderDeliveries",
+  "manual-delivery-execution.js wires Edge Function invoke via client module",
+);
+assertContains(
   manualDeliveryExecutionJs,
   "send-reminder-deliveries",
-  "manual-delivery-execution.js must not reference send-reminder-deliveries yet",
+  "manual-delivery-execution.js references send-reminder-deliveries via client module",
 );
 
 assertContains(

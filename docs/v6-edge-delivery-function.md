@@ -11,18 +11,17 @@
 
 ## Executive summary
 
-V6 now has **two Resend code paths** during the Phase 38 → Phase 39 transition:
+V6 reminder delivery uses a **server-side Edge Function** for Resend sends. As of **Phase 39**, the Manual Delivery UI invokes `send-reminder-deliveries` via authenticated `supabase.functions.invoke` — the browser never calls `api.resend.com` or reads `RESEND_API_KEY`.
 
-| Path | Module | Status (Phase 38) | `RESEND_API_KEY` location |
-|------|--------|-------------------|---------------------------|
-| **Server (authoritative)** | `supabase/functions/send-reminder-deliveries/index.ts` | Implemented — Resend via `Deno.env.get` | Supabase Edge Function secrets only |
-| **Browser (legacy scaffold)** | `manual-delivery-execution.js` → `resend-provider.js` | Wired to Manual Delivery UI but **inert in committed defaults** | `email-provider-env.js` (must stay `undefined` in git) |
+| Path | Module | Status |
+|------|--------|--------|
+| **Server (authoritative)** | `supabase/functions/send-reminder-deliveries/index.ts` | Resend via `Deno.env.get` — Supabase Edge Function secrets only |
+| **Browser invoke** | `manual-delivery-execution.js` → `edge-delivery-invoke.js` | `functions.invoke("send-reminder-deliveries", …)` with session JWT |
+| **Browser (legacy, inert)** | `providers/resend-provider.js` | Deprecated scaffold — **not used** by Manual Delivery after Phase 39 |
 
-**Committed git state:** `email-provider-env.js` sets all provider fields to `undefined`, so `getEmailProviderConfig()` returns `enabled: false`. The Manual Delivery UI shows *Email provider is not enabled* and does not call Resend.
+**Committed git state:** `email-provider-env.js` sets all provider fields to `undefined`, so `getEmailProviderConfig()` returns `enabled: false`. The Manual Delivery UI shows *Email provider is not enabled* until provider settings are synced (without `RESEND_API_KEY` in the browser).
 
-**After `npm run sync-env` with local `.env`:** the legacy browser path can become **active** if `EMAIL_PROVIDER_ENABLED=true`, provider settings, and `RESEND_API_KEY` are synced — this is for pre-Phase-39 manual staging only. Browser `fetch` to Resend remains CORS-blocked and exposes any synced key in the bundle.
-
-**Phase 39 requirement:** Manual Delivery UI must invoke `send-reminder-deliveries` instead of `createResendEmailProvider`. The browser must **not** be the production sending path after Phase 39.
+**After `npm run sync-env` with local `.env`:** provider mode/from-address settings can enable the Manual Delivery UI gate. Sends still go through the Edge Function; `RESEND_API_KEY` belongs in Supabase secrets only.
 
 Original motivation for server-side delivery:
 
@@ -382,7 +381,55 @@ See **Executive summary** above. `npm run verify-edge-delivery-resend` enforces:
 
 **Verification:** `npm run verify-edge-delivery-resend`
 
-**Next slice after Phase 38:** V6 Phase 39 — Browser invoke wiring (planned).
+---
+
+## Phase 39 — Browser invoke wiring
+
+**Module:** `js/app/automation/manual-delivery-execution.js`, `js/app/automation/edge-delivery-invoke.js`
+
+**Status:** Manual Delivery UI invokes `send-reminder-deliveries` via authenticated Supabase session. No browser Resend fetch.
+
+### Browser invoke contract
+
+```javascript
+supabase.functions.invoke("send-reminder-deliveries", {
+  body: {
+    organisationId,
+    automationRunId,
+    deliveryRecords, // mapped from buildReminderDeliveryRecords
+  },
+});
+```
+
+The Supabase JS client attaches the signed-in user's JWT (`Authorization: Bearer <access_token>`). `RESEND_API_KEY` is **not** read in the browser.
+
+### Manual delivery execution flow (Phase 39)
+
+1. Admin confirms Manual Delivery Test in UI (`app.js` → `executeManualDeliveryTest`)
+2. `createAutomationRun` records a manual test run
+3. `buildReminderDeliveryRecords` prepares queue items (preview/dry-run path unchanged)
+4. `invokeSendReminderDeliveries` calls the Edge Function
+5. UI displays `executionSummary` (`attempted`, `delivered`, `failed`, `skipped`) from Edge Function response
+
+### Phase 39 non-goals
+
+- `create_reminder_delivery_log` RPC writes (deferred)
+- Mark-as-sent, compliance, or history mutation
+- Scheduled or automatic execution
+- Deploying Edge Function secrets to production (staging validation only)
+
+### Phase 39 safety gates
+
+| Rule | Verification |
+|------|--------------|
+| **Required** | `manual-delivery-execution.js` invokes `send-reminder-deliveries` via `edge-delivery-invoke.js` |
+| **Forbidden** | `createResendEmailProvider`, `RESEND_API_KEY`, or `api.resend.com` in manual execution path |
+| **Allowed** | `resend-provider.js` retained as deprecated/inert scaffold |
+| **Forbidden** | Committed real `RESEND_API_KEY` in `email-provider-env.js` |
+
+**Verification:** `npm run verify-edge-delivery-browser-invoke`
+
+**Next slice after Phase 39:** Delivery log persistence from Edge Function outcomes (planned).
 
 ---
 
@@ -393,5 +440,3 @@ See **Executive summary** above. `npm run verify-edge-delivery-resend` enforces:
 | [`v6-delivery-architecture.md`](v6-delivery-architecture.md) | Phase 36 server-side architecture cross-reference |
 | [`v6-email-provider-configuration.md`](v6-email-provider-configuration.md) | Provider env vars, test/production gates, Resend adapter contract |
 | [`v6-beta-validation.md`](v6-beta-validation.md) | Staging validation before implementation |
-
-**Next slice after Phase 38:** V6 Phase 39 — Browser invoke wiring (planned).

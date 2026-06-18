@@ -1,6 +1,6 @@
 /**
  * V6 Phase 19: Resend email provider adapter.
- * LEGACY BROWSER MODULE — used by manual-delivery-execution.js until Phase 39 Edge Function wiring.
+ * LEGACY BROWSER MODULE — deprecated/inert scaffold; not used by Manual Delivery after Phase 39.
  * Network implementation uses injected fetchImpl only (browser fetch when wired from manual delivery UI).
  * Server-side sends use the Supabase Edge Function — not this module.
  * No mark-as-sent automation, compliance/action/history mutation, or app wiring beyond manual delivery.

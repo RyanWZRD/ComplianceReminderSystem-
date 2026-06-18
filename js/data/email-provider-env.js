@@ -4,7 +4,7 @@
  * SAFETY: Do not commit secrets — keep RESEND_API_KEY undefined in git defaults.
  * Committed undefined values disable the browser provider (see getEmailProviderConfig).
  * RESEND_API_KEY belongs in Supabase Edge Function secrets for server-side sends (Phase 38+).
- * After Phase 39, the Manual Delivery UI must use the server-side Edge Function — not browser Resend.
+ * Manual Delivery UI invokes the server-side Edge Function (Phase 39+) — not browser Resend.
  */
 
 /** @type {Record<string, string | undefined>} */

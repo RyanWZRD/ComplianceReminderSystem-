@@ -6,13 +6,37 @@ A local-first safeguarding compliance tracker. Runs in the browser with localSto
 
 # Current Release
 
-## V6 Phase 38 — Edge Function Resend Integration
+## V6 Phase 39 — Browser Invoke Wiring
 
 **Date:** June 2026
 
 ### Summary
 
-V6 Phase 38 implements **server-side Resend sending** in `supabase/functions/send-reminder-deliveries/index.ts`. Legacy browser provider scaffold remains wired but **inert in committed defaults** (`email-provider-env.js` all `undefined`). **No browser invoke wiring yet.**
+V6 Phase 39 wires the **Manual Delivery UI** to invoke `send-reminder-deliveries` via authenticated `supabase.functions.invoke`. The browser no longer calls Resend directly — `RESEND_API_KEY` stays in Edge Function secrets only. Delivery log writes remain deferred.
+
+**Documentation:**
+
+- [`docs/v6-edge-delivery-function.md`](docs/v6-edge-delivery-function.md) — Phase 39 browser invoke behaviour
+- [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md) — Phase 39 cross-reference
+- [`docs/v5-automated-compliance-operations.md`](docs/v5-automated-compliance-operations.md#v6--reminder-delivery--phase-39-complete) — Phase 39 summary
+
+**Verification (required):**
+
+- `npm run verify-edge-delivery-browser-invoke` — browser invoke wiring and safety gates
+- `npm run verify-edge-delivery-resend` — server-side Resend integration must still pass
+- `npm run verify-edge-delivery-function-skeleton` — structural skeleton checks must still pass
+
+**Next slice:** Delivery log persistence from Edge Function outcomes (planned)
+
+---
+
+## V6 Phase 38 — Edge Function Resend Integration (complete)
+
+**Date:** June 2026
+
+### Summary
+
+V6 Phase 38 implements **server-side Resend sending** in `supabase/functions/send-reminder-deliveries/index.ts`. Extended by Phase 39 browser invoke wiring.
 
 **Documentation:**
 
@@ -25,7 +49,7 @@ V6 Phase 38 implements **server-side Resend sending** in `supabase/functions/sen
 - `npm run verify-edge-delivery-resend` — server-side Resend integration and safety gates
 - `npm run verify-edge-delivery-function-skeleton` — structural skeleton checks must still pass
 
-**Next slice:** V6 Phase 39 — Browser invoke wiring (planned)
+**Status:** Complete — see V6 Phase 39 (current release) above.
 
 ---
 

@@ -21321,7 +21321,7 @@ ${suffix}`;
     return null;
   }
   var AUTOMATION_ENABLED = readAutomationFromLocation() ?? (typeof process !== "undefined" && process.env?.AUTOMATION_ENABLED === "true");
-  var APP_VERSION = "v5.0.0-alpha.5";
+  var APP_VERSION = "v6.0.0-alpha.1";
 
   // js/app/permissions.js
   function isCloudMode() {

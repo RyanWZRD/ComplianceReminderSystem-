@@ -6,6 +6,33 @@ A local-first safeguarding compliance tracker. Runs in the browser with localSto
 
 # Current Release
 
+## v6.0.0-alpha.1 — V6 Delivery Foundation
+
+**Date:** June 2026
+
+### Summary
+
+First v6 alpha checkpoint: **V6** delivery foundation (domain model, in-memory delivery record builder, `reminder_delivery_logs` schema, delivery log RPC draft, state machine, mock email provider, mock delivery executor, foundation verification orchestrator). Builds on **v5.0.0-alpha.5** (V5-2 template & digest foundation). Mock provider only — no real email provider, no production sending, no mark-as-sent automation, compliance/action/history mutation, or cloud mutation default changes.
+
+**Documentation:**
+
+- [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md) — V6 phases 1–9 detail and release-readiness note
+- [`docs/v5-automated-compliance-operations.md`](docs/v5-automated-compliance-operations.md#v6--reminder-delivery--phase-9-complete) — V6 delivery foundation summary
+
+**Release verification (required before tag):**
+
+- `npm run build` — rebuild `app.bundle.js` after version bump
+- `npm run verify-delivery-foundation` — V6 phases 1–8 orchestrator (no live execution)
+
+Application version: **v6.0.0-alpha.1**
+
+**Next slice:** V6 Phase 10 — real email provider integration — see [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md)
+
+Status: Release candidate (V6 Phase 9)  
+Tag: **v6.0.0-alpha.1** — not created unless explicitly requested
+
+---
+
 ## v5.0.0-alpha.5 — V5-2 Template & Digest Foundation
 
 **Date:** June 2026
@@ -24,9 +51,9 @@ Fifth v5 alpha checkpoint: **V5-2** template & digest foundation (queue-item ema
 - `npm run build` — rebuild `app.bundle.js` after version bump
 - `npm run verify-reminder-template-digest-foundation` — V5-1 queue foundation + V5-2 phases 1–6 orchestrator (no live execution)
 
-Application version: **v5.0.0-alpha.5**
+Application version: **v5.0.0-alpha.5** (superseded by v6.0.0-alpha.1)
 
-**Next slice:** controlled delivery planning
+**Next slice:** V6 Phase 10 — real email provider integration — see [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md)
 
 Status: Release candidate (V5-2 Phase 7)  
 Tag: **v5.0.0-alpha.5** — not created unless explicitly requested
@@ -53,7 +80,7 @@ Fourth v5 alpha checkpoint: **V5-1** reminder queue foundation (in-memory queue 
 
 Application version: **v5.0.0-alpha.4** (superseded by alpha.5)
 
-**Next slice:** template/digest preparation or controlled delivery planning
+**Next slice:** V6 Phase 6 — email provider integration — see [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md)
 
 Status: Release candidate (V5-1 Phase 5)  
 Tag: **v5.0.0-alpha.4** — not created unless explicitly requested
@@ -259,9 +286,233 @@ Tag: v3.0.0
 
 # Next Planned Release
 
+## V6.0.0 Phase 9 — Delivery Foundation Release Readiness · Complete
+
+**Date:** June 2026
+
+Documentation and verification checkpoint for **v6.0.0-alpha.1**. Version bump, release-readiness docs, `verify-delivery-foundation` gate. No application logic changes. Mock provider only — no real email provider, no production sending, no mark-as-sent automation, or compliance/action/history mutation.
+
+**Documentation:** [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md) · [`docs/v5-automated-compliance-operations.md`](docs/v5-automated-compliance-operations.md#v6--reminder-delivery--phase-9-complete)
+
+**Verification:** `npm run build` · `npm run verify-delivery-foundation`
+
+**Release candidate:** **v6.0.0-alpha.1**
+
+**Next slice:** V6 Phase 10 — real email provider integration
+
+---
+
+## V6.0.0 Phase 8 — Delivery Foundation Verification Orchestrator · Complete
+
+**Theme:** One verification command that proves the delivery architecture, delivery records, schema, RPCs, state machine, mock provider, and mock executor all work together — without real sending.
+
+Builds on **v6.0.0 Phase 7** (mock delivery executor). Adds `npm run verify-delivery-foundation` to run phases 1–7 verification scripts in order, stop on first failure, and print a single success gate.
+
+**Documentation:** [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md)
+
+| Phase | Deliverable | Status |
+|-------|-------------|--------|
+| 1 | Delivery domain model architecture doc + verification | **Complete** |
+| 2 | In-memory delivery record builder (`buildReminderDeliveryRecords`) | **Complete** |
+| 3 | `reminder_delivery_logs` schema + RLS | **Complete** |
+| 4 | Delivery log RPC draft (`create_reminder_delivery_log`, `get_reminder_delivery_logs`) | **Complete** |
+| 5 | In-process delivery state machine (`transitionReminderDeliveryRecord`) | **Complete** |
+| 6 | Mock email provider (`createMockEmailProvider`) | **Complete** |
+| 7 | Mock delivery executor (`executeMockReminderDelivery`) | **Complete** |
+| 8 | Delivery foundation verification orchestrator (`verify-delivery-foundation`) | **Complete** |
+| 9 | Release readiness / alpha tag prep (`v6.0.0-alpha.1`) | **Complete** |
+| 10 | Real email provider integration | Planned |
+
+**Verification:** `npm run verify-delivery-foundation` (master gate); individual phase scripts remain available for targeted checks
+
+**Constraints:** Verification orchestration only. No real email provider, no production delivery, no mark-as-sent automation, no app wiring, no compliance/action/history mutation.
+
+**Next slice:** V6 Phase 10 — real email provider integration
+
+---
+
+## V6.0.0 Phase 7 — Mock Delivery Executor · Complete
+
+**Theme:** In-memory mock delivery execution — orchestrates state machine transitions and mock provider calls without real sends or app wiring.
+
+Builds on **v6.0.0 Phase 6** (mock email provider). Adds `executeMockReminderDelivery({ records, provider, at })` to process `prepared` records through `sending` to `delivered` or `failed`, skip terminal and missing-email records, and return execution summary counts.
+
+**Documentation:** [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md)
+
+| Phase | Deliverable | Status |
+|-------|-------------|--------|
+| 1 | Delivery domain model architecture doc + verification | **Complete** |
+| 2 | In-memory delivery record builder (`buildReminderDeliveryRecords`) | **Complete** |
+| 3 | `reminder_delivery_logs` schema + RLS | **Complete** |
+| 4 | Delivery log RPC draft (`create_reminder_delivery_log`, `get_reminder_delivery_logs`) | **Complete** |
+| 5 | In-process delivery state machine (`transitionReminderDeliveryRecord`) | **Complete** |
+| 6 | Mock email provider (`createMockEmailProvider`) | **Complete** |
+| 7 | Mock delivery executor (`executeMockReminderDelivery`) | **Complete** |
+| 8 | Real email provider integration | Planned |
+
+**Verification:** `npm run verify-delivery-architecture` · `npm run verify-reminder-delivery-record-builder` · `npm run verify-reminder-delivery-state-machine` · `npm run verify-mock-email-provider` · `npm run verify-mock-delivery-executor` (in-memory checks only)
+
+**Constraints:** Mock execution only. No real email provider, no production delivery, no mark-as-sent automation, no app wiring.
+
+**Next slice:** V6 Phase 9 — real email provider integration
+
+---
+
+## V6.0.0 Phase 6 — Mock Email Provider · Complete
+
+**Theme:** Simulated email provider adapter for testing delivery flow — without real sends or app wiring.
+
+Builds on **v6.0.0 Phase 5** (delivery state machine). Adds `createMockEmailProvider({ mode })` with `sendReminder` and `healthCheck`, supporting `success`, `transient_failure`, and `permanent_failure` modes.
+
+**Documentation:** [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md)
+
+| Phase | Deliverable | Status |
+|-------|-------------|--------|
+| 1 | Delivery domain model architecture doc + verification | **Complete** |
+| 2 | In-memory delivery record builder (`buildReminderDeliveryRecords`) | **Complete** |
+| 3 | `reminder_delivery_logs` schema + RLS | **Complete** |
+| 4 | Delivery log RPC draft (`create_reminder_delivery_log`, `get_reminder_delivery_logs`) | **Complete** |
+| 5 | In-process delivery state machine (`transitionReminderDeliveryRecord`) | **Complete** |
+| 6 | Mock email provider (`createMockEmailProvider`) | **Complete** |
+| 7 | Mock delivery executor (`executeMockReminderDelivery`) | Planned |
+
+**Verification:** `npm run verify-delivery-architecture` · `npm run verify-reminder-delivery-record-builder` · `npm run verify-reminder-delivery-state-machine` · `npm run verify-mock-email-provider` (in-memory checks only)
+
+**Constraints:** Mock provider only. No real email provider, no delivery execution, no mark-as-sent automation, no app wiring.
+
+**Next slice:** V6 Phase 7 — mock delivery executor
+
+---
+
+## V6.0.0 Phase 5 — Delivery State Machine · Complete
+
+**Theme:** Pure in-memory state transitions for reminder delivery records — without provider integration or app wiring.
+
+Builds on **v6.0.0 Phase 4** (delivery log RPC draft). Adds `transitionReminderDeliveryRecord` with validated lifecycle transitions, timestamp fields, failure/cancellation reasons, and `statusHistory` audit entries.
+
+**Documentation:** [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md)
+
+| Phase | Deliverable | Status |
+|-------|-------------|--------|
+| 1 | Delivery domain model architecture doc + verification | **Complete** |
+| 2 | In-memory delivery record builder (`buildReminderDeliveryRecords`) | **Complete** |
+| 3 | `reminder_delivery_logs` schema + RLS | **Complete** |
+| 4 | Delivery log RPC draft (`create_reminder_delivery_log`, `get_reminder_delivery_logs`) | **Complete** |
+| 5 | In-process delivery state machine (`transitionReminderDeliveryRecord`) | **Complete** |
+| 6 | Mock email provider (`createMockEmailProvider`) | **Complete** |
+| 7 | Real email provider integration | Planned |
+
+**Verification:** `npm run verify-delivery-architecture` · `npm run verify-reminder-delivery-record-builder` · `npm run verify-reminder-delivery-state-machine` · `npm run verify-mock-email-provider` (in-memory checks only)
+
+**Constraints:** State logic only. No email provider, no delivery execution, no mark-as-sent automation, no app wiring.
+
+**Next slice:** V6 Phase 7 — real email provider integration
+
+---
+
+## V6.0.0 Phase 4 — Delivery Log RPC Draft · Complete
+
+**Theme:** Controlled Postgres RPCs for creating and reading reminder delivery logs — without wiring into app behaviour.
+
+Builds on **v6.0.0 Phase 3** (delivery log schema). Adds `public.create_reminder_delivery_log(...)` (admin-only insert) and `public.get_reminder_delivery_logs(p_organisation_id uuid)` (admin/editor read).
+
+**Documentation:** [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md)
+
+| Phase | Deliverable | Status |
+|-------|-------------|--------|
+| 1 | Delivery domain model architecture doc + verification | **Complete** |
+| 2 | In-memory delivery record builder (`buildReminderDeliveryRecords`) | **Complete** |
+| 3 | `reminder_delivery_logs` schema + RLS | **Complete** |
+| 4 | Delivery log RPC draft (`create_reminder_delivery_log`, `get_reminder_delivery_logs`) | **Complete** |
+| 5 | In-process delivery state machine (`transitionReminderDeliveryRecord`) | **Complete** |
+| 6 | Email provider integration | Planned |
+
+**Verification:** `npm run verify-delivery-architecture` · `npm run verify-reminder-delivery-record-builder` · `npm run verify-reminder-delivery-log-schema` · `npm run verify-reminder-delivery-log-rpcs` · `npm run verify-reminder-delivery-state-machine` (static / in-memory checks only)
+
+**Constraints:** Database RPC only. No email provider, no delivery execution, no mark-as-sent automation, no app wiring.
+
+**Next slice:** V6 Phase 6 — email provider integration
+
+---
+
+## V6.0.0 Phase 3 — Delivery Log Schema · Complete
+
+**Theme:** Postgres schema for per-recipient reminder delivery audit records — without wiring into app behaviour.
+
+Builds on **v6.0.0 Phase 2** (in-memory delivery record builder) and **v5.0.0-alpha.5** (V5-2 template & digest foundation). Adds `public.reminder_delivery_logs` with lifecycle status constraint, dedup unique index, RLS policies, and `updated_at` trigger.
+
+**Documentation:** [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md)
+
+| Phase | Deliverable | Status |
+|-------|-------------|--------|
+| 1 | Delivery domain model architecture doc + verification | **Complete** |
+| 2 | In-memory delivery record builder (`buildReminderDeliveryRecords`) | **Complete** |
+| 3 | `reminder_delivery_logs` schema + RLS | **Complete** |
+| 4 | Delivery log RPC draft | **Complete** |
+| 5 | In-process delivery state machine (`transitionReminderDeliveryRecord`) | **Complete** |
+| 6 | Email provider integration | Planned |
+
+**Verification:** `npm run verify-delivery-architecture` · `npm run verify-reminder-delivery-record-builder` · `npm run verify-reminder-delivery-log-schema` (static checks only)
+
+**Constraints:** Schema only. No email provider, no delivery execution, no mark-as-sent automation, no app wiring.
+
+**Next slice:** V6 Phase 6 — email provider integration
+
+---
+
+## V6.0.0 Phase 2 — Delivery Record Builder · Complete
+
+**Theme:** Create in-memory delivery records from reminder queue items and templates — without sending.
+
+Builds on **v6.0.0 Phase 1** (delivery domain model) and **v5.0.0-alpha.5** (V5-2 template & digest foundation). Produces per-recipient delivery records with `prepared` or `failed` (missing email) status from queue items via `buildReminderEmailTemplate`.
+
+**Documentation:** [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md)
+
+| Phase | Deliverable | Status |
+|-------|-------------|--------|
+| 1 | Delivery domain model architecture doc + verification | **Complete** |
+| 2 | In-memory delivery record builder (`buildReminderDeliveryRecords`) | **Complete** |
+| 3 | `reminder_delivery_logs` schema + RLS | **Complete** |
+| 4 | Delivery log RPC draft | **Complete** |
+| 5 | In-process delivery state machine (`transitionReminderDeliveryRecord`) | **Complete** |
+| 6 | Email provider integration | Planned |
+
+**Verification:** `npm run verify-delivery-architecture` · `npm run verify-reminder-delivery-record-builder` (no Supabase)
+
+**Constraints:** Record preparation only. No email provider, no delivery execution, no mark-as-sent automation, no database writes.
+
+**Next slice:** V6 Phase 6 — email provider integration
+
+---
+
+## V6.0.0 Phase 1 — Delivery Domain Model · Complete
+
+**Theme:** Architecture for how reminder emails would be sent and audited — without implementing delivery.
+
+Builds on **v5.0.0-alpha.5** (V5-2 template & digest foundation). Defines delivery lifecycle, reminder delivery record shape, audit requirements, duplicate-prevention rules, retry strategy, and future `EmailProvider` abstraction.
+
+**Documentation:** [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md)
+
+| Phase | Deliverable | Status |
+|-------|-------------|--------|
+| 1 | Delivery domain model architecture doc + verification | **Complete** |
+| 2 | In-memory delivery record builder | **Complete** |
+| 3 | `reminder_delivery_logs` schema + RLS | **Complete** |
+| 4 | Delivery log RPC draft | **Complete** |
+| 5 | In-process delivery state machine (`transitionReminderDeliveryRecord`) | **Complete** |
+| 6 | Email provider integration | Planned |
+
+**Verification:** `npm run verify-delivery-architecture` (no Supabase)
+
+**Constraints:** No email provider, no delivery execution, no mark-as-sent automation, no compliance/action/history mutation.
+
+**Next slice:** V6 Phase 6 — email provider integration
+
+---
+
 ## V5-2 — Reminder email template builder · Foundation complete
 
-Template & digest foundation shipped as **v5.0.0-alpha.5**. Next work: controlled delivery planning. Prerequisite **V5-1** reminder queue foundation (**v5.0.0-alpha.4**) satisfied.
+Template & digest foundation shipped as **v5.0.0-alpha.5**. Next work: **V6 Phase 1** delivery domain model. Prerequisite **V5-1** reminder queue foundation (**v5.0.0-alpha.4**) satisfied.
 
 **Documentation:** [`docs/v5-automated-compliance-operations.md`](docs/v5-automated-compliance-operations.md) (V5-2 section)
 
@@ -283,7 +534,7 @@ Template & digest foundation shipped as **v5.0.0-alpha.5**. Next work: controlle
 
 **Constraints:** No delivery provider, send button, mark-as-sent automation, or compliance/action/history mutation.
 
-**Next slice:** controlled delivery planning
+**Next slice:** V6 Phase 6 — email provider integration — see [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md)
 
 ---
 
@@ -307,7 +558,7 @@ Reminder queue foundation shipped as **v5.0.0-alpha.4**. Template & digest found
 
 **Verification:** `npm run build` · `npm run verify-reminder-queue-foundation` (runs V5-0 foundation + phases 1–3 in order; stop on first failure) · individual phase scripts remain available (no Supabase)
 
-**Next slice:** template/digest preparation or controlled delivery planning
+**Next slice:** V6 Phase 6 — email provider integration — see [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md)
 
 ---
 
@@ -351,13 +602,13 @@ Scheduled compliance operations: reminder delivery, action orchestration, escala
 - `npm run verify-contact-management` — V5-1A release gate (no Supabase)
 - `npm run verify:phase2` — cloud regression including contact RPC smokes
 
-**Next slice:** template/digest preparation or controlled delivery planning
+**Next slice:** V6 Phase 6 — email provider integration — see [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md)
 
 ## v4.0.1 — Compliance Insights GA · RC hardening complete
 
 Read-only compliance insights on the dashboard: health score, risk summary, renewal forecast, and rule-based recommendations. See [`docs/compliance-insights.md`](docs/compliance-insights.md) and [Version Roadmap — v4](#v4--compliance-insights-release-candidate).
 
-Application version: **v5.0.0-alpha.5** in source (V5-2 template & digest foundation alpha); v4 GA target **v4.0.1**.
+Application version: **v6.0.0-alpha.1** in source (V6 delivery foundation alpha); v4 GA target **v4.0.1**.
 
 **RC hardening summary (June 2026):**
 
@@ -973,6 +1224,34 @@ V4 answers *what needs attention*. V5 **acts on it automatically** once the auto
 
 **Alpha tag in source:** v5.0.0-alpha.5  
 **GA tag target:** `v5.0.0`
+
+---
+
+## v6.0.0 — Reminder Delivery · Planned
+
+**Theme:** From preparation to auditable delivery — lifecycle, records, provider integration, and operations visibility.
+
+V5 answers *what would be sent*. V6 defines and eventually implements *how sends are tracked and audited*.
+
+**Full architecture:** [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md)
+
+**Prerequisites:** v5.0.0-alpha.5 (V5-2 template & digest foundation)
+
+| Phase | Status | Summary |
+|-------|--------|---------|
+| V6-1 Phase 1 | **Complete** | Delivery domain model — lifecycle, record shape, audit, dedup, retry, provider interface; architecture only |
+| V6-1 Phase 2 | **Complete** | In-memory delivery record builder (`buildReminderDeliveryRecords`) |
+| V6-1 Phase 3 | **Complete** | `reminder_delivery_logs` Postgres schema, RLS, dedup index — no app wiring |
+| V6-1 Phase 4 | **Complete** | Delivery log RPC draft — `create_reminder_delivery_log`, `get_reminder_delivery_logs` |
+| V6-1 Phase 5 | **COMPLETE** | In-process delivery state machine (`transitionReminderDeliveryRecord`) |
+| V6-1 Phase 6 | **COMPLETE** | Mock email provider (`createMockEmailProvider`) |
+| V6-1 Phase 7 | **COMPLETE** | Mock delivery executor (`executeMockReminderDelivery`) |
+| V6-1 Phase 8 | **COMPLETE** | Delivery foundation verification orchestrator (`verify-delivery-foundation`) |
+| V6-1 Phase 9+ | **PLANNED** | Real provider integration, Operations Log UI |
+
+**Verification:** `npm run verify-delivery-foundation` (master gate); individual phase scripts remain available for targeted checks
+
+**Non-goals (Phase 1–2):** Email provider, outbound delivery, mark-as-sent automation, database writes.
 
 ---
 

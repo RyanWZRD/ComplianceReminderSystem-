@@ -164,10 +164,20 @@ assertContains(
   "get_reminder_delivery_logs",
   "cloud-automation-store loads delivery logs via get_reminder_delivery_logs"
 );
-assertNotContains(
+assertContains(
   cloudAutomationStoreJs,
-  "create_reminder_delivery_log",
-  "cloud-automation-store has no create delivery log wiring"
+  "createReminderDeliveryLog",
+  "cloud-automation-store exposes createReminderDeliveryLog repository method"
+);
+assertContains(
+  cloudAutomationStoreJs,
+  'supabase.rpc("create_reminder_delivery_log", payload)',
+  "cloud-automation-store createReminderDeliveryLog uses create_reminder_delivery_log RPC"
+);
+assertNotContains(
+  readFileSync(join(root, "app.js"), "utf8"),
+  "createReminderDeliveryLog",
+  "app.js does not call createReminderDeliveryLog"
 );
 
 const repositoryJs = readFileSync(join(root, "js", "data", "repository.js"), "utf8");

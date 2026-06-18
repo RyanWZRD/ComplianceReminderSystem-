@@ -82,6 +82,11 @@
     "verify-resend-provider": "node scripts/verify-resend-provider.mjs",
     "verify-resend-provider-foundation": "node scripts/verify-resend-provider-foundation.mjs",
     "verify-delivery-operations-log-ui": "node scripts/verify-delivery-operations-log-ui.mjs",
+    "verify-delivery-worker": "node scripts/verify-delivery-worker.mjs",
+    "verify-delivery-worker-persistence": "node scripts/verify-delivery-worker-persistence.mjs",
+    "verify-delivery-log-persistence-service": "node scripts/verify-delivery-log-persistence-service.mjs",
+    "verify-delivery-pipeline-service": "node scripts/verify-delivery-pipeline-service.mjs",
+    "verify-delivery-pipeline-foundation": "node scripts/verify-delivery-pipeline-foundation.mjs",
     "verify:phase2": "node scripts/verify-phase2.mjs"
   },
   "dependencies": {

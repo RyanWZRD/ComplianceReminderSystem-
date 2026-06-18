@@ -6,6 +6,148 @@ A local-first safeguarding compliance tracker. Runs in the browser with localSto
 
 # Current Release
 
+## v6.0.0-alpha.7 — V6 Delivery Pipeline Foundation Release Readiness
+
+**Date:** June 2026
+
+### Summary
+
+Seventh v6 alpha checkpoint: **V6** delivery pipeline foundation release readiness on top of **v6.0.0-alpha.6** Delivery Operations Log UI. Service-level delivery stack complete — worker execution (`executeReminderDeliveries`), persistence adapter (`buildDeliveryLogPayloads`), persistence service (`persistDeliveryLogPayloads`), pipeline service (`runDeliveryPipeline`), and foundation verification (`verify-delivery-pipeline-foundation`). **No UI send button, scheduled execution, mark-as-sent automation, or `app.js` pipeline wiring.**
+
+**Documentation:**
+
+- [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md) — V6 phases 1–29 detail and release-readiness note
+- [`docs/v6-email-provider-configuration.md`](docs/v6-email-provider-configuration.md) — cross-reference
+- [`docs/v5-automated-compliance-operations.md`](docs/v5-automated-compliance-operations.md#v6--reminder-delivery--phase-29-complete) — V6 delivery pipeline foundation release readiness summary
+
+**Release verification (required before tag):**
+
+- `npm run build` — rebuild `app.bundle.js` after version bump
+- `npm run verify-delivery-pipeline-foundation` — full delivery pipeline stack at service level
+
+Application version: **v6.0.0-alpha.7**
+
+**Next slice:** V6 Phase 30 — Worker delivery execution wiring — see [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md) · [`docs/v6-email-provider-configuration.md`](docs/v6-email-provider-configuration.md)
+
+Status: Release candidate (V6 Phase 29)  
+Tag: **v6.0.0-alpha.7** — not created unless explicitly requested
+
+---
+
+## V6 Phase 28 — Delivery Pipeline Foundation Verification
+
+**Date:** June 2026
+
+### Summary
+
+V6 Phase 28 adds `verify-delivery-pipeline-foundation` — one orchestrator command that proves the delivery pipeline stack works end-to-end at service level (Resend provider foundation, worker execution, persistence adapter, persistence service, pipeline service, and read-only operations log UI). Verification only — no app behaviour changes, UI send button, scheduled execution, or mark-as-sent automation.
+
+**Documentation:**
+
+- [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md) — Phase 28 foundation verification orchestrator
+- [`docs/v6-email-provider-configuration.md`](docs/v6-email-provider-configuration.md) — cross-reference
+- [`docs/v5-automated-compliance-operations.md`](docs/v5-automated-compliance-operations.md#v6--reminder-delivery--phase-28-complete) — Phase 28 summary
+
+**Verification (required):**
+
+- `npm run verify-delivery-pipeline-foundation` — full delivery pipeline stack at service level
+
+**Next slice:** V6 Phase 29 — Delivery pipeline foundation release readiness (planned)
+
+---
+
+## V6 Phase 27 — Delivery Pipeline Service
+
+**Date:** June 2026
+
+### Summary
+
+V6 Phase 27 adds `runDeliveryPipeline` in `delivery-pipeline-service.js` — composes `executeReminderDeliveries`, `buildDeliveryLogPayloads`, and `persistDeliveryLogPayloads` into one orchestrated flow. Service composition only — no `app.js` wiring, UI controls, scheduled jobs, or mark-as-sent automation.
+
+**Documentation:**
+
+- [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md) — Phase 27 pipeline service
+- [`docs/v6-email-provider-configuration.md`](docs/v6-email-provider-configuration.md) — cross-reference
+- [`docs/v5-automated-compliance-operations.md`](docs/v5-automated-compliance-operations.md#v6--reminder-delivery--phase-27-complete) — Phase 27 summary
+
+**Verification (required):**
+
+- `npm run verify-delivery-pipeline-service` — pipeline composition, summaries, partial persistence failures, immutable inputs, no app/UI/schedule wiring
+- `npm run verify-delivery-worker` · `npm run verify-delivery-worker-persistence` · `npm run verify-delivery-log-persistence-service` — underlying layers still safe
+
+**Next slice:** V6 Phase 28 — Worker delivery execution wiring (planned)
+
+---
+
+## V6 Phase 26 — Delivery Log Persistence Service
+
+**Date:** June 2026
+
+### Summary
+
+V6 Phase 26 adds `persistDeliveryLogPayloads` in `delivery-log-persistence-service.js` — persists delivery-log payloads through `db.createReminderDeliveryLog` (backed by `create_reminder_delivery_log` RPC). Continues on partial failure with per-payload results and summary counts. Persistence service only — no provider calls, sending, `app.js` wiring, UI controls, or mark-as-sent automation.
+
+**Documentation:**
+
+- [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md) — Phase 26 persistence service
+- [`docs/v6-email-provider-configuration.md`](docs/v6-email-provider-configuration.md) — cross-reference
+- [`docs/v5-automated-compliance-operations.md`](docs/v5-automated-compliance-operations.md#v6--reminder-delivery--phase-26-complete) — Phase 26 summary
+
+**Verification (required):**
+
+- `npm run verify-delivery-log-persistence-service` — RPC persistence orchestration, partial failure handling, immutable payloads, no app/provider wiring
+- `npm run verify-delivery-worker-persistence` — payload adapter still safe
+
+**Next slice:** V6 Phase 27 — Worker delivery execution wiring (planned)
+
+---
+
+## V6 Phase 25 — Delivery Worker Persistence Adapter
+
+**Date:** June 2026
+
+### Summary
+
+V6 Phase 25 adds `buildDeliveryLogPayloads` in `delivery-worker-persistence.js` — maps delivery worker records to `create_reminder_delivery_log` RPC payloads with preserved metadata. Persistence mapping only — no provider calls, RPC execution, `app.js` wiring, UI controls, or mark-as-sent automation.
+
+**Documentation:**
+
+- [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md) — Phase 25 persistence adapter
+- [`docs/v6-email-provider-configuration.md`](docs/v6-email-provider-configuration.md) — cross-reference
+- [`docs/v5-automated-compliance-operations.md`](docs/v5-automated-compliance-operations.md#v6--reminder-delivery--phase-25-complete) — Phase 25 summary
+
+**Verification (required):**
+
+- `npm run verify-delivery-worker-persistence` — RPC payload mapping, metadata preservation, immutable inputs, no app/DB/RPC wiring
+- `npm run verify-delivery-worker` — execution engine still safe
+
+**Next slice:** V6 Phase 26 — Worker delivery execution wiring (planned)
+
+---
+
+## V6 Phase 24 — Worker Delivery Execution Engine
+
+**Date:** June 2026
+
+### Summary
+
+V6 Phase 24 adds `executeReminderDeliveries` in `delivery-worker.js` — an in-memory execution engine that processes prepared delivery records through an injected provider via `transitionReminderDeliveryRecord`. Execution engine only — no `app.js` wiring, UI buttons, automatic scheduling, or mark-as-sent automation.
+
+**Documentation:**
+
+- [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md) — Phase 24 worker delivery execution engine
+- [`docs/v6-email-provider-configuration.md`](docs/v6-email-provider-configuration.md) — cross-reference
+- [`docs/v5-automated-compliance-operations.md`](docs/v5-automated-compliance-operations.md#v6--reminder-delivery--phase-24-complete) — Phase 24 summary
+
+**Verification (required):**
+
+- `npm run verify-delivery-worker` — execution engine, summary counts, immutable inputs, no app/DB/RPC wiring
+- `npm run verify-resend-provider-foundation` — Resend provider foundation still safe
+
+**Next slice:** V6 Phase 25 — Worker delivery execution wiring (planned)
+
+---
+
 ## v6.0.0-alpha.6 — V6 Delivery Operations Log Release Readiness
 
 **Date:** June 2026
@@ -496,6 +638,90 @@ Tag: v3.0.0
 ---
 
 # Next Planned Release
+
+## V6.0.0 Phase 29 — Delivery Pipeline Foundation Release Readiness · Complete
+
+**Date:** June 2026
+
+Documentation and version bump (`v6.0.0-alpha.7`) confirming the service-level delivery pipeline is safe to tag before any app/UI/scheduled execution. V6 Phases 1–29 complete. Gates: `npm run build`, `npm run verify-delivery-pipeline-foundation`.
+
+**Documentation:** [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md) · [`docs/v6-email-provider-configuration.md`](docs/v6-email-provider-configuration.md) · [`docs/v5-automated-compliance-operations.md`](docs/v5-automated-compliance-operations.md#v6--reminder-delivery--phase-29-complete)
+
+**Release candidate:** **v6.0.0-alpha.7**
+
+**Next slice:** V6 Phase 30 — Worker delivery execution wiring
+
+---
+
+## V6.0.0 Phase 28 — Delivery Pipeline Foundation Verification · Complete
+
+**Date:** June 2026
+
+`verify-delivery-pipeline-foundation` runs in order: `verify-resend-provider-foundation`, `verify-delivery-worker`, `verify-delivery-worker-persistence`, `verify-delivery-log-persistence-service`, `verify-delivery-pipeline-service`, `verify-delivery-operations-log-ui`. Stops on first failure. Verification only — no app/UI/schedule/mark-as-sent wiring.
+
+**Documentation:** [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md) · [`docs/v6-email-provider-configuration.md`](docs/v6-email-provider-configuration.md) · [`docs/v5-automated-compliance-operations.md`](docs/v5-automated-compliance-operations.md#v6--reminder-delivery--phase-28-complete)
+
+**Verification:** `npm run verify-delivery-pipeline-foundation`
+
+**Next slice:** V6 Phase 29 — Worker delivery execution wiring
+
+---
+
+## V6.0.0 Phase 27 — Delivery Pipeline Service · Complete
+
+**Date:** June 2026
+
+`runDeliveryPipeline({ records, provider, db, organisationId, automationRunId, now })` chains execution → payload mapping → RPC persistence. Returns executed `records`, `executionSummary`, `persistenceSummary`, and `persistenceResults`. No `app.js` wiring, UI controls, scheduled jobs, or mark-as-sent automation.
+
+**Documentation:** [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md) · [`docs/v6-email-provider-configuration.md`](docs/v6-email-provider-configuration.md) · [`docs/v5-automated-compliance-operations.md`](docs/v5-automated-compliance-operations.md#v6--reminder-delivery--phase-27-complete)
+
+**Verification:** `npm run verify-delivery-pipeline-service` · `npm run verify-delivery-worker` · `npm run verify-delivery-worker-persistence` · `npm run verify-delivery-log-persistence-service`
+
+**Next slice:** V6 Phase 28 — Worker delivery execution wiring
+
+---
+
+## V6.0.0 Phase 26 — Delivery Log Persistence Service · Complete
+
+**Date:** June 2026
+
+`persistDeliveryLogPayloads({ db, payloads })` calls `db.createReminderDeliveryLog(payload)` once per payload via `CloudAutomationStore.createReminderDeliveryLog` → `create_reminder_delivery_log` RPC. Returns per-payload results and `{ total, persisted, failed }` summary; continues on partial failure. No provider calls, sending, `app.js` wiring, or mark-as-sent automation.
+
+**Documentation:** [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md) · [`docs/v6-email-provider-configuration.md`](docs/v6-email-provider-configuration.md) · [`docs/v5-automated-compliance-operations.md`](docs/v5-automated-compliance-operations.md#v6--reminder-delivery--phase-26-complete)
+
+**Verification:** `npm run verify-delivery-log-persistence-service` · `npm run verify-delivery-worker-persistence`
+
+**Next slice:** V6 Phase 27 — Worker delivery execution wiring
+
+---
+
+## V6.0.0 Phase 25 — Delivery Worker Persistence Adapter · Complete
+
+**Date:** June 2026
+
+`buildDeliveryLogPayloads({ records, organisationId, automationRunId })` maps delivery worker records to `create_reminder_delivery_log` RPC payloads (`p_organisation_id`, `p_delivery_status`, lifecycle timestamps, `p_metadata`, etc.). Metadata preserves provider details, failure type, and `statusHistory`. No provider calls, RPC execution, database writes, or `app.js` wiring.
+
+**Documentation:** [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md) · [`docs/v6-email-provider-configuration.md`](docs/v6-email-provider-configuration.md) · [`docs/v5-automated-compliance-operations.md`](docs/v5-automated-compliance-operations.md#v6--reminder-delivery--phase-25-complete)
+
+**Verification:** `npm run verify-delivery-worker-persistence` · `npm run verify-delivery-worker`
+
+**Next slice:** V6 Phase 26 — Worker delivery execution wiring
+
+---
+
+## V6.0.0 Phase 24 — Worker Delivery Execution Engine · Complete
+
+**Date:** June 2026
+
+In-memory `executeReminderDeliveries({ records, provider, transitionRecord, now })` processes prepared records: `prepared` → `sending` → `delivered`/`failed` via injected provider. Skips delivered, cancelled, and `failed` + `missing_recipient_email`. No `app.js` wiring, UI buttons, scheduling, database writes, RPC calls, or mark-as-sent automation.
+
+**Documentation:** [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md) · [`docs/v6-email-provider-configuration.md`](docs/v6-email-provider-configuration.md) · [`docs/v5-automated-compliance-operations.md`](docs/v5-automated-compliance-operations.md#v6--reminder-delivery--phase-24-complete)
+
+**Verification:** `npm run verify-delivery-worker` · `npm run verify-resend-provider-foundation`
+
+**Next slice:** V6 Phase 25 — Worker delivery execution wiring
+
+---
 
 ## V6.0.0 Phase 23 — Delivery Operations Log Release Readiness · Complete
 
@@ -1009,7 +1235,7 @@ Scheduled compliance operations: reminder delivery, action orchestration, escala
 
 Read-only compliance insights on the dashboard: health score, risk summary, renewal forecast, and rule-based recommendations. See [`docs/compliance-insights.md`](docs/compliance-insights.md) and [Version Roadmap — v4](#v4--compliance-insights-release-candidate).
 
-Application version: **v6.0.0-alpha.6** in source (V6 Delivery Operations Log release readiness alpha); v4 GA target **v4.0.1**.
+Application version: **v6.0.0-alpha.7** in source (V6 delivery pipeline foundation release readiness alpha); v4 GA target **v4.0.1**.
 
 **RC hardening summary (June 2026):**
 

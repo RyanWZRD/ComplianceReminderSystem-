@@ -21321,7 +21321,7 @@ ${suffix}`;
     return null;
   }
   var AUTOMATION_ENABLED = readAutomationFromLocation() ?? (typeof process !== "undefined" && process.env?.AUTOMATION_ENABLED === "true");
-  var APP_VERSION = "v6.0.0-alpha.6";
+  var APP_VERSION = "v6.0.0-alpha.7";
 
   // js/app/permissions.js
   function isCloudMode() {
@@ -21876,6 +21876,38 @@ ${suffix}`;
       const run = mapAutomationRunFromRpc(data.run);
       this.runs = [run, ...this.runs.filter((entry) => entry.id !== run.id)];
       return { ok: true, status: "created", run };
+    }
+    /**
+     * @param {CreateReminderDeliveryLogPayload} payload
+     * @returns {Promise<ReminderDeliveryLogCreateResult>}
+     */
+    async createReminderDeliveryLog(payload) {
+      if (!isSupabaseConfigured()) {
+        return { ok: false, error: "Supabase is not configured." };
+      }
+      await waitForAuthReady();
+      if (!isAuthenticated()) {
+        return { ok: false, error: "Not signed in." };
+      }
+      const supabase = getSupabaseClient();
+      const { data, error } = await supabase.rpc("create_reminder_delivery_log", payload);
+      if (error) {
+        return { ok: false, error: error.message };
+      }
+      if (!data || typeof data !== "object" || typeof data.id !== "string") {
+        return {
+          ok: false,
+          error: `Unexpected response from create_reminder_delivery_log: ${JSON.stringify(data)}`
+        };
+      }
+      return {
+        ok: true,
+        log: {
+          id: data.id,
+          deliveryStatus: String(data.delivery_status ?? ""),
+          createdAt: String(data.created_at ?? "")
+        }
+      };
     }
   };
 

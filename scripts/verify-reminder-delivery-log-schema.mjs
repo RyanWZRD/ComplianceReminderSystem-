@@ -204,10 +204,15 @@ assertContains(
   "get_reminder_delivery_logs",
   "cloud-automation-store loads delivery logs via get_reminder_delivery_logs"
 );
-assertNotContains(
+assertContains(
   cloudAutomationStoreJs,
-  "create_reminder_delivery_log",
-  "cloud-automation-store has no create delivery log wiring"
+  "createReminderDeliveryLog",
+  "cloud-automation-store exposes createReminderDeliveryLog repository method"
+);
+assertNotContains(
+  appJs,
+  "createReminderDeliveryLog",
+  "app.js does not call createReminderDeliveryLog"
 );
 
 const repositoryJs = readFileSync(join(root, "js", "data", "repository.js"), "utf8");

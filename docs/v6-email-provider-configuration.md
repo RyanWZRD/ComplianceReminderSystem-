@@ -3,8 +3,8 @@
 **Theme:** Define how a real email provider will be configured safely — without implementing a provider, sending email, or wiring the application.
 
 **Target:** v6.0.0 (major release)  
-**Current phase:** V6 Phase 23 — Delivery Operations Log Release Readiness  
-**Release candidate:** v6.0.0-alpha.6  
+**Current phase:** V6 Phase 29 — Delivery Pipeline Foundation Release Readiness  
+**Release candidate:** v6.0.0-alpha.7  
 **Prerequisites:** v6.0.0-alpha.2 (V6 Phase 13 — provider foundation release readiness)  
 **Date:** Planned — June 2026+
 
@@ -311,6 +311,11 @@ The `mock` provider identifier is for tests and verification only — not set vi
 | `npm run verify-resend-provider` | Phase 19 — Resend provider network implementation (mocked `fetchImpl`; no app wiring) |
 | `npm run verify-resend-provider-foundation` | Phase 20 — orchestrator; runs skeleton foundation + Resend plan + Resend provider in order, stop on first failure |
 | `npm run verify-delivery-operations-log-ui` | Phase 22 — Delivery Operations Log UI, CSV export, no execution hooks |
+| `npm run verify-delivery-worker` | Phase 24 — worker delivery execution engine (in-memory; no app wiring) |
+| `npm run verify-delivery-worker-persistence` | Phase 25 — worker persistence adapter (RPC payload mapping; no RPC calls) |
+| `npm run verify-delivery-log-persistence-service` | Phase 26 — delivery log persistence service (RPC orchestration; no app wiring) |
+| `npm run verify-delivery-pipeline-service` | Phase 27 — delivery pipeline service (execution + persistence composition; no app wiring) |
+| `npm run verify-delivery-pipeline-foundation` | Phase 28 — delivery pipeline foundation orchestrator (full service-level stack) |
 | `npm run verify-delivery-foundation` | Phases 1–8 — delivery foundation orchestrator (included in Phase 12 gate) |
 
 **Phase 10 gate:** `npm run verify-email-provider-config` must pass. No Supabase, browser, real email provider, or outbound delivery.
@@ -339,7 +344,9 @@ The `mock` provider identifier is for tests and verification only — not set vi
 
 **Phase 22 gate:** `npm run verify-delivery-operations-log-ui` must pass. Read-only audit UI and CSV export only — no send button, delivery execution, mark-as-sent automation, or provider `sendReminder` calls.
 
-**Phase 23 gate:** `npm run build`, `npm run verify-resend-provider-foundation`, and `npm run verify-delivery-operations-log-ui` must pass. Documentation and version bump only — no application logic changes. Delivery Operations Log UI complete; no send/retry/execute controls, mark-as-sent automation, or automatic delivery execution.
+**Phase 28 gate:** `npm run verify-delivery-pipeline-foundation` must pass. Verification orchestrator only — no app behaviour changes, UI send button, scheduled execution, or mark-as-sent automation.
+
+**Phase 29 gate:** `npm run build` and `npm run verify-delivery-pipeline-foundation` must pass. Documentation and version bump only — no application logic changes.
 
 ---
 
@@ -408,29 +415,50 @@ Stops on first failure. Prints section headings for each step. Verification-only
 | 21 | Resend provider release readiness (`v6.0.0-alpha.5`) | **Complete** |
 | 22 | Delivery Operations Log UI + export | **Complete** |
 | 23 | Delivery Operations Log release readiness (`v6.0.0-alpha.6`) | **Complete** |
-| 24 | Worker delivery execution wiring | Planned |
-| 25 | Mark-as-sent on confirmed delivery (policy-gated) | Planned |
+| 24 | Worker delivery execution engine (`executeReminderDeliveries`) | **Complete** |
+| 25 | Delivery worker persistence adapter (`buildDeliveryLogPayloads`) | **Complete** |
+| 26 | Delivery log persistence service (`persistDeliveryLogPayloads`) | **Complete** |
+| 27 | Delivery pipeline service (`runDeliveryPipeline`) | **Complete** |
+| 28 | Delivery pipeline foundation verification (`verify-delivery-pipeline-foundation`) | **Complete** |
+| 29 | Delivery pipeline foundation release readiness (`v6.0.0-alpha.7`) | **Complete** |
+| 30 | Worker delivery execution wiring | Planned |
+| 31 | Mark-as-sent on confirmed delivery (policy-gated) | Planned |
 
-**Release candidate:** **v6.0.0-alpha.6**
+**Release candidate:** **v6.0.0-alpha.7**
 
-**Release-readiness note (v6.0.0-alpha.6):**
+**Release-readiness note (v6.0.0-alpha.7):**
 
-- V6 Phases 1–23 complete
-- Delivery Operations Log UI complete (read-only audit view, summary counts, expandable detail panel)
-- CSV export complete
-- Loads via `get_reminder_delivery_logs` RPC (read-only)
-- **No send/retry/execute controls**
+- V6 Phases 1–29 complete
+- Delivery worker complete (`executeReminderDeliveries`)
+- Persistence adapter complete (`buildDeliveryLogPayloads`)
+- Persistence service complete (`persistDeliveryLogPayloads`)
+- Delivery pipeline service complete (`runDeliveryPipeline`)
+- Pipeline foundation verification complete (`verify-delivery-pipeline-foundation`)
+- **No UI send button**
+- **No scheduled execution**
 - **No mark-as-sent automation**
-- **No automatic delivery execution**
-- **No compliance/action/history mutation**
+- **No `app.js` pipeline wiring**
 
 **Release verification (required before tag):**
 
 - `npm run build` — rebuild `app.bundle.js` after version bump
-- `npm run verify-resend-provider-foundation` — Resend provider foundation still safe
-- `npm run verify-delivery-operations-log-ui` — read-only audit UI and CSV export; no execution hooks
+- `npm run verify-delivery-pipeline-foundation` — full delivery pipeline stack at service level
 
-**Next slice after Phase 23:** V6 Phase 24 — Worker delivery execution wiring.
+**Next slice after Phase 23:** V6 Phase 24 — Worker delivery execution engine.
+
+---
+
+## Phase 29 — Delivery pipeline foundation release readiness
+
+**Scope:** Documentation, version bump (`v6.0.0-alpha.7`), and release-readiness gate. No application logic changes.
+
+**Verification:** `npm run build` · `npm run verify-delivery-pipeline-foundation`
+
+### Phase 29 constraints
+
+- Documentation and version display only
+- No UI send button, scheduled execution, or mark-as-sent automation
+- No `app.js` pipeline wiring
 
 ---
 
@@ -809,6 +837,76 @@ Stops on first failure. Prints section headings for each step. Final success mes
 - Read-only audit UI — loads existing delivery log rows only
 - No send/retry/execute/mark-sent controls
 - No `sendReminder` or provider network calls from `app.js`
+
+---
+
+## Phase 28 — Delivery pipeline foundation verification
+
+**Scope:** `verify-delivery-pipeline-foundation` orchestrator — proves delivery pipeline stack end-to-end at service level. **No app behaviour changes.**
+
+**Verification:** `npm run verify-delivery-pipeline-foundation`
+
+### Phase 28 constraints
+
+- Verification orchestrator and documentation only
+- No app behaviour changes, UI send button, or scheduled execution
+- No mark-as-sent automation
+
+---
+
+## Phase 27 — Delivery pipeline service
+
+**Scope:** `runDeliveryPipeline({ records, provider, db, organisationId, automationRunId, now })` in `delivery-pipeline-service.js`. Chains execution → payload mapping → persistence. **Not wired into `app.js`, UI, automation runs, or scheduled jobs.**
+
+**Verification:** `npm run verify-delivery-pipeline-service`
+
+### Phase 27 constraints
+
+- Service composition module only
+- No `app.js` wiring, UI buttons, or scheduled jobs
+- No mark-as-sent automation
+
+---
+
+## Phase 26 — Delivery log persistence service
+
+**Scope:** `persistDeliveryLogPayloads({ db, payloads })` in `delivery-log-persistence-service.js`. Repository method `CloudAutomationStore.createReminderDeliveryLog` calls `create_reminder_delivery_log` RPC. **Not wired into `app.js`, UI, automation runs, or scheduled jobs.**
+
+**Verification:** `npm run verify-delivery-log-persistence-service`
+
+### Phase 26 constraints
+
+- Persistence service and repository method only
+- No provider calls, sending, or `app.js` wiring
+- No mark-as-sent automation
+
+---
+
+## Phase 25 — Delivery worker persistence adapter
+
+**Scope:** `buildDeliveryLogPayloads` in `delivery-worker-persistence.js` — maps delivery worker records to `create_reminder_delivery_log` RPC payloads. **Does not call RPCs, write to the database, or wire into `app.js`.**
+
+**Verification:** `npm run verify-delivery-worker-persistence`
+
+### Phase 25 constraints
+
+- Persistence mapping module only
+- No provider calls, RPC execution, or database writes
+- No `app.js` wiring, UI buttons, or mark-as-sent automation
+
+---
+
+## Phase 24 — Worker delivery execution engine
+
+**Scope:** `executeReminderDeliveries` in `delivery-worker.js` — in-memory execution through injected provider. **Not wired into `app.js`, UI, automation runs, or scheduled jobs.**
+
+**Verification:** `npm run verify-delivery-worker`
+
+### Phase 24 constraints
+
+- Execution engine module only
+- No `app.js` wiring, UI buttons, or automatic scheduling
+- No database writes, RPC calls, or mark-as-sent automation
 
 ---
 

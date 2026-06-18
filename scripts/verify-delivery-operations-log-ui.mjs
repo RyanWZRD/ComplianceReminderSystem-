@@ -156,11 +156,6 @@ assertContains(exportBody, "downloadFile", "export downloads CSV file");
 
 assertContains(cloudAutomationStoreJs, "get_reminder_delivery_logs", "cloud store calls get_reminder_delivery_logs RPC");
 assertContains(cloudAutomationStoreJs, "loadReminderDeliveryLogs", "cloud store exposes loadReminderDeliveryLogs");
-assertNotContains(
-  cloudAutomationStoreJs,
-  "create_reminder_delivery_log",
-  "cloud store does not create delivery logs from UI"
-);
 
 const forbiddenHooks = [
   "sendReminder",
@@ -197,7 +192,13 @@ for (const needle of forbiddenHooks) {
 }
 
 assertNotContains(cloudAutomationStoreJs, "sendReminder", "cloud store has no sendReminder");
-assertNotContains(cloudAutomationStoreJs, "create_reminder_delivery_log", "cloud store has no create delivery log");
+assertContains(
+  cloudAutomationStoreJs,
+  "createReminderDeliveryLog",
+  "cloud store exposes createReminderDeliveryLog repository method"
+);
+assertNotContains(appJs, "createReminderDeliveryLog", "app.js does not call createReminderDeliveryLog");
+assertNotContains(appJs, "persistDeliveryLogPayloads", "app.js does not call persistDeliveryLogPayloads");
 
 for (const needle of ["Send reminder", "Retry delivery", "Execute delivery", "Mark sent"]) {
   assertNotContains(indexHtml, needle, `index.html has no ${needle}`);

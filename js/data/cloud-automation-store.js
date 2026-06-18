@@ -35,6 +35,21 @@ import { mapAutomationRunFromRpc } from "./automation-runs.js";
  * @property {Error | string} [error]
  */
 
+/**
+ * @typedef {Object} AutomationRunCreateInput
+ * @property {import('./cloud-mapper.js').AutomationRunStatus} [status]
+ * @property {import('./cloud-mapper.js').AutomationRunSummary | object} [summary]
+ * @property {string | null} [error]
+ */
+
+/**
+ * @typedef {Object} AutomationRunCreateResult
+ * @property {boolean} ok
+ * @property {"created"} [status]
+ * @property {AutomationRunView} [run]
+ * @property {string} [error]
+ */
+
 export class CloudAutomationStore {
   constructor() {
     /** @type {AutomationPolicyView[]} */
@@ -261,5 +276,48 @@ export class CloudAutomationStore {
     }
 
     return { ok: true, run: mapAutomationRunFromRpc(data.run) };
+  }
+
+  /**
+   * @param {AutomationRunCreateInput} [input]
+   * @returns {Promise<AutomationRunCreateResult>}
+   */
+  async createAutomationRun(input = {}) {
+    if (!isSupabaseConfigured()) {
+      return { ok: false, error: "Supabase is not configured." };
+    }
+
+    await waitForAuthReady();
+
+    if (!isAuthenticated()) {
+      return { ok: false, error: "Not signed in." };
+    }
+
+    const status = input.status ?? "completed";
+    const summary = input.summary ?? {};
+    const errorMessage = input.error ?? null;
+
+    const supabase = getSupabaseClient();
+    const { data, error } = await supabase.rpc("create_automation_run", {
+      p_status: status,
+      p_summary: summary,
+      p_error: errorMessage,
+    });
+
+    if (error) {
+      return { ok: false, error: error.message };
+    }
+
+    if (!data || typeof data !== "object" || data.status !== "created" || !data.run) {
+      return {
+        ok: false,
+        error: `Unexpected response from create_automation_run: ${JSON.stringify(data)}`,
+      };
+    }
+
+    const run = mapAutomationRunFromRpc(data.run);
+    this.runs = [run, ...this.runs.filter((entry) => entry.id !== run.id)];
+
+    return { ok: true, status: "created", run };
   }
 }

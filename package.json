@@ -50,6 +50,7 @@
     "verify-automation-foundation": "node scripts/verify-automation-foundation.mjs",
     "verify-automation-policies": "node scripts/verify-automation-policies.mjs",
     "verify-automation-runs": "node scripts/verify-automation-runs.mjs",
+    "verify-automation-run-create": "node scripts/verify-automation-run-create.mjs",
     "verify:phase2": "node scripts/verify-phase2.mjs"
   },
   "dependencies": {

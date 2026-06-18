@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Compliance Reminder System v5.0.0-alpha.4</title>
-  <link rel="stylesheet" href="styles.css?v=v5.0.0-alpha.4">
+  <title>Compliance Reminder System v5.0.0-alpha.5</title>
+  <link rel="stylesheet" href="styles.css?v=v5.0.0-alpha.5">
 </head>
 <body>
   <section id="auth-login-screen" class="auth-login-screen hidden" aria-labelledby="auth-login-title">
@@ -33,7 +33,7 @@
     <header>
       <h1>Compliance Reminder System</h1>
       <div class="header-badges">
-        <p class="version-badge">v5.0.0-alpha.4</p>
+        <p class="version-badge">v5.0.0-alpha.5</p>
         <p id="data-backend-badge" class="data-backend-badge">Local storage mode</p>
         <p id="auth-mode-badge" class="auth-mode-badge hidden">Local auth</p>
       </div>
@@ -255,6 +255,67 @@
           <thead id="reminder-queue-preview-table-head"></thead>
           <tbody id="reminder-queue-preview-table-body"></tbody>
         </table>
+      </div>
+      <div id="reminder-digest-preview" class="reminder-digest-preview">
+        <h3 class="reminder-digest-preview-heading">Digest preview</h3>
+        <p
+          id="reminder-digest-preview-safety-note"
+          class="reminder-digest-preview-safety-note settings-hint"
+        ></p>
+        <dl class="reminder-digest-preview-metadata">
+          <div>
+            <dt>Total queued</dt>
+            <dd id="reminder-digest-preview-total-count" data-digest-field="totalQueued">0</dd>
+          </div>
+          <div>
+            <dt>Missing email</dt>
+            <dd id="reminder-digest-preview-missing-email-count" data-digest-field="missingEmail">0</dd>
+          </div>
+          <div>
+            <dt>Expired</dt>
+            <dd id="reminder-digest-preview-expired-count" data-digest-field="expired">0</dd>
+          </div>
+          <div>
+            <dt>30-day</dt>
+            <dd id="reminder-digest-preview-30-count" data-digest-field="day30">0</dd>
+          </div>
+          <div>
+            <dt>14-day</dt>
+            <dd id="reminder-digest-preview-14-count" data-digest-field="day14">0</dd>
+          </div>
+          <div>
+            <dt>7-day</dt>
+            <dd id="reminder-digest-preview-7-count" data-digest-field="day7">0</dd>
+          </div>
+        </dl>
+        <div class="reminder-digest-preview-subject">
+          <h4>Subject</h4>
+          <p
+            id="reminder-digest-preview-subject"
+            class="reminder-digest-preview-subject-text"
+            data-digest-field="subject"
+          ></p>
+        </div>
+        <div class="reminder-digest-preview-body-block">
+          <h4>Body</h4>
+          <pre
+            id="reminder-digest-preview-body"
+            class="reminder-digest-preview-body"
+            data-digest-field="bodyText"
+          ></pre>
+        </div>
+        <div class="reminder-digest-preview-actions no-print">
+          <button
+            type="button"
+            id="reminder-digest-preview-copy-btn"
+            class="quick-action-btn reminder-digest-preview-copy-btn"
+          >Copy digest</button>
+          <p
+            id="reminder-digest-preview-copy-message"
+            class="reminder-digest-preview-copy-message settings-hint hidden"
+            role="status"
+          ></p>
+        </div>
       </div>
     </section>
 
@@ -1166,7 +1227,7 @@
   </div>
   </div>
 
-  <script src="app.bundle.js?v=v5.0.0-alpha.4"></script>
+  <script src="app.bundle.js?v=v5.0.0-alpha.5"></script>
   <script>
     window.addEventListener("load", function () {
       window.setTimeout(function () {

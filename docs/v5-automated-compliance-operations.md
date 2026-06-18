@@ -3,8 +3,8 @@
 **Theme:** Move from *knowing* what needs attention (V4 Compliance Insights) to *acting on it automatically* — scheduled reminders, orchestrated actions, escalations, and auditable operations.
 
 **Target:** v5.0.0 (major release)  
-**Current alpha:** v5.0.0-alpha.4 — V5-1 Reminder Queue Foundation (see release-readiness note below)  
-**Prior alpha:** v5.0.0-alpha.3 — V5-0 Automation Platform Foundation; v5.0.0-alpha.2 — V5-1A + V5-1B (see [`docs/v5-0-0-alpha-2-release-notes.md`](v5-0-0-alpha-2-release-notes.md))  
+**Current alpha:** v5.0.0-alpha.5 — V5-2 Template & Digest Foundation (see release-readiness note below)  
+**Prior alpha:** v5.0.0-alpha.4 — V5-1 Reminder Queue Foundation; v5.0.0-alpha.3 — V5-0 Automation Platform Foundation; v5.0.0-alpha.2 — V5-1A + V5-1B (see [`docs/v5-0-0-alpha-2-release-notes.md`](v5-0-0-alpha-2-release-notes.md))  
 **Prerequisites:** v4.0.1 GA, v3.1.0 cloud follow-on (evidence Storage, restore/bulk ops, production cloud-writes policy)  
 **Date:** Planned — post v4.0.1 sign-off (June 2026+)
 
@@ -89,7 +89,7 @@ V5 adds a **server-side automation layer** on top of the existing RPC-only write
 
 ## Release slices
 
-Slices are ordered **V5-1A (contact foundation) → V5-1B (preview) → V5-0 → V5-1 automation → V5-2 → V5-4**. Contact Management shipped as **v5.0.0-alpha.1**; Reminder Template Preview as **v5.0.0-alpha.2**; automation platform foundation as **v5.0.0-alpha.3**; reminder queue foundation as **v5.0.0-alpha.4**; live reminder delivery follows in subsequent V5-1 slices.
+Slices are ordered **V5-1A (contact foundation) → V5-1B (preview) → V5-0 → V5-1 automation → V5-2 → V5-4**. Contact Management shipped as **v5.0.0-alpha.1**; Reminder Template Preview as **v5.0.0-alpha.2**; automation platform foundation as **v5.0.0-alpha.3**; reminder queue foundation as **v5.0.0-alpha.4**; template & digest foundation as **v5.0.0-alpha.5**; live reminder delivery follows in subsequent V5-1 slices.
 
 ### V5-1A — Contact Management · **COMPLETE (alpha)**
 
@@ -268,8 +268,6 @@ Read-only **Automation Audit** dashboard section loads `automation_runs` for the
 
 **Release verification:** `npm run build` · `npm run verify-reminder-queue-foundation`
 
-**Next slice:** template/digest preparation or controlled delivery planning
-
 **Phase 1 reminder queue foundation:**
 
 `buildReminderQueueFromDryRun({ dryRunResult, asOfDate, rows, settings })` converts dry-run reminder candidates into in-memory queue items with person name, compliance type, expiry date, reminder window/type, email (or null), `status: "queued"`, `source: "dry_run_candidate"`, and execution fields explicitly false/null (`sent`, `delivered`, `markedSent`, timestamps, `failed`, `failureReason`). Missing-email candidates are still queued and flagged with `emailMissing: true`. **Queue-only** — no email delivery, mark-sent, compliance/action mutation, history writes, or live automation execution.
@@ -305,7 +303,88 @@ Read-only **Reminder Queue Preview** card on the dashboard uses `computeAutomati
 
 ---
 
-### V5-2 — Automated action orchestration
+### V5-2 — Reminder email template builder · **COMPLETE (alpha)**
+
+**Goal:** Generate reusable email/template content from reminder queue items without sending.
+
+**Prerequisite slices:** V5-1 Reminder Queue Foundation (shipped).
+
+**Status:** Foundation complete — application version **v5.0.0-alpha.5**. Phases 1–6 implementation plus Phase 7 release-readiness gate. No live email sending.
+
+**Release-readiness note (v5.0.0-alpha.5):**
+
+- Template builder complete (`buildReminderEmailTemplate` — subject, bodyText, metadata, `emailMissing` flag)
+- Queue template preview UI complete (per-row expandable preview with safety note)
+- Copy template action complete (`buildReminderQueueTemplateCopyText` — clipboard copy for manual use)
+- Digest builder complete (`buildReminderDigest` — manager/admin summary from queue items)
+- Digest preview UI complete (subject, body, metadata counts, **Copy digest** button)
+- Template & digest verification orchestrator complete (`npm run verify-reminder-template-digest-foundation`)
+- **No delivery provider**
+- **No send button**
+- **No mark-as-sent automation**
+- **No compliance/action/history mutation**
+
+**Implementation phases (incremental):**
+
+| Phase | Deliverable | Status |
+|-------|-------------|--------|
+| 1 | Template builder module (`js/app/automation/reminder-template-builder.js`) | **COMPLETE** |
+| 1 | `buildReminderEmailTemplate` — subject, bodyText, metadata, `emailMissing` flag | **COMPLETE** |
+| 1 | `npm run verify-reminder-template-builder` | **COMPLETE** |
+| 2 | Queue template preview UI (`js/app/automation/reminder-queue-template-preview-ui.js`) | **COMPLETE** |
+| 2 | Per-row “Preview template” expandable detail (subject, body, metadata, safety note) | **COMPLETE** |
+| 2 | `npm run verify-reminder-queue-template-preview-ui` | **COMPLETE** |
+| 3 | Copy template action (`buildReminderQueueTemplateCopyText`) — clipboard copy for manual email use | **COMPLETE** |
+| 3 | Per-row **Copy template** button in expanded preview (`Subject:` + bodyText format) | **COMPLETE** |
+| 3 | `npm run verify-reminder-template-copy` | **COMPLETE** |
+| 4 | Digest builder module (`js/app/automation/reminder-digest-builder.js`) | **COMPLETE** |
+| 4 | `buildReminderDigest` — subject, bodyText, metadata (counts + grouped queue summary) | **COMPLETE** |
+| 4 | `npm run verify-reminder-digest-builder` | **COMPLETE** |
+| 5 | Digest preview UI (`js/app/automation/reminder-digest-preview-ui.js`) | **COMPLETE** |
+| 5 | Reminder Queue Preview digest area (subject, body, metadata counts, safety note) | **COMPLETE** |
+| 5 | **Copy digest** button (`Subject:` + bodyText format) | **COMPLETE** |
+| 5 | `npm run verify-reminder-digest-preview-ui` | **COMPLETE** |
+| 6 | Foundation verification orchestrator (`scripts/verify-reminder-template-digest-foundation.mjs`) | **COMPLETE** |
+| 6 | `npm run verify-reminder-template-digest-foundation` | **COMPLETE** |
+| 7 | Release readiness / alpha tag prep (`v5.0.0-alpha.5`) | **COMPLETE** |
+
+**Release candidate:** **v5.0.0-alpha.5**
+
+**Release verification:** `npm run build` · `npm run verify-reminder-template-digest-foundation`
+
+**Phase 1 reminder email template builder:**
+
+`buildReminderEmailTemplate({ queueItem, organisationName, contactName })` generates reusable subject and body text from reminder queue items. Output includes `subject`, `bodyText`, `metadata` (queue source, reminder window, compliance type, expiry date), and `emailMissing` when no recipient email is on file. Missing-email queue items still produce preview content. Expired reminders use distinct renewal wording from upcoming expiry windows. **Template-only** — no email sending, mark-as-sent, compliance/action mutation, history writes, or fake links.
+
+**Phase 2 reminder queue template preview UI:**
+
+Each Reminder Queue Preview row includes a **Preview template** control. Expanding the row shows generated `subject` and `bodyText` (via `textContent`), metadata (reminder window, compliance type, expiry date, source), a missing-email warning when `emailMissing` is true, and the safety note: *Template preview only — no email is sent.* Wired to `buildReminderEmailTemplate` — **preview-only**; no send, execute, mark-sent, delivery provider, or history writes.
+
+**Phase 3 copy reminder template:**
+
+Each expanded template preview includes a **Copy template** button. Copies `Subject: <subject>` followed by a blank line and `bodyText` to the clipboard via `navigator.clipboard.writeText` when available. Shows *Template copied.* on success; shows a friendly copy-unavailable message when the clipboard API is not available. **Copy-only** — no send, execute, mark-sent, delivery provider, compliance/action mutation, or history writes.
+
+**Phase 4 reminder digest builder:**
+
+`buildReminderDigest({ queueItems, organisationName, asOfDate })` generates a manager/admin digest summarising who needs chasing from reminder queue items. Output includes `subject`, `bodyText`, and `metadata` (as-of date, organisation, total queued, missing email count, per-window counts, empty flag). The body lists summary counts (total queued, missing email, expired, 30/14/7-day) and a grouped follow-up list by reminder window/type with person name, compliance type, formatted expiry date, and email or “Missing email”. Empty queues return a useful “no reminders due” digest with zero counts. **Digest-only** — no email sending, mark-as-sent, compliance/action mutation, history writes, or delivery hooks.
+
+**Phase 5 reminder digest preview UI:**
+
+The Reminder Queue Preview section includes a **Digest preview** area wired to `buildReminderDigest` from the current queue preview items. It shows generated `subject` and `bodyText` (via `textContent`), summary metadata counts (total queued, missing email, expired, 30/14/7-day), the safety note: *Digest preview only — no email is sent.*, and a **Copy digest** button that copies `Subject: <subject>` followed by a blank line and `bodyText` to the clipboard when available. **Preview-only** — no send, execute, mark-sent, delivery provider, compliance/action mutation, or history writes.
+
+**Phase 6 template and digest foundation verification:**
+
+`npm run verify-reminder-template-digest-foundation` runs `verify-reminder-queue-foundation`, then V5-2 phases 1–5 verification scripts in order (template builder, template preview UI, copy template, digest builder, digest preview UI). Stops on first failure. Verification-only — no reminder/action/email execution, delivery provider integration, send functionality, mark-as-sent, or compliance/action/history mutation.
+
+**Verification:** `npm run verify-reminder-template-digest-foundation` (master gate); individual phase scripts remain available for targeted checks (no Supabase).
+
+**Constraints:** Template generation, preview, and digest generation only; no email delivery, mark-as-sent, compliance/action mutation, or history writes.
+
+**Next slice:** controlled delivery planning.
+
+---
+
+### V5-2A — Automated action orchestration
 
 **Goal:** Provision and advance actions based on compliance state, not manual clicks.
 
@@ -451,6 +530,12 @@ Extend the existing pattern from V3/V4:
 | `npm run verify-reminder-queue-ui` | V5-1 Phase 2 — read-only reminder queue preview UI, no execution hooks |
 | `npm run verify-reminder-queue-export` | V5-1 Phase 3 — reminder queue preview CSV export, no execution or mutation hooks |
 | `npm run verify-reminder-queue-foundation` | V5-1 Phase 4 — orchestrator; runs V5-0 foundation + phases 1–3 in order, stop on first failure |
+| `npm run verify-reminder-template-builder` | V5-2 Phase 1 — queue-item email template builder, no delivery hooks |
+| `npm run verify-reminder-queue-template-preview-ui` | V5-2 Phase 2 — queue template preview UI, safe rendering, no execution hooks |
+| `npm run verify-reminder-template-copy` | V5-2 Phase 3 — queue template copy action, clipboard path, no execution hooks |
+| `npm run verify-reminder-digest-builder` | V5-2 Phase 4 — manager/admin reminder digest builder, no delivery hooks |
+| `npm run verify-reminder-digest-preview-ui` | V5-2 Phase 5 — digest preview UI, safe rendering, no execution hooks |
+| `npm run verify-reminder-template-digest-foundation` | V5-2 Phase 6 — orchestrator; runs V5-1 queue foundation + V5-2 phases 1–5 in order, stop on first failure |
 | `npm run verify-automation-schema` | V5-0 migrations + RPC |
 | `npm run verify-automation-reminders` | V5-1 queue + mark sent |
 | `npm run verify-automation-actions` | V5-2 policy apply |
@@ -549,8 +634,8 @@ Secrets (SMTP API keys) live in Supabase Edge Function secrets only — never in
 | V5-1B | **COMPLETE** | Reminder Template Preview — template, UI, copy/export, dashboard; **v5.0.0-alpha.2** |
 | V5-0 | **COMPLETE** | Automation platform foundation — schema, RPCs, dry-run scan + audit logging + audit UI; **v5.0.0-alpha.3** |
 | V5-1 (foundation) | **COMPLETE** | Reminder queue foundation — queue, preview UI, CSV export, orchestrator; **v5.0.0-alpha.4** |
-| V5-1 (delivery) | **PLANNED** | Template/digest preparation, controlled delivery, live send |
-| V5-2 | **PLANNED** | Automated action orchestration |
+| V5-2 | **COMPLETE** | Reminder email template builder — template builder, preview UI, copy template, digest builder, digest preview UI, foundation orchestrator; **v5.0.0-alpha.5**; no delivery |
+| V5-2A | **PLANNED** | Automated action orchestration |
 | V5-3 | **PLANNED** | Escalation & operational closure |
 | V5-4 | **PLANNED** | Policy engine GA & operations pack |
 

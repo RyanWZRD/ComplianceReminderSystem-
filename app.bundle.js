@@ -21321,7 +21321,7 @@ ${suffix}`;
     return null;
   }
   var AUTOMATION_ENABLED = readAutomationFromLocation() ?? (typeof process !== "undefined" && process.env?.AUTOMATION_ENABLED === "true");
-  var APP_VERSION = "v5.0.0-alpha.4";
+  var APP_VERSION = "v5.0.0-alpha.5";
 
   // js/app/permissions.js
   function isCloudMode() {
@@ -26287,6 +26287,289 @@ ${suffix}`;
     return [headerRow, ...dataRows].join("\n");
   }
 
+  // js/app/automation/reminder-template-builder.js
+  function getReminderWindowCopy2(reminderWindow, reminderType) {
+    if (reminderWindow === "expired" || reminderType === REMINDER_UI_LABELS.expired) {
+      return {
+        subjectLead: "Expired compliance",
+        windowLine: "This compliance item has expired and requires renewal.",
+        actionLine: "Please renew this compliance record urgently and update the register once renewal is complete."
+      };
+    }
+    if (reminderWindow === "30-day" || reminderType === REMINDER_UI_LABELS[30]) {
+      return {
+        subjectLead: "30-day reminder",
+        windowLine: "This compliance item expires within 30 days.",
+        actionLine: "Please review this record and arrange renewal or follow-up before the expiry date."
+      };
+    }
+    if (reminderWindow === "14-day" || reminderType === REMINDER_UI_LABELS[14]) {
+      return {
+        subjectLead: "14-day reminder",
+        windowLine: "This compliance item expires within 14 days.",
+        actionLine: "Please review this record and arrange renewal or follow-up before the expiry date."
+      };
+    }
+    if (reminderWindow === "7-day" || reminderType === REMINDER_UI_LABELS[7]) {
+      return {
+        subjectLead: "7-day reminder",
+        windowLine: "This compliance item expires within 7 days.",
+        actionLine: "Please review this record and arrange renewal or follow-up before the expiry date."
+      };
+    }
+    return {
+      subjectLead: "Compliance reminder",
+      windowLine: "This compliance item needs your attention.",
+      actionLine: "Please review this record and arrange renewal or follow-up as required."
+    };
+  }
+  function buildReminderEmailTemplate({ queueItem, organisationName, contactName }) {
+    if (!queueItem || typeof queueItem !== "object") {
+      throw new Error("queueItem is required.");
+    }
+    const recordName = String(queueItem.personName ?? "").trim();
+    const salutationName = String(contactName ?? recordName).trim();
+    const complianceType = String(queueItem.complianceType ?? "").trim();
+    const expiryDate = String(queueItem.expiryDate ?? "").trim();
+    const reminderWindow = String(queueItem.reminderWindow ?? "").trim();
+    const reminderType = String(queueItem.reminderType ?? "").trim();
+    const source = String(queueItem.source ?? "").trim();
+    const resolvedOrganisation = String(organisationName ?? "").trim() || DEFAULT_ORGANISATION_NAME;
+    if (!recordName || !complianceType || !expiryDate) {
+      throw new Error("queueItem must include personName, complianceType, and expiryDate.");
+    }
+    if (!salutationName) {
+      throw new Error("contactName or queueItem.personName is required for the greeting.");
+    }
+    const formattedExpiry = formatReminderExpiryDate(expiryDate);
+    const { subjectLead, windowLine, actionLine } = getReminderWindowCopy2(
+      reminderWindow,
+      reminderType
+    );
+    const subject = `${subjectLead}: ${complianceType} \u2014 ${recordName}`;
+    const bodyLines = [
+      `Dear ${salutationName},`,
+      "",
+      windowLine,
+      "",
+      `Compliance type: ${complianceType}`,
+      `Expiry date: ${formattedExpiry}`,
+      `Reminder window: ${reminderWindow || reminderType}`,
+      "",
+      actionLine,
+      "",
+      "If you have already renewed this item, please ensure the compliance register is up to date.",
+      "",
+      resolvedOrganisation,
+      "",
+      "This is a reminder queue template preview. No email has been sent."
+    ];
+    const emailMissing = queueItem.emailMissing === true || queueItem.email == null;
+    return {
+      subject,
+      bodyText: bodyLines.join("\n"),
+      metadata: {
+        source,
+        reminderWindow: reminderWindow || reminderType,
+        complianceType,
+        expiryDate
+      },
+      emailMissing
+    };
+  }
+
+  // js/app/automation/reminder-digest-builder.js
+  var DIGEST_WINDOW_ORDER = ["expired", "7-day", "14-day", "30-day"];
+  var REMINDER_WINDOW_URGENCY2 = {
+    expired: 0,
+    "7-day": 1,
+    "14-day": 2,
+    "30-day": 3
+  };
+  function createEmptyWindowCounts2() {
+    return {
+      "30-day": 0,
+      "14-day": 0,
+      "7-day": 0,
+      expired: 0
+    };
+  }
+  function compareDigestQueueItems(left, right) {
+    const leftUrgency = REMINDER_WINDOW_URGENCY2[left.reminderWindow] ?? 99;
+    const rightUrgency = REMINDER_WINDOW_URGENCY2[right.reminderWindow] ?? 99;
+    if (leftUrgency !== rightUrgency) {
+      return leftUrgency - rightUrgency;
+    }
+    const nameCompare = String(left.personName ?? "").localeCompare(
+      String(right.personName ?? ""),
+      "en-GB"
+    );
+    if (nameCompare !== 0) {
+      return nameCompare;
+    }
+    return String(left.complianceType ?? "").localeCompare(
+      String(right.complianceType ?? ""),
+      "en-GB"
+    );
+  }
+  function formatDigestEmailLabel(item) {
+    const emailMissing = item.emailMissing === true || item.email == null;
+    if (emailMissing) {
+      return REMINDER_QUEUE_MISSING_EMAIL_LABEL;
+    }
+    return String(item.email ?? "").trim() || REMINDER_QUEUE_MISSING_EMAIL_LABEL;
+  }
+  function formatDigestItemLine(item) {
+    const personName = String(item.personName ?? "").trim() || "\u2014";
+    const complianceType = String(item.complianceType ?? "").trim() || "\u2014";
+    const expiryDate = formatReminderExpiryDate(String(item.expiryDate ?? "").trim());
+    const emailLabel = formatDigestEmailLabel(item);
+    return `- ${personName} \u2014 ${complianceType} \u2014 expires ${expiryDate} \u2014 ${emailLabel}`;
+  }
+  function buildGroupedDigestSections(items) {
+    const sections = [];
+    DIGEST_WINDOW_ORDER.forEach((windowKey) => {
+      const windowItems = items.filter((item) => item.reminderWindow === windowKey);
+      if (windowItems.length === 0) {
+        return;
+      }
+      const heading = formatReminderQueueWindowLabel(windowKey);
+      sections.push(`${heading} (${windowItems.length})`);
+      windowItems.forEach((item) => {
+        sections.push(formatDigestItemLine(item));
+      });
+      sections.push("");
+    });
+    return sections;
+  }
+  function buildReminderDigest({ queueItems, organisationName, asOfDate }) {
+    const resolvedOrganisation = String(organisationName ?? "").trim() || DEFAULT_ORGANISATION_NAME;
+    const resolvedAsOfDate = String(asOfDate ?? "").trim();
+    const inputItems = Array.isArray(queueItems) ? queueItems : [];
+    const items = [...inputItems].sort(compareDigestQueueItems);
+    const byWindow = createEmptyWindowCounts2();
+    let missingEmail = 0;
+    items.forEach((item) => {
+      if (item.emailMissing === true || item.email == null) {
+        missingEmail += 1;
+      }
+      if (Object.prototype.hasOwnProperty.call(byWindow, item.reminderWindow)) {
+        byWindow[item.reminderWindow] += 1;
+      }
+    });
+    const totalQueued = items.length;
+    const empty = totalQueued === 0;
+    const metadata = {
+      asOfDate: resolvedAsOfDate,
+      organisationName: resolvedOrganisation,
+      totalQueued,
+      missingEmail,
+      byWindow,
+      empty
+    };
+    if (empty) {
+      const subject2 = `No reminders due \u2014 ${resolvedOrganisation}`;
+      const bodyLines = [
+        "Reminder digest",
+        "",
+        resolvedOrganisation,
+        resolvedAsOfDate ? `As of ${resolvedAsOfDate}` : "",
+        "",
+        "No reminder queue items are due for follow-up on this scan.",
+        "",
+        "Summary",
+        "- Total queued: 0",
+        "- Missing email: 0",
+        "- Expired: 0",
+        "- 30-day: 0",
+        "- 14-day: 0",
+        "- 7-day: 0",
+        "",
+        "There is nothing to chase right now. Review the register again after the next compliance scan.",
+        "",
+        "Digest preview only \u2014 no email has been sent."
+      ].filter((line, index, allLines) => !(line === "" && allLines[index - 1] === ""));
+      return {
+        subject: subject2,
+        bodyText: bodyLines.join("\n"),
+        metadata
+      };
+    }
+    const subject = `Reminder digest \u2014 ${totalQueued} to chase \u2014 ${resolvedOrganisation}`;
+    const summaryLines = [
+      "Reminder digest",
+      "",
+      resolvedOrganisation,
+      resolvedAsOfDate ? `As of ${resolvedAsOfDate}` : "",
+      "",
+      "Summary",
+      `- Total queued: ${totalQueued}`,
+      `- Missing email: ${missingEmail}`,
+      `- Expired: ${byWindow.expired}`,
+      `- 30-day: ${byWindow["30-day"]}`,
+      `- 14-day: ${byWindow["14-day"]}`,
+      `- 7-day: ${byWindow["7-day"]}`,
+      "",
+      "Records needing follow-up",
+      "",
+      ...buildGroupedDigestSections(items),
+      "Digest preview only \u2014 no email has been sent."
+    ];
+    return {
+      subject,
+      bodyText: summaryLines.join("\n"),
+      metadata
+    };
+  }
+
+  // js/app/automation/reminder-digest-preview-ui.js
+  var REMINDER_DIGEST_PREVIEW_SAFETY_NOTE = "Digest preview only \u2014 no email is sent.";
+  var REMINDER_DIGEST_COPY_BUTTON_LABEL = "Copy digest";
+  var REMINDER_DIGEST_COPY_SUCCESS_MESSAGE = "Digest copied.";
+  var REMINDER_DIGEST_COPY_UNAVAILABLE_MESSAGE = "Copy is not available in this browser.";
+  function buildReminderDigestCopyText(digest) {
+    return `Subject: ${digest.subject}
+
+${digest.bodyText}`;
+  }
+  function mapReminderDigestPreviewMetadata(metadata) {
+    return {
+      totalQueued: String(metadata.totalQueued),
+      missingEmail: String(metadata.missingEmail),
+      expired: String(metadata.byWindow.expired),
+      day30: String(metadata.byWindow["30-day"]),
+      day14: String(metadata.byWindow["14-day"]),
+      day7: String(metadata.byWindow["7-day"])
+    };
+  }
+
+  // js/app/automation/reminder-queue-template-preview-ui.js
+  var REMINDER_QUEUE_TEMPLATE_PREVIEW_SAFETY_NOTE = "Template preview only \u2014 no email is sent.";
+  var REMINDER_QUEUE_TEMPLATE_PREVIEW_BUTTON_LABEL = "Preview template";
+  var REMINDER_QUEUE_TEMPLATE_MISSING_EMAIL_WARNING = "No recipient email on file \u2014 a reminder could not be delivered until contact email is added.";
+  var REMINDER_QUEUE_TEMPLATE_COPY_BUTTON_LABEL = "Copy template";
+  var REMINDER_QUEUE_TEMPLATE_COPY_SUCCESS_MESSAGE = "Template copied.";
+  var REMINDER_QUEUE_TEMPLATE_COPY_UNAVAILABLE_MESSAGE = "Copy is not available in this browser.";
+  function buildReminderQueueTemplateCopyText(template) {
+    return `Subject: ${template.subject}
+
+${template.bodyText}`;
+  }
+  function getReminderQueueTemplatePreviewRowKey(index) {
+    return `queue-template-${index}`;
+  }
+  function getReminderQueueTemplatePreviewButtonLabel(isExpanded) {
+    return isExpanded ? "Hide template" : REMINDER_QUEUE_TEMPLATE_PREVIEW_BUTTON_LABEL;
+  }
+  function mapReminderQueueTemplatePreviewMetadata(metadata) {
+    return {
+      reminderWindow: formatReminderQueueWindowLabel(metadata.reminderWindow),
+      complianceType: metadata.complianceType || "\u2014",
+      expiryDate: formatReminderExpiryDate(metadata.expiryDate) || metadata.expiryDate || "\u2014",
+      source: metadata.source || "\u2014"
+    };
+  }
+
   // app.js
   console.log(
     `Compliance Reminder System ${APP_VERSION} \u2014 app.js loaded (${DATA_BACKEND} data, ${AUTH_MODE} auth)`
@@ -26503,6 +26786,20 @@ ${suffix}`;
   var reminderQueuePreviewTableHead = document.getElementById("reminder-queue-preview-table-head");
   var reminderQueuePreviewTableBody = document.getElementById("reminder-queue-preview-table-body");
   var exportReminderQueueCsvBtn = document.getElementById("export-reminder-queue-csv-btn");
+  var reminderDigestPreview = document.getElementById("reminder-digest-preview");
+  var reminderDigestPreviewSafetyNote = document.getElementById("reminder-digest-preview-safety-note");
+  var reminderDigestPreviewTotalCount = document.getElementById("reminder-digest-preview-total-count");
+  var reminderDigestPreviewMissingEmailCount = document.getElementById(
+    "reminder-digest-preview-missing-email-count"
+  );
+  var reminderDigestPreviewExpiredCount = document.getElementById("reminder-digest-preview-expired-count");
+  var reminderDigestPreview30Count = document.getElementById("reminder-digest-preview-30-count");
+  var reminderDigestPreview14Count = document.getElementById("reminder-digest-preview-14-count");
+  var reminderDigestPreview7Count = document.getElementById("reminder-digest-preview-7-count");
+  var reminderDigestPreviewSubject = document.getElementById("reminder-digest-preview-subject");
+  var reminderDigestPreviewBody = document.getElementById("reminder-digest-preview-body");
+  var reminderDigestPreviewCopyBtn = document.getElementById("reminder-digest-preview-copy-btn");
+  var reminderDigestPreviewCopyMessage = document.getElementById("reminder-digest-preview-copy-message");
   var automationRunAuditSection = document.getElementById("automation-run-audit-section");
   var automationRunAuditLocalHint = document.getElementById("automation-run-audit-local-hint");
   var automationRunAuditError = document.getElementById("automation-run-audit-error");
@@ -26519,6 +26816,7 @@ ${suffix}`;
   var automationRunAuditLoadState = "idle";
   var automationRunAuditLoadError = "";
   var expandedAutomationRunIds = /* @__PURE__ */ new Set();
+  var expandedReminderQueueTemplatePreviewKeys = /* @__PURE__ */ new Set();
   var expiryWindowFilter = null;
   var currentTablePage = 1;
   var dashboard30Count = document.getElementById("dashboard-30-count");
@@ -30447,6 +30745,174 @@ This cannot be undone.`
       settings: reminderSettings
     });
   }
+  function renderReminderDigestPreview(queue) {
+    if (!reminderDigestPreview || !reminderDigestPreviewSafetyNote || !reminderDigestPreviewTotalCount || !reminderDigestPreviewMissingEmailCount || !reminderDigestPreviewExpiredCount || !reminderDigestPreview30Count || !reminderDigestPreview14Count || !reminderDigestPreview7Count || !reminderDigestPreviewSubject || !reminderDigestPreviewBody) {
+      return;
+    }
+    const digest = buildReminderDigest({
+      queueItems: queue.items,
+      asOfDate: queue.asOfDate
+    });
+    const metadata = mapReminderDigestPreviewMetadata(digest.metadata);
+    reminderDigestPreviewSafetyNote.textContent = REMINDER_DIGEST_PREVIEW_SAFETY_NOTE;
+    reminderDigestPreviewTotalCount.textContent = metadata.totalQueued;
+    reminderDigestPreviewMissingEmailCount.textContent = metadata.missingEmail;
+    reminderDigestPreviewExpiredCount.textContent = metadata.expired;
+    reminderDigestPreview30Count.textContent = metadata.day30;
+    reminderDigestPreview14Count.textContent = metadata.day14;
+    reminderDigestPreview7Count.textContent = metadata.day7;
+    reminderDigestPreviewSubject.textContent = digest.subject;
+    reminderDigestPreviewBody.textContent = digest.bodyText;
+    if (reminderDigestPreviewCopyBtn) {
+      reminderDigestPreviewCopyBtn.textContent = REMINDER_DIGEST_COPY_BUTTON_LABEL;
+    }
+    if (reminderDigestPreviewCopyMessage) {
+      hideMessage(reminderDigestPreviewCopyMessage);
+    }
+  }
+  function showReminderDigestCopyMessage(text, type) {
+    if (!reminderDigestPreviewCopyMessage) {
+      return;
+    }
+    showMessage(reminderDigestPreviewCopyMessage, text, type);
+  }
+  async function copyReminderDigest() {
+    const queue = buildReminderQueuePreviewData();
+    const digest = buildReminderDigest({
+      queueItems: queue.items,
+      asOfDate: queue.asOfDate
+    });
+    const copyText = buildReminderDigestCopyText(digest);
+    if (!navigator.clipboard?.writeText) {
+      showReminderDigestCopyMessage(REMINDER_DIGEST_COPY_UNAVAILABLE_MESSAGE, "error");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(copyText);
+      showReminderDigestCopyMessage(REMINDER_DIGEST_COPY_SUCCESS_MESSAGE, "success");
+    } catch (error) {
+      console.error("Could not copy reminder digest text.", error);
+      showReminderDigestCopyMessage(REMINDER_DIGEST_COPY_UNAVAILABLE_MESSAGE, "error");
+    }
+  }
+  function toggleReminderQueueTemplatePreview(rowKey) {
+    if (expandedReminderQueueTemplatePreviewKeys.has(rowKey)) {
+      expandedReminderQueueTemplatePreviewKeys.delete(rowKey);
+    } else {
+      expandedReminderQueueTemplatePreviewKeys.add(rowKey);
+    }
+    renderReminderQueuePreview();
+  }
+  function populateReminderQueueTemplatePreviewDetail(detailRow, queueItem) {
+    const template = buildReminderEmailTemplate({ queueItem });
+    const metadata = mapReminderQueueTemplatePreviewMetadata(template.metadata);
+    const safetyNote = detailRow.querySelector(".reminder-queue-template-preview-safety-note");
+    if (safetyNote) {
+      safetyNote.textContent = REMINDER_QUEUE_TEMPLATE_PREVIEW_SAFETY_NOTE;
+    }
+    const missingEmailWarning = detailRow.querySelector(
+      ".reminder-queue-template-preview-missing-email"
+    );
+    if (missingEmailWarning) {
+      missingEmailWarning.textContent = REMINDER_QUEUE_TEMPLATE_MISSING_EMAIL_WARNING;
+      missingEmailWarning.classList.toggle("hidden", !template.emailMissing);
+    }
+    const reminderWindowField = detailRow.querySelector(
+      '[data-template-field="reminderWindow"]'
+    );
+    if (reminderWindowField) {
+      reminderWindowField.textContent = metadata.reminderWindow;
+    }
+    const complianceTypeField = detailRow.querySelector('[data-template-field="complianceType"]');
+    if (complianceTypeField) {
+      complianceTypeField.textContent = metadata.complianceType;
+    }
+    const expiryDateField = detailRow.querySelector('[data-template-field="expiryDate"]');
+    if (expiryDateField) {
+      expiryDateField.textContent = metadata.expiryDate;
+    }
+    const sourceField = detailRow.querySelector('[data-template-field="source"]');
+    if (sourceField) {
+      sourceField.textContent = metadata.source;
+    }
+    const subjectField = detailRow.querySelector('[data-template-field="subject"]');
+    if (subjectField) {
+      subjectField.textContent = template.subject;
+    }
+    const bodyField = detailRow.querySelector('[data-template-field="bodyText"]');
+    if (bodyField) {
+      bodyField.textContent = template.bodyText;
+    }
+    const copyMessage = detailRow.querySelector(".reminder-queue-template-preview-copy-message");
+    if (copyMessage) {
+      hideMessage(copyMessage);
+    }
+  }
+  function showReminderQueueTemplateCopyMessage(detailRow, text, type) {
+    const copyMessage = detailRow?.querySelector(".reminder-queue-template-preview-copy-message");
+    if (!copyMessage) {
+      return;
+    }
+    showMessage(copyMessage, text, type);
+  }
+  async function copyReminderQueueTemplate(rowKey) {
+    const detailRow = reminderQueuePreviewTableBody?.querySelector(
+      `.reminder-queue-template-preview-detail-row[data-queue-row-key="${rowKey}"]`
+    );
+    if (!detailRow) {
+      return;
+    }
+    const queue = buildReminderQueuePreviewData();
+    const index = Number.parseInt(rowKey.replace("queue-template-", ""), 10);
+    const queueItem = Number.isNaN(index) ? null : queue.items[index];
+    if (!queueItem) {
+      return;
+    }
+    const template = buildReminderEmailTemplate({ queueItem });
+    const copyText = buildReminderQueueTemplateCopyText(template);
+    if (!navigator.clipboard?.writeText) {
+      showReminderQueueTemplateCopyMessage(
+        detailRow,
+        REMINDER_QUEUE_TEMPLATE_COPY_UNAVAILABLE_MESSAGE,
+        "error"
+      );
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(copyText);
+      showReminderQueueTemplateCopyMessage(
+        detailRow,
+        REMINDER_QUEUE_TEMPLATE_COPY_SUCCESS_MESSAGE,
+        "success"
+      );
+    } catch (error) {
+      console.error("Could not copy reminder queue template text.", error);
+      showReminderQueueTemplateCopyMessage(
+        detailRow,
+        REMINDER_QUEUE_TEMPLATE_COPY_UNAVAILABLE_MESSAGE,
+        "error"
+      );
+    }
+  }
+  function handleReminderQueuePreviewTableClick(event) {
+    const copyButton = event.target.closest(".reminder-queue-template-preview-copy-btn");
+    if (copyButton) {
+      const rowKey2 = copyButton.dataset.queueRowKey;
+      if (rowKey2) {
+        void copyReminderQueueTemplate(rowKey2);
+      }
+      return;
+    }
+    const previewButton = event.target.closest(".reminder-queue-template-preview-btn");
+    if (!previewButton) {
+      return;
+    }
+    const rowKey = previewButton.dataset.queueRowKey;
+    if (!rowKey) {
+      return;
+    }
+    toggleReminderQueueTemplatePreview(rowKey);
+  }
   function renderReminderQueuePreview() {
     if (!reminderQueuePreviewSection || !reminderQueuePreviewTotalCount || !reminderQueuePreviewMissingEmailCount || !reminderQueuePreviewExpiredCount || !reminderQueuePreview30Count || !reminderQueuePreview14Count || !reminderQueuePreview7Count || !reminderQueuePreviewEmpty || !reminderQueuePreviewTableWrapper || !reminderQueuePreviewTableHead || !reminderQueuePreviewTableBody) {
       return;
@@ -30462,6 +30928,7 @@ This cannot be undone.`
       const scanDateLabel = queue.asOfDate && !Number.isNaN(parseDateAtMidnight(queue.asOfDate).getTime()) ? formatDate(queue.asOfDate) : "today";
       reminderQueuePreviewMeta.textContent = `Scan as of ${scanDateLabel} \xB7 ${queue.summary.total} queued`;
     }
+    renderReminderDigestPreview(queue);
     reminderQueuePreviewEmpty.classList.add("hidden");
     reminderQueuePreviewTableWrapper.classList.add("hidden");
     reminderQueuePreviewTableHead.innerHTML = "";
@@ -30474,13 +30941,17 @@ This cannot be undone.`
       return;
     }
     const previewRows = mapReminderQueueItemsToPreviewRows(queue.items, formatDate);
+    const queueColumnCount = REMINDER_QUEUE_PREVIEW_COLUMNS.length + 1;
     reminderQueuePreviewTableWrapper.classList.remove("hidden");
     reminderQueuePreviewTableHead.innerHTML = `<tr>${REMINDER_QUEUE_PREVIEW_COLUMNS.map(
       (column) => `<th scope="col">${escapeHtml(column.label)}</th>`
-    ).join("")}</tr>`;
-    reminderQueuePreviewTableBody.innerHTML = previewRows.map(
-      (row) => `
-        <tr class="reminder-queue-preview-row">
+    ).join("")}<th scope="col">Template</th></tr>`;
+    reminderQueuePreviewTableBody.innerHTML = previewRows.map((row, index) => {
+      const rowKey = getReminderQueueTemplatePreviewRowKey(index);
+      const isExpanded = expandedReminderQueueTemplatePreviewKeys.has(rowKey);
+      const previewButtonLabel = getReminderQueueTemplatePreviewButtonLabel(isExpanded);
+      return `
+        <tr class="reminder-queue-preview-row" data-queue-row-key="${escapeHtml(rowKey)}">
           <td>${escapeHtml(row.personName)}</td>
           <td>${escapeHtml(row.complianceType)}</td>
           <td>${escapeHtml(row.expiryDate)}</td>
@@ -30488,8 +30959,73 @@ This cannot be undone.`
           <td class="${row.emailMissing ? "reminder-queue-preview-email-missing" : ""}">${escapeHtml(row.email)}</td>
           <td>${escapeHtml(row.status)}</td>
           <td>${escapeHtml(row.source)}</td>
-        </tr>`
-    ).join("");
+          <td class="reminder-queue-preview-row-actions">
+            <button
+              type="button"
+              class="quick-action-btn reminder-queue-template-preview-btn"
+              data-queue-row-key="${escapeHtml(rowKey)}"
+              aria-expanded="${isExpanded ? "true" : "false"}"
+            >${escapeHtml(previewButtonLabel)}</button>
+          </td>
+        </tr>
+        ${isExpanded ? `<tr class="reminder-queue-template-preview-detail-row" data-queue-row-key="${escapeHtml(rowKey)}">
+          <td colspan="${queueColumnCount}">
+            <div class="reminder-queue-template-preview-detail">
+              <p class="reminder-queue-template-preview-safety-note settings-hint"></p>
+              <p class="reminder-queue-template-preview-missing-email settings-hint hidden"></p>
+              <dl class="reminder-queue-template-preview-metadata">
+                <div>
+                  <dt>Reminder window</dt>
+                  <dd data-template-field="reminderWindow"></dd>
+                </div>
+                <div>
+                  <dt>Compliance type</dt>
+                  <dd data-template-field="complianceType"></dd>
+                </div>
+                <div>
+                  <dt>Expiry date</dt>
+                  <dd data-template-field="expiryDate"></dd>
+                </div>
+                <div>
+                  <dt>Source</dt>
+                  <dd data-template-field="source"></dd>
+                </div>
+              </dl>
+              <div class="reminder-queue-template-preview-subject">
+                <h4>Subject</h4>
+                <p class="reminder-queue-template-preview-subject-text" data-template-field="subject"></p>
+              </div>
+              <div class="reminder-queue-template-preview-body-block">
+                <h4>Body</h4>
+                <pre class="reminder-queue-template-preview-body" data-template-field="bodyText"></pre>
+              </div>
+              <div class="reminder-queue-template-preview-actions">
+                <button
+                  type="button"
+                  class="quick-action-btn reminder-queue-template-preview-copy-btn"
+                  data-queue-row-key="${escapeHtml(rowKey)}"
+                >${escapeHtml(REMINDER_QUEUE_TEMPLATE_COPY_BUTTON_LABEL)}</button>
+                <p
+                  class="reminder-queue-template-preview-copy-message settings-hint hidden"
+                  role="status"
+                ></p>
+              </div>
+            </div>
+          </td>
+        </tr>` : ""}`;
+    }).join("");
+    queue.items.forEach((queueItem, index) => {
+      const rowKey = getReminderQueueTemplatePreviewRowKey(index);
+      if (!expandedReminderQueueTemplatePreviewKeys.has(rowKey)) {
+        return;
+      }
+      const detailRow = reminderQueuePreviewTableBody.querySelector(
+        `.reminder-queue-template-preview-detail-row[data-queue-row-key="${rowKey}"]`
+      );
+      if (detailRow) {
+        populateReminderQueueTemplatePreviewDetail(detailRow, queueItem);
+      }
+    });
   }
   function exportReminderQueueCsv() {
     const queue = buildReminderQueuePreviewData();
@@ -30508,6 +31044,10 @@ This cannot be undone.`
   }
   function setupReminderQueuePreviewListeners() {
     exportReminderQueueCsvBtn?.addEventListener("click", exportReminderQueueCsv);
+    reminderQueuePreviewTableBody?.addEventListener("click", handleReminderQueuePreviewTableClick);
+    reminderDigestPreviewCopyBtn?.addEventListener("click", () => {
+      void copyReminderDigest();
+    });
   }
   function renderReminderPreviewDashboardPreview(report) {
     if (!reminderPreviewDashboardPreview || !reminderPreviewDashboardPreviewTitle || !reminderPreviewDashboardPreviewMeta || !reminderPreviewDashboardTableHead || !reminderPreviewDashboardTableBody) {

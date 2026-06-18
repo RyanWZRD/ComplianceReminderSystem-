@@ -3,7 +3,8 @@
 **Theme:** Move from *knowing* what needs attention (V4 Compliance Insights) to *acting on it automatically* — scheduled reminders, orchestrated actions, escalations, and auditable operations.
 
 **Target:** v5.0.0 (major release)  
-**Current alpha:** v5.0.0-alpha.2 — V5-1A Contact Management + V5-1B Reminder Template Preview (see [`docs/v5-0-0-alpha-2-release-notes.md`](v5-0-0-alpha-2-release-notes.md))  
+**Current alpha:** v5.0.0-alpha.3 — V5-0 Automation Platform Foundation (see release-readiness note below)  
+**Prior alpha:** v5.0.0-alpha.2 — V5-1A Contact Management + V5-1B Reminder Template Preview (see [`docs/v5-0-0-alpha-2-release-notes.md`](v5-0-0-alpha-2-release-notes.md))  
 **Prerequisites:** v4.0.1 GA, v3.1.0 cloud follow-on (evidence Storage, restore/bulk ops, production cloud-writes policy)  
 **Date:** Planned — post v4.0.1 sign-off (June 2026+)
 
@@ -88,7 +89,7 @@ V5 adds a **server-side automation layer** on top of the existing RPC-only write
 
 ## Release slices
 
-Slices are ordered **V5-1A (contact foundation) → V5-1B (preview) → V5-0 → V5-1 automation → V5-2 → V5-4**. Contact Management shipped as **v5.0.0-alpha.1**; Reminder Template Preview as **v5.0.0-alpha.2**; server automation follows with **V5-0**.
+Slices are ordered **V5-1A (contact foundation) → V5-1B (preview) → V5-0 → V5-1 automation → V5-2 → V5-4**. Contact Management shipped as **v5.0.0-alpha.1**; Reminder Template Preview as **v5.0.0-alpha.2**; automation platform foundation as **v5.0.0-alpha.3**; live automation delivery follows with **V5-1**.
 
 ### V5-1A — Contact Management · **COMPLETE (alpha)**
 
@@ -144,9 +145,21 @@ Slices are ordered **V5-1A (contact foundation) → V5-1B (preview) → V5-0 →
 
 ---
 
-### V5-0 — Automation platform foundation
+### V5-0 — Automation platform foundation · **COMPLETE (alpha)**
 
 **Goal:** Schema, RPC contracts, and run infrastructure without user-visible automation yet.
+
+**Status:** COMPLETE — application version **v5.0.0-alpha.3**. Phases 1–8 implementation plus Phase 9 release-readiness gate. No live automation execution.
+
+**Release-readiness note (v5.0.0-alpha.3):**
+
+- Schema complete (`automation_policies`, `automation_runs`, `AUTOMATION_ENABLED` flag)
+- RPC creation/listing complete (policy admin + run read/create RPCs)
+- Dry-run scan complete (`computeAutomationDryRun` — no writes)
+- Dry-run logging complete (`logAutomationDryRunRun` — audit rows only, execution counters zero)
+- Audit UI complete (read-only Automation Audit dashboard; no execution buttons)
+- Orchestrated verification complete (`npm run verify-automation-v5-foundation`)
+- **No live automation execution yet** — no reminder delivery, queue processing, policy apply, cron, or Edge Functions
 
 **Implementation phases (incremental):**
 
@@ -157,6 +170,14 @@ Slices are ordered **V5-1A (contact foundation) → V5-1B (preview) → V5-0 →
 | 3 | RPC `list_automation_runs` / `get_automation_run` | **COMPLETE** |
 | 4 | RPC `create_automation_run` (audit record only) | **COMPLETE** |
 | 5 | Dry-run scan engine (`js/app/automation/automation-dry-run.js`) | **COMPLETE** |
+| 6 | Dry-run run logging (`js/app/automation/automation-run-logging.js`) | **COMPLETE** |
+| 7 | Automation run audit UI (`js/app/automation/automation-run-audit-ui.js`) | **COMPLETE** |
+| 8 | Foundation verification orchestrator (`scripts/verify-automation-v5-foundation.mjs`) | **COMPLETE** |
+| 9 | Release readiness / alpha tag prep (`v5.0.0-alpha.3`) | **COMPLETE** |
+
+**Release candidate:** **v5.0.0-alpha.3**
+
+**Release verification:** `npm run build` · `npm run verify-automation-v5-foundation`
 
 **Phase 5 dry-run output shape:**
 
@@ -184,7 +205,21 @@ Slices are ordered **V5-1A (contact foundation) → V5-1B (preview) → V5-0 →
 
 Reuses existing insights logic: reminder window detection, Contact Readiness, Evidence Gap tiers, Operational Health missing follow-up, and Compliance Insights normalisation. **No writes** — no email delivery, notification queue, cron, Edge Functions, action creation, reminder mark-sent updates, policy execution, or UI.
 
-**Verification:** `npm run verify-automation-dry-run` (no Supabase).
+**Phase 6 dry-run run logging:**
+
+`logAutomationDryRunRun({ db, organisationId, actorProfileId, dryRunResult, source })` connects the Phase 5 dry-run scan engine to `automation_runs` for audit only. Each call inserts one completed run row via `create_automation_run` with `summary.runType: "dry_run"`, `summary.source` (default `"manual_dry_run"`), the full `summary.dryRun` payload, and execution outcome counters explicitly zero (`policiesApplied`, `remindersQueued`, `remindersSent`, `actionsCreated`, `escalationsFired`, etc.). Repeated logging appends separate audit rows — never overwrites.
+
+**Audit-only — does not execute automation.** Phase 6 does not send emails, create reminders, update compliance records, change action status, or mutate people/records/evidence/history. Real reminder delivery, queue processing, and policy execution remain out of scope (V5-1+).
+
+**Phase 7 automation run audit UI:**
+
+Read-only **Automation Audit** dashboard section loads `automation_runs` for the signed-in organisation via `automationRepository.loadAutomationRuns()` (RPC `get_automation_runs`). Displays run date/time, run type, status, source, records scanned, reminder/action candidate totals, and execution counters (zero for dry-runs). **View summary** expands a row showing the full `summary` JSON via `textContent` (no HTML injection). Empty state: “No automation runs logged yet.” Load failures show a friendly message. Local mode shows cloud-only hint. **No buttons execute automation** — no dry-run trigger, no reminder/action send hooks in `app.js`.
+
+**Phase 8 foundation verification orchestrator:**
+
+`npm run verify-automation-v5-foundation` runs phases 1–7 verification scripts in order (schema, policies, run read/create RPCs, dry-run scan, dry-run logging, audit UI). Stops on first failure. Verification-only — no reminder/action/email execution.
+
+**Verification:** `npm run verify-automation-v5-foundation` (master gate); individual phase scripts remain available for targeted checks.
 
 | ID | Deliverable | Notes |
 |----|-------------|-------|
@@ -363,6 +398,9 @@ Extend the existing pattern from V3/V4:
 | `npm run verify-automation-runs` | V5-0 Phase 3 — run read RPCs |
 | `npm run verify-automation-run-create` | V5-0 Phase 4 — create run RPC |
 | `npm run verify-automation-dry-run` | V5-0 Phase 5 — dry-run scan engine, no execution hooks |
+| `npm run verify-automation-dry-run-logging` | V5-0 Phase 6 — dry-run audit logging only, no execution |
+| `npm run verify-automation-run-ui` | V5-0 Phase 7 — read-only automation audit UI, no execution hooks |
+| `npm run verify-automation-v5-foundation` | V5-0 Phase 8 — orchestrator; runs phases 1–7 in order, stop on first failure |
 | `npm run verify-automation-schema` | V5-0 migrations + RPC |
 | `npm run verify-automation-reminders` | V5-1 queue + mark sent |
 | `npm run verify-automation-actions` | V5-2 policy apply |
@@ -459,7 +497,7 @@ Secrets (SMTP API keys) live in Supabase Edge Function secrets only — never in
 |-------|--------|---------|
 | V5-1A | **COMPLETE** | Contact Management — email fields, insights, drilldown-to-edit; **v5.0.0-alpha.1** |
 | V5-1B | **COMPLETE** | Reminder Template Preview — template, UI, copy/export, dashboard; **v5.0.0-alpha.2** |
-| V5-0 | **IN PROGRESS** | Automation platform foundation — Phases 1–5 complete (schema, RPCs, dry-run scan) |
+| V5-0 | **COMPLETE** | Automation platform foundation — schema, RPCs, dry-run scan + audit logging + audit UI; **v5.0.0-alpha.3** |
 | V5-1 (automation) | **PLANNED** | Automated reminders & digests (post V5-0) |
 | V5-2 | **PLANNED** | Automated action orchestration |
 | V5-3 | **PLANNED** | Escalation & operational closure |

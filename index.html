@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Compliance Reminder System v5.0.0-alpha.2</title>
-  <link rel="stylesheet" href="styles.css?v=v5.0.0-alpha.2">
+  <title>Compliance Reminder System v5.0.0-alpha.3</title>
+  <link rel="stylesheet" href="styles.css?v=v5.0.0-alpha.3">
 </head>
 <body>
   <section id="auth-login-screen" class="auth-login-screen hidden" aria-labelledby="auth-login-title">
@@ -33,7 +33,7 @@
     <header>
       <h1>Compliance Reminder System</h1>
       <div class="header-badges">
-        <p class="version-badge">v5.0.0-alpha.2</p>
+        <p class="version-badge">v5.0.0-alpha.3</p>
         <p id="data-backend-badge" class="data-backend-badge">Local storage mode</p>
         <p id="auth-mode-badge" class="auth-mode-badge hidden">Local auth</p>
       </div>
@@ -211,6 +211,20 @@
           <button type="button" id="export-reminder-preview-pack-btn" class="export-btn">Export Reminder Pack</button>
           <button type="button" id="clear-reminder-preview-dashboard-preview-btn" class="quick-action-btn">Clear Preview</button>
         </div>
+      </div>
+    </section>
+
+    <section class="card automation-run-audit-section" id="automation-run-audit-section">
+      <h2>Automation Audit</h2>
+      <p class="settings-hint">Read-only history of automation scan runs for your organisation. This view does not execute automation.</p>
+      <p id="automation-run-audit-local-hint" class="settings-hint automation-run-audit-local-hint hidden">Automation audit logs are available in cloud mode only.</p>
+      <p id="automation-run-audit-error" class="automation-run-audit-error hidden" role="alert"></p>
+      <p id="automation-run-audit-empty" class="settings-hint automation-run-audit-empty hidden">No automation runs logged yet.</p>
+      <div id="automation-run-audit-table-wrapper" class="table-wrapper automation-run-audit-table-wrapper hidden">
+        <table class="automation-run-audit-table">
+          <thead id="automation-run-audit-table-head"></thead>
+          <tbody id="automation-run-audit-table-body"></tbody>
+        </table>
       </div>
     </section>
 
@@ -1108,7 +1122,7 @@
   </div>
   </div>
 
-  <script src="app.bundle.js?v=v5.0.0-alpha.2"></script>
+  <script src="app.bundle.js?v=v5.0.0-alpha.3"></script>
   <script>
     window.addEventListener("load", function () {
       window.setTimeout(function () {

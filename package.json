@@ -52,6 +52,9 @@
     "verify-automation-runs": "node scripts/verify-automation-runs.mjs",
     "verify-automation-run-create": "node scripts/verify-automation-run-create.mjs",
     "verify-automation-dry-run": "node scripts/verify-automation-dry-run.mjs",
+    "verify-automation-dry-run-logging": "node scripts/verify-automation-dry-run-logging.mjs",
+    "verify-automation-run-ui": "node scripts/verify-automation-run-ui.mjs",
+    "verify-automation-v5-foundation": "node scripts/verify-automation-v5-foundation.mjs",
     "verify:phase2": "node scripts/verify-phase2.mjs"
   },
   "dependencies": {

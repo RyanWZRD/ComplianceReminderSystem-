@@ -21321,7 +21321,7 @@ ${suffix}`;
     return null;
   }
   var AUTOMATION_ENABLED = readAutomationFromLocation() ?? (typeof process !== "undefined" && process.env?.AUTOMATION_ENABLED === "true");
-  var APP_VERSION = "v5.0.0-alpha.2";
+  var APP_VERSION = "v5.0.0-alpha.3";
 
   // js/app/permissions.js
   function isCloudMode() {
@@ -25892,6 +25892,107 @@ ${suffix}`;
     return `reminder-preview-pack-${slug}-${datePart}.txt`;
   }
 
+  // js/app/automation/automation-run-audit-ui.js
+  var AUTOMATION_RUN_EXECUTION_COUNTER_KEYS = [
+    "policiesApplied",
+    "policiesSkipped",
+    "remindersQueued",
+    "remindersSent",
+    "actionsCreated",
+    "escalationsFired"
+  ];
+  var AUTOMATION_RUN_AUDIT_COLUMNS = [
+    { key: "runAt", label: "Run date/time" },
+    { key: "runType", label: "Run type" },
+    { key: "status", label: "Status" },
+    { key: "source", label: "Source" },
+    { key: "totalRecords", label: "Records scanned" },
+    { key: "reminderCandidatesTotal", label: "Reminder candidates" },
+    { key: "actionCandidatesTotal", label: "Action candidates" },
+    { key: "executionCounters", label: "Execution counters" },
+    { key: "actions", label: "" }
+  ];
+  var EXECUTION_COUNTER_LABELS = {
+    policiesApplied: "Policies applied",
+    policiesSkipped: "Policies skipped",
+    remindersQueued: "Reminders queued",
+    remindersSent: "Reminders sent",
+    actionsCreated: "Actions created",
+    escalationsFired: "Escalations fired"
+  };
+  function formatAutomationRunTimestamp(isoString) {
+    if (typeof isoString !== "string" || !isoString.trim()) {
+      return "\u2014";
+    }
+    const date = new Date(isoString);
+    if (Number.isNaN(date.getTime())) {
+      return "\u2014";
+    }
+    return date.toLocaleString("en-GB", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit"
+    });
+  }
+  function computeActionCandidatesTotal(actionCandidates) {
+    if (!actionCandidates || typeof actionCandidates !== "object" || Array.isArray(actionCandidates)) {
+      return null;
+    }
+    const values = [
+      actionCandidates.expiredRecords,
+      actionCandidates.criticalEvidenceGaps,
+      actionCandidates.missingFollowUp
+    ];
+    if (values.some((value) => typeof value !== "number" || Number.isNaN(value))) {
+      return null;
+    }
+    return values.reduce((sum, value) => sum + value, 0);
+  }
+  function formatAutomationRunExecutionCounters(summary) {
+    if (!summary || typeof summary !== "object" || Array.isArray(summary)) {
+      return "\u2014";
+    }
+    const parts = AUTOMATION_RUN_EXECUTION_COUNTER_KEYS.map((key) => {
+      const value = summary[key];
+      const label = EXECUTION_COUNTER_LABELS[key] ?? key;
+      const display = typeof value === "number" && !Number.isNaN(value) ? String(value) : "\u2014";
+      return `${label}: ${display}`;
+    });
+    return parts.join(" \xB7 ");
+  }
+  function mapAutomationRunToAuditRow(run) {
+    const summary = run?.summary && typeof run.summary === "object" ? run.summary : {};
+    const dryRun = summary.dryRun && typeof summary.dryRun === "object" && !Array.isArray(summary.dryRun) ? summary.dryRun : null;
+    const runAt = formatAutomationRunTimestamp(run.startedAt || run.completedAt || run.createdAt);
+    const runType = typeof summary.runType === "string" && summary.runType.trim() ? summary.runType : "\u2014";
+    const status = typeof run.status === "string" && run.status.trim() ? run.status : "\u2014";
+    const source = typeof summary.source === "string" && summary.source.trim() ? summary.source : "\u2014";
+    const totalRecords = dryRun && typeof dryRun.totalRecords === "number" && !Number.isNaN(dryRun.totalRecords) ? String(dryRun.totalRecords) : "\u2014";
+    const reminderCandidatesTotal = dryRun?.reminderCandidates && typeof dryRun.reminderCandidates.total === "number" && !Number.isNaN(dryRun.reminderCandidates.total) ? String(dryRun.reminderCandidates.total) : "\u2014";
+    const actionTotalValue = dryRun ? computeActionCandidatesTotal(dryRun.actionCandidates) : null;
+    const actionCandidatesTotal = actionTotalValue === null ? "\u2014" : String(actionTotalValue);
+    return {
+      id: run.id,
+      runAt,
+      runType,
+      status,
+      source,
+      totalRecords,
+      reminderCandidatesTotal,
+      actionCandidatesTotal,
+      executionCounters: formatAutomationRunExecutionCounters(summary),
+      summaryJson: JSON.stringify(summary, null, 2)
+    };
+  }
+  function mapAutomationRunsToAuditRows(runs) {
+    if (!Array.isArray(runs)) {
+      return [];
+    }
+    return runs.map((run) => mapAutomationRunToAuditRow(run));
+  }
+
   // app.js
   console.log(
     `Compliance Reminder System ${APP_VERSION} \u2014 app.js loaded (${DATA_BACKEND} data, ${AUTH_MODE} auth)`
@@ -26089,12 +26190,22 @@ ${suffix}`;
   var reminderPreviewDashboardCards = document.querySelectorAll(
     "[data-reminder-preview-dashboard]"
   );
+  var automationRunAuditSection = document.getElementById("automation-run-audit-section");
+  var automationRunAuditLocalHint = document.getElementById("automation-run-audit-local-hint");
+  var automationRunAuditError = document.getElementById("automation-run-audit-error");
+  var automationRunAuditEmpty = document.getElementById("automation-run-audit-empty");
+  var automationRunAuditTableWrapper = document.getElementById("automation-run-audit-table-wrapper");
+  var automationRunAuditTableHead = document.getElementById("automation-run-audit-table-head");
+  var automationRunAuditTableBody = document.getElementById("automation-run-audit-table-body");
   var insightStaleEvidence = document.getElementById("insight-stale-evidence");
   var renewModalContext = null;
   var evidenceModalContext = null;
   var actionModalContext = null;
   var workspaceActionFilter = "all";
   var currentReminderPreviewDashboard = null;
+  var automationRunAuditLoadState = "idle";
+  var automationRunAuditLoadError = "";
+  var expandedAutomationRunIds = /* @__PURE__ */ new Set();
   var expiryWindowFilter = null;
   var currentTablePage = 1;
   var dashboard30Count = document.getElementById("dashboard-30-count");
@@ -30184,6 +30295,128 @@ This cannot be undone.`
       handleReminderPreviewDashboardRowClick
     );
   }
+  function toggleAutomationRunSummary(runId) {
+    if (!runId) {
+      return;
+    }
+    if (expandedAutomationRunIds.has(runId)) {
+      expandedAutomationRunIds.delete(runId);
+    } else {
+      expandedAutomationRunIds.add(runId);
+    }
+    renderAutomationRunAudit();
+  }
+  function handleAutomationRunAuditTableClick(event) {
+    const summaryButton = event.target.closest(".automation-run-audit-view-summary-btn");
+    if (!summaryButton) {
+      return;
+    }
+    toggleAutomationRunSummary(summaryButton.dataset.runId);
+  }
+  function renderAutomationRunAudit() {
+    if (!automationRunAuditSection || !automationRunAuditLocalHint || !automationRunAuditError || !automationRunAuditEmpty || !automationRunAuditTableWrapper || !automationRunAuditTableHead || !automationRunAuditTableBody) {
+      return;
+    }
+    automationRunAuditLocalHint.classList.add("hidden");
+    automationRunAuditError.classList.add("hidden");
+    automationRunAuditEmpty.classList.add("hidden");
+    automationRunAuditTableWrapper.classList.add("hidden");
+    if (automationRunAuditLoadState === "local") {
+      automationRunAuditLocalHint.classList.remove("hidden");
+      automationRunAuditTableHead.innerHTML = "";
+      automationRunAuditTableBody.innerHTML = "";
+      return;
+    }
+    if (automationRunAuditLoadState === "loading") {
+      automationRunAuditTableHead.innerHTML = "";
+      automationRunAuditTableBody.innerHTML = "";
+      return;
+    }
+    if (automationRunAuditLoadState === "error") {
+      automationRunAuditError.textContent = automationRunAuditLoadError || "Could not load automation runs. Check your connection and try signing in again.";
+      automationRunAuditError.classList.remove("hidden");
+      automationRunAuditTableHead.innerHTML = "";
+      automationRunAuditTableBody.innerHTML = "";
+      return;
+    }
+    const runs = automationRepository ? automationRepository.getAutomationRuns() : [];
+    const auditRows = mapAutomationRunsToAuditRows(runs);
+    if (auditRows.length === 0) {
+      automationRunAuditEmpty.classList.remove("hidden");
+      automationRunAuditTableHead.innerHTML = "";
+      automationRunAuditTableBody.innerHTML = "";
+      return;
+    }
+    automationRunAuditTableWrapper.classList.remove("hidden");
+    automationRunAuditTableHead.innerHTML = `<tr>${AUTOMATION_RUN_AUDIT_COLUMNS.map(
+      (column) => `<th scope="col">${escapeHtml(column.label)}</th>`
+    ).join("")}</tr>`;
+    automationRunAuditTableBody.innerHTML = auditRows.map((row) => {
+      const isExpanded = expandedAutomationRunIds.has(row.id);
+      const summaryLabel = isExpanded ? "Hide summary" : "View summary";
+      return `
+          <tr class="automation-run-audit-row" data-run-id="${escapeHtml(row.id)}">
+            <td>${escapeHtml(row.runAt)}</td>
+            <td>${escapeHtml(row.runType)}</td>
+            <td>${escapeHtml(row.status)}</td>
+            <td>${escapeHtml(row.source)}</td>
+            <td>${escapeHtml(row.totalRecords)}</td>
+            <td>${escapeHtml(row.reminderCandidatesTotal)}</td>
+            <td>${escapeHtml(row.actionCandidatesTotal)}</td>
+            <td>${escapeHtml(row.executionCounters)}</td>
+            <td class="automation-run-audit-row-actions">
+              <button
+                type="button"
+                class="quick-action-btn automation-run-audit-view-summary-btn"
+                data-run-id="${escapeHtml(row.id)}"
+                aria-expanded="${isExpanded ? "true" : "false"}"
+              >${escapeHtml(summaryLabel)}</button>
+            </td>
+          </tr>
+          ${isExpanded ? `<tr class="automation-run-audit-detail-row" data-run-id="${escapeHtml(row.id)}">
+            <td colspan="${AUTOMATION_RUN_AUDIT_COLUMNS.length}">
+              <pre class="automation-run-audit-summary-json" data-run-summary-for="${escapeHtml(row.id)}"></pre>
+            </td>
+          </tr>` : ""}`;
+    }).join("");
+    auditRows.forEach((row) => {
+      if (!expandedAutomationRunIds.has(row.id)) {
+        return;
+      }
+      const summaryElement = automationRunAuditTableBody.querySelector(
+        `[data-run-summary-for="${row.id}"]`
+      );
+      if (summaryElement) {
+        summaryElement.textContent = row.summaryJson;
+      }
+    });
+  }
+  async function loadAutomationRunAudit() {
+    if (!automationRunAuditSection) {
+      return;
+    }
+    if (!automationRepository) {
+      automationRunAuditLoadState = "local";
+      automationRunAuditLoadError = "";
+      renderAutomationRunAudit();
+      return;
+    }
+    automationRunAuditLoadState = "loading";
+    renderAutomationRunAudit();
+    const result = await automationRepository.loadAutomationRuns();
+    if (!result.ok) {
+      automationRunAuditLoadState = "error";
+      automationRunAuditLoadError = result.error?.message || "Could not load automation runs. Check your connection and try signing in again.";
+      renderAutomationRunAudit();
+      return;
+    }
+    automationRunAuditLoadState = "loaded";
+    automationRunAuditLoadError = "";
+    renderAutomationRunAudit();
+  }
+  function setupAutomationRunAuditListeners() {
+    automationRunAuditTableBody?.addEventListener("click", handleAutomationRunAuditTableClick);
+  }
   function renderActionSummaryCards() {
     const metrics = getGlobalActionMetrics();
     if (actionDashboardOpen) {
@@ -33578,6 +33811,7 @@ Your current data will be overwritten. Continue?`
     }
     applyReadOnlyMode();
     renderTable();
+    await loadAutomationRunAudit();
     document.documentElement.dataset.appReady = "true";
     return true;
   }
@@ -33594,6 +33828,7 @@ Your current data will be overwritten. Continue?`
     setupVisualInsightsListeners();
     setupActionDashboardListeners();
     setupReminderPreviewDashboardListeners();
+    setupAutomationRunAuditListeners();
     setupRecordWorkspaceListeners();
     setupReportListeners();
   }

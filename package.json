@@ -49,6 +49,7 @@
     "verify-reminder-suite": "node scripts/verify-reminder-suite.mjs",
     "verify-automation-foundation": "node scripts/verify-automation-foundation.mjs",
     "verify-automation-policies": "node scripts/verify-automation-policies.mjs",
+    "verify-automation-runs": "node scripts/verify-automation-runs.mjs",
     "verify:phase2": "node scripts/verify-phase2.mjs"
   },
   "dependencies": {

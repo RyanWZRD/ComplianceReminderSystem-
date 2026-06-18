@@ -8,10 +8,12 @@ import {
   mapAutomationPolicyFromRpc,
   mapAutomationPolicyToRpc,
 } from "./automation-policies.js";
+import { mapAutomationRunFromRpc } from "./automation-runs.js";
 
 /**
  * @typedef {import('./automation-policies.js').AutomationPolicyView} AutomationPolicyView
  * @typedef {import('./automation-policies.js').AutomationPolicyInput} AutomationPolicyInput
+ * @typedef {import('./automation-runs.js').AutomationRunView} AutomationRunView
  */
 
 /**
@@ -20,10 +22,25 @@ import {
  * @property {Error} [error]
  */
 
+/**
+ * @typedef {Object} AutomationRunsLoadResult
+ * @property {boolean} ok
+ * @property {Error} [error]
+ */
+
+/**
+ * @typedef {Object} AutomationRunLoadResult
+ * @property {boolean} ok
+ * @property {AutomationRunView} [run]
+ * @property {Error | string} [error]
+ */
+
 export class CloudAutomationStore {
   constructor() {
     /** @type {AutomationPolicyView[]} */
     this.policies = [];
+    /** @type {AutomationRunView[]} */
+    this.runs = [];
   }
 
   get backend() {
@@ -35,6 +52,13 @@ export class CloudAutomationStore {
    */
   getPolicies() {
     return this.policies;
+  }
+
+  /**
+   * @returns {AutomationRunView[]}
+   */
+  getAutomationRuns() {
+    return this.runs;
   }
 
   /**
@@ -135,5 +159,107 @@ export class CloudAutomationStore {
     }
 
     return { ok: true, status: "upserted", policy };
+  }
+
+  /**
+   * @returns {Promise<AutomationRunsLoadResult>}
+   */
+  async loadAutomationRuns() {
+    if (!isSupabaseConfigured()) {
+      const error = new Error(
+        "Supabase is not configured. Run npm run sync-env after setting .env."
+      );
+      return { ok: false, error };
+    }
+
+    await waitForAuthReady();
+
+    if (!isAuthenticated()) {
+      const error = new Error("Not signed in. Sign in before loading automation runs.");
+      return { ok: false, error };
+    }
+
+    const organisationId = getOrganisationId();
+
+    if (!organisationId) {
+      const error = new Error("No organisation on the current session profile.");
+      return { ok: false, error };
+    }
+
+    try {
+      const supabase = getSupabaseClient();
+      const { data, error } = await supabase.rpc("get_automation_runs");
+
+      if (error) {
+        return { ok: false, error: new Error(error.message) };
+      }
+
+      if (!data || typeof data !== "object" || data.status !== "ok") {
+        return {
+          ok: false,
+          error: new Error(
+            `Unexpected response from get_automation_runs: ${JSON.stringify(data)}`
+          ),
+        };
+      }
+
+      const rows = Array.isArray(data.runs) ? data.runs : [];
+
+      this.runs = rows.map((row) => mapAutomationRunFromRpc(row));
+
+      return { ok: true };
+    } catch (error) {
+      const loadError = error instanceof Error ? error : new Error(String(error));
+      return { ok: false, error: loadError };
+    }
+  }
+
+  /**
+   * @param {string} runId
+   * @returns {Promise<AutomationRunLoadResult>}
+   */
+  async loadAutomationRun(runId) {
+    if (!isSupabaseConfigured()) {
+      return { ok: false, error: "Supabase is not configured." };
+    }
+
+    await waitForAuthReady();
+
+    if (!isAuthenticated()) {
+      return { ok: false, error: "Not signed in." };
+    }
+
+    if (typeof runId !== "string" || !runId.trim()) {
+      return { ok: false, error: "Run id is required." };
+    }
+
+    const supabase = getSupabaseClient();
+    const { data, error } = await supabase.rpc("get_automation_run", {
+      p_run_id: runId,
+    });
+
+    if (error) {
+      return { ok: false, error: error.message };
+    }
+
+    if (!data || typeof data !== "object") {
+      return {
+        ok: false,
+        error: `Unexpected response from get_automation_run: ${JSON.stringify(data)}`,
+      };
+    }
+
+    if (data.status === "not_found") {
+      return { ok: false, error: "Automation run not found." };
+    }
+
+    if (data.status !== "ok" || !data.run) {
+      return {
+        ok: false,
+        error: `Unexpected response from get_automation_run: ${JSON.stringify(data)}`,
+      };
+    }
+
+    return { ok: true, run: mapAutomationRunFromRpc(data.run) };
   }
 }

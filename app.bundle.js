@@ -21569,10 +21569,27 @@ ${suffix}`;
     };
   }
 
+  // js/data/automation-runs.js
+  function mapAutomationRunFromRpc(row) {
+    return {
+      id: row.id,
+      startedAt: row.started_at,
+      completedAt: row.completed_at ?? null,
+      status: (
+        /** @type {import('./cloud-mapper.js').AutomationRunStatus} */
+        row.status
+      ),
+      summary: row.summary ?? {},
+      error: row.error ?? null,
+      createdAt: row.created_at
+    };
+  }
+
   // js/data/cloud-automation-store.js
   var CloudAutomationStore = class {
     constructor() {
       this.policies = [];
+      this.runs = [];
     }
     get backend() {
       return "cloud";
@@ -21582,6 +21599,12 @@ ${suffix}`;
      */
     getPolicies() {
       return this.policies;
+    }
+    /**
+     * @returns {AutomationRunView[]}
+     */
+    getAutomationRuns() {
+      return this.runs;
     }
     /**
      * @returns {Promise<AutomationPoliciesLoadResult>}
@@ -21662,6 +21685,87 @@ ${suffix}`;
         this.policies.push(policy);
       }
       return { ok: true, status: "upserted", policy };
+    }
+    /**
+     * @returns {Promise<AutomationRunsLoadResult>}
+     */
+    async loadAutomationRuns() {
+      if (!isSupabaseConfigured()) {
+        const error = new Error(
+          "Supabase is not configured. Run npm run sync-env after setting .env."
+        );
+        return { ok: false, error };
+      }
+      await waitForAuthReady();
+      if (!isAuthenticated()) {
+        const error = new Error("Not signed in. Sign in before loading automation runs.");
+        return { ok: false, error };
+      }
+      const organisationId = getOrganisationId();
+      if (!organisationId) {
+        const error = new Error("No organisation on the current session profile.");
+        return { ok: false, error };
+      }
+      try {
+        const supabase = getSupabaseClient();
+        const { data, error } = await supabase.rpc("get_automation_runs");
+        if (error) {
+          return { ok: false, error: new Error(error.message) };
+        }
+        if (!data || typeof data !== "object" || data.status !== "ok") {
+          return {
+            ok: false,
+            error: new Error(
+              `Unexpected response from get_automation_runs: ${JSON.stringify(data)}`
+            )
+          };
+        }
+        const rows = Array.isArray(data.runs) ? data.runs : [];
+        this.runs = rows.map((row) => mapAutomationRunFromRpc(row));
+        return { ok: true };
+      } catch (error) {
+        const loadError = error instanceof Error ? error : new Error(String(error));
+        return { ok: false, error: loadError };
+      }
+    }
+    /**
+     * @param {string} runId
+     * @returns {Promise<AutomationRunLoadResult>}
+     */
+    async loadAutomationRun(runId) {
+      if (!isSupabaseConfigured()) {
+        return { ok: false, error: "Supabase is not configured." };
+      }
+      await waitForAuthReady();
+      if (!isAuthenticated()) {
+        return { ok: false, error: "Not signed in." };
+      }
+      if (typeof runId !== "string" || !runId.trim()) {
+        return { ok: false, error: "Run id is required." };
+      }
+      const supabase = getSupabaseClient();
+      const { data, error } = await supabase.rpc("get_automation_run", {
+        p_run_id: runId
+      });
+      if (error) {
+        return { ok: false, error: error.message };
+      }
+      if (!data || typeof data !== "object") {
+        return {
+          ok: false,
+          error: `Unexpected response from get_automation_run: ${JSON.stringify(data)}`
+        };
+      }
+      if (data.status === "not_found") {
+        return { ok: false, error: "Automation run not found." };
+      }
+      if (data.status !== "ok" || !data.run) {
+        return {
+          ok: false,
+          error: `Unexpected response from get_automation_run: ${JSON.stringify(data)}`
+        };
+      }
+      return { ok: true, run: mapAutomationRunFromRpc(data.run) };
     }
   };
 

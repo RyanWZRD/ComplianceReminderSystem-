@@ -169,3 +169,12 @@ export function canMutateAutomationPolicies() {
 
   return canAdmin();
 }
+
+/** @returns {boolean} */
+export function canReadAutomationRuns() {
+  if (!isCloudMode()) {
+    return false;
+  }
+
+  return canEdit();
+}

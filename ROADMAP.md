@@ -6,7 +6,38 @@ A local-first safeguarding compliance tracker. Runs in the browser with localSto
 
 # Current Release
 
-## V6 Phase 39 — Browser Invoke Wiring
+## V6 Phase 40 — Edge Function Test-Mode Deployment Readiness
+
+**Date:** June 2026
+
+### Summary
+
+V6 Phase 40 prepares **safe deployment and testing** of `send-reminder-deliveries` in Supabase **test mode** only. Deployment checklist, secret checklist, local/staging smoke test plans, and an automated readiness gate — **no production sending**, no delivery log writes, no mark-as-sent, and no compliance/history mutation.
+
+**Documentation:**
+
+- [`docs/v6-edge-delivery-test-deployment.md`](docs/v6-edge-delivery-test-deployment.md) — Phase 40 deployment checklist, secrets, smoke tests, Supabase checks
+- [`docs/v6-edge-delivery-function.md`](docs/v6-edge-delivery-function.md) — Phase 40 cross-reference
+- [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md) — Phase 40 cross-reference
+- [`docs/v5-automated-compliance-operations.md`](docs/v5-automated-compliance-operations.md#v6--reminder-delivery--phase-40-complete) — Phase 40 summary
+
+**Verification (required):**
+
+- `npm run verify-edge-delivery-test-deployment` — deployment readiness doc, static safety gates, prerequisite Edge Function scripts
+- `npm run verify-edge-delivery-browser-invoke` — browser invoke wiring must still pass
+- `npm run verify-edge-delivery-resend` — server-side Resend integration must still pass
+
+**Manual sign-off (after deploy):**
+
+- Set Supabase Edge Function secrets (`EMAIL_MODE=test`, `EMAIL_TEST_REDIRECT_TO`, etc.)
+- Deploy `send-reminder-deliveries` to staging
+- Run local/staging smoke checklists in [`docs/v6-edge-delivery-test-deployment.md`](docs/v6-edge-delivery-test-deployment.md)
+
+**Next slice:** Delivery log persistence from Edge Function outcomes (planned)
+
+---
+
+## V6 Phase 39 — Browser Invoke Wiring (complete)
 
 **Date:** June 2026
 
@@ -26,7 +57,7 @@ V6 Phase 39 wires the **Manual Delivery UI** to invoke `send-reminder-deliveries
 - `npm run verify-edge-delivery-resend` — server-side Resend integration must still pass
 - `npm run verify-edge-delivery-function-skeleton` — structural skeleton checks must still pass
 
-**Next slice:** Delivery log persistence from Edge Function outcomes (planned)
+**Status:** Complete — see V6 Phase 40 (current release) above.
 
 ---
 

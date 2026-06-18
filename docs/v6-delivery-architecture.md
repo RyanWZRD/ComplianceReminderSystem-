@@ -1415,7 +1415,43 @@ Browser Manual Delivery UI
 
 **Phase 39 gate:** `npm run verify-edge-delivery-browser-invoke` must pass.
 
-**Next slice after Phase 39:** Delivery log persistence from Edge Function outcomes (planned).
+**Next slice after Phase 39:** Edge Function test-mode deployment readiness (Phase 40).
+
+---
+
+## Phase 40 — Edge Function test-mode deployment readiness
+
+**Scope:** Prepare safe deployment and testing of `send-reminder-deliveries` in Supabase **test mode** only. Deployment checklist, secret checklist, local/staging smoke test plans, and automated readiness verification — **no new application logic**.
+
+### Phase 40 deliverables
+
+| Item | Location |
+|------|----------|
+| Deployment readiness checklist | [`docs/v6-edge-delivery-test-deployment.md`](v6-edge-delivery-test-deployment.md) |
+| Readiness verification gate | `scripts/verify-edge-delivery-test-deployment.mjs` |
+| Contract cross-reference | [`docs/v6-edge-delivery-function.md`](v6-edge-delivery-function.md) § Phase 40 |
+
+**Script:** `scripts/verify-edge-delivery-test-deployment.mjs`
+
+`npm run verify-edge-delivery-test-deployment` verifies:
+
+1. Deployment doc covers all six required Edge Function secrets with `EMAIL_MODE=test`
+2. Test redirect to `EMAIL_TEST_REDIRECT_TO` and `[TEST]` subject prefix documented and present in Edge Function code
+3. Missing-secret failures (`503 provider_not_configured`, `invalid_email_mode`, `invalid_config`) documented and coded
+4. Browser invokes Edge Function only — no `api.resend.com` or `RESEND_API_KEY` in manual execution path
+5. No delivery log writes, mark-as-sent hooks, or compliance/history mutation in Edge Function or manual execution
+6. Prerequisite Phase 37–39 verify scripts still pass
+
+### Phase 40 constraints
+
+- Test mode only — `EMAIL_MODE=test` in Supabase secrets; no production sending
+- Documentation and verification only — deploy secrets + function for manual smoke sign-off
+- No `create_reminder_delivery_log` RPC writes yet
+- No mark-as-sent automation, scheduled execution, or compliance/history mutation
+
+**Phase 40 gate:** `npm run verify-edge-delivery-test-deployment` must pass.
+
+**Next slice after Phase 40:** Delivery log persistence from Edge Function outcomes (planned).
 
 ---
 

@@ -429,7 +429,36 @@ The Supabase JS client attaches the signed-in user's JWT (`Authorization: Bearer
 
 **Verification:** `npm run verify-edge-delivery-browser-invoke`
 
-**Next slice after Phase 39:** Delivery log persistence from Edge Function outcomes (planned).
+**Next slice after Phase 39:** Edge Function test-mode deployment readiness (Phase 40).
+
+---
+
+## Phase 40 — Edge Function test-mode deployment readiness
+
+**Module:** `supabase/functions/send-reminder-deliveries/index.ts` (deploy + secrets)  
+**Documentation:** [`docs/v6-edge-delivery-test-deployment.md`](v6-edge-delivery-test-deployment.md)
+
+**Status:** Deployment readiness checklist and verification gate — **no new application logic**.
+
+### Phase 40 scope
+
+| Item | Detail |
+|------|--------|
+| Secret checklist | `RESEND_API_KEY`, `EMAIL_MODE=test`, `EMAIL_FROM_ADDRESS`, `EMAIL_REPLY_TO_ADDRESS`, `EMAIL_TEST_REDIRECT_TO`, `EMAIL_RATE_LIMIT_PER_RUN` |
+| Test-mode behaviour | All recipients → `EMAIL_TEST_REDIRECT_TO`; subject `[TEST]` prefix |
+| Missing secrets | `503` — `provider_not_configured`, `invalid_email_mode`, or `invalid_config` |
+| Browser path | `edge-delivery-invoke.js` → `functions.invoke` only — no browser Resend |
+| Safety | No delivery log writes, mark-as-sent, compliance/history mutation, or scheduling |
+
+### Phase 40 non-goals
+
+- `EMAIL_MODE=production` or real-recipient sends
+- Delivery log persistence (Phase 41+)
+- JWT admin-role validation inside Edge Function (deferred)
+
+**Verification:** `npm run verify-edge-delivery-test-deployment`
+
+**Next slice after Phase 40:** Delivery log persistence from Edge Function outcomes (planned).
 
 ---
 
@@ -440,3 +469,4 @@ The Supabase JS client attaches the signed-in user's JWT (`Authorization: Bearer
 | [`v6-delivery-architecture.md`](v6-delivery-architecture.md) | Phase 36 server-side architecture cross-reference |
 | [`v6-email-provider-configuration.md`](v6-email-provider-configuration.md) | Provider env vars, test/production gates, Resend adapter contract |
 | [`v6-beta-validation.md`](v6-beta-validation.md) | Staging validation before implementation |
+| [`v6-edge-delivery-test-deployment.md`](v6-edge-delivery-test-deployment.md) | Phase 40 test-mode deployment checklist and smoke tests |

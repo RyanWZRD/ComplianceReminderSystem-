@@ -748,6 +748,39 @@ The Reminder Queue Preview section includes a **Digest preview** area wired to `
 
 ---
 
+## V6 — Reminder delivery · Phase 40 complete
+
+**Goal:** Prepare safe deployment and testing of `send-reminder-deliveries` in Supabase **test mode** — deployment checklist, secret checklist, smoke test plans, and automated readiness gate.
+
+**Status:** Test-mode deployment readiness complete. V6 Phase 40 complete on **v6.0.0-beta.1** baseline.
+
+**Deliverables:**
+
+- [`docs/v6-edge-delivery-test-deployment.md`](v6-edge-delivery-test-deployment.md) — deployment checklist, secrets, local/staging smoke tests, Supabase checks
+- `scripts/verify-edge-delivery-test-deployment.mjs` — deployment readiness verification gate
+- `npm run verify-edge-delivery-test-deployment`
+
+| Item | Detail |
+|------|--------|
+| Required secrets | `RESEND_API_KEY`, `EMAIL_MODE=test`, `EMAIL_FROM_ADDRESS`, `EMAIL_REPLY_TO_ADDRESS`, `EMAIL_TEST_REDIRECT_TO`, `EMAIL_RATE_LIMIT_PER_RUN` |
+| Test mode | All recipients redirect to `EMAIL_TEST_REDIRECT_TO`; `[TEST]` subject prefix |
+| Missing secrets | `503` — `provider_not_configured`, `invalid_email_mode`, `invalid_config` |
+| Browser path | Edge Function invoke only — no browser Resend |
+| Phase 40 scope | Documentation + verification — no delivery logs, mark-as-sent, or production sends |
+
+**Constraints:** No production sending, no delivery log RPC writes, no mark-as-sent automation, no scheduled execution, no compliance/history mutation.
+
+**Verification:** `npm run verify-edge-delivery-test-deployment`
+
+| Phase | Deliverable | Status |
+|-------|-------------|--------|
+| 40 | Test-mode deployment readiness (`verify-edge-delivery-test-deployment`) | **Complete** |
+| 41 | Delivery log persistence from Edge outcomes | Planned |
+
+**Next slice:** Delivery log persistence from Edge Function outcomes (planned).
+
+---
+
 ## V6 — Reminder delivery · Phase 39 complete
 
 **Goal:** Wire Manual Delivery UI to invoke `send-reminder-deliveries` via authenticated Supabase session — no browser Resend fetch or `RESEND_API_KEY` exposure.
@@ -776,9 +809,8 @@ The Reminder Queue Preview section includes a **Digest preview** area wired to `
 | Phase | Deliverable | Status |
 |-------|-------------|--------|
 | 39 | Browser invoke wiring (`verify-edge-delivery-browser-invoke`) | **Complete** |
-| 40 | Delivery log persistence from Edge outcomes | Planned |
 
-**Next slice:** Delivery log persistence from Edge Function outcomes (planned).
+**Next slice:** V6 Phase 40 — Edge Function test-mode deployment readiness.
 
 ---
 

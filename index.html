@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Compliance Reminder System v5.0.0-alpha.3</title>
-  <link rel="stylesheet" href="styles.css?v=v5.0.0-alpha.3">
+  <title>Compliance Reminder System v5.0.0-alpha.4</title>
+  <link rel="stylesheet" href="styles.css?v=v5.0.0-alpha.4">
 </head>
 <body>
   <section id="auth-login-screen" class="auth-login-screen hidden" aria-labelledby="auth-login-title">
@@ -33,7 +33,7 @@
     <header>
       <h1>Compliance Reminder System</h1>
       <div class="header-badges">
-        <p class="version-badge">v5.0.0-alpha.3</p>
+        <p class="version-badge">v5.0.0-alpha.4</p>
         <p id="data-backend-badge" class="data-backend-badge">Local storage mode</p>
         <p id="auth-mode-badge" class="auth-mode-badge hidden">Local auth</p>
       </div>
@@ -211,6 +211,50 @@
           <button type="button" id="export-reminder-preview-pack-btn" class="export-btn">Export Reminder Pack</button>
           <button type="button" id="clear-reminder-preview-dashboard-preview-btn" class="quick-action-btn">Clear Preview</button>
         </div>
+      </div>
+    </section>
+
+    <section class="card reminder-queue-preview-section" id="reminder-queue-preview-section">
+      <div class="reminder-queue-preview-header">
+        <h2>Reminder Queue Preview</h2>
+        <div class="reminder-queue-preview-actions no-print">
+          <button type="button" id="export-reminder-queue-csv-btn" class="export-btn" disabled>Export queue CSV</button>
+        </div>
+      </div>
+      <p class="settings-hint reminder-queue-preview-safety-note">Preview only — no reminders are sent.</p>
+      <div class="reminder-queue-preview-summary">
+        <div class="reminder-queue-preview-summary-card reminder-queue-preview-total">
+          <p class="summary-label">Total queued</p>
+          <p id="reminder-queue-preview-total-count" class="summary-number">0</p>
+        </div>
+        <div class="reminder-queue-preview-summary-card reminder-queue-preview-missing-email">
+          <p class="summary-label">Missing email</p>
+          <p id="reminder-queue-preview-missing-email-count" class="summary-number">0</p>
+        </div>
+        <div class="reminder-queue-preview-summary-card reminder-queue-preview-expired">
+          <p class="summary-label">Expired reminders</p>
+          <p id="reminder-queue-preview-expired-count" class="summary-number">0</p>
+        </div>
+        <div class="reminder-queue-preview-summary-card reminder-queue-preview-30">
+          <p class="summary-label">30-day reminders</p>
+          <p id="reminder-queue-preview-30-count" class="summary-number">0</p>
+        </div>
+        <div class="reminder-queue-preview-summary-card reminder-queue-preview-14">
+          <p class="summary-label">14-day reminders</p>
+          <p id="reminder-queue-preview-14-count" class="summary-number">0</p>
+        </div>
+        <div class="reminder-queue-preview-summary-card reminder-queue-preview-7">
+          <p class="summary-label">7-day reminders</p>
+          <p id="reminder-queue-preview-7-count" class="summary-number">0</p>
+        </div>
+      </div>
+      <p id="reminder-queue-preview-meta" class="reminder-queue-preview-meta settings-hint"></p>
+      <p id="reminder-queue-preview-empty" class="settings-hint reminder-queue-preview-empty hidden">No reminder queue items for this scan.</p>
+      <div id="reminder-queue-preview-table-wrapper" class="table-wrapper reminder-queue-preview-table-wrapper hidden">
+        <table class="reminder-queue-preview-table">
+          <thead id="reminder-queue-preview-table-head"></thead>
+          <tbody id="reminder-queue-preview-table-body"></tbody>
+        </table>
       </div>
     </section>
 
@@ -1122,7 +1166,7 @@
   </div>
   </div>
 
-  <script src="app.bundle.js?v=v5.0.0-alpha.3"></script>
+  <script src="app.bundle.js?v=v5.0.0-alpha.4"></script>
   <script>
     window.addEventListener("load", function () {
       window.setTimeout(function () {

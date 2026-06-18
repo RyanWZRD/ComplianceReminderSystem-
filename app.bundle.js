@@ -21321,7 +21321,7 @@ ${suffix}`;
     return null;
   }
   var AUTOMATION_ENABLED = readAutomationFromLocation() ?? (typeof process !== "undefined" && process.env?.AUTOMATION_ENABLED === "true");
-  var APP_VERSION = "v5.0.0-alpha.3";
+  var APP_VERSION = "v5.0.0-alpha.4";
 
   // js/app/permissions.js
   function isCloudMode() {
@@ -25993,6 +25993,300 @@ ${suffix}`;
     return runs.map((run) => mapAutomationRunToAuditRow(run));
   }
 
+  // js/app/automation/automation-dry-run.js
+  var AUTOMATION_REMINDER_TYPE_BUCKETS = {
+    "30-day": REMINDER_UI_LABELS[30],
+    "14-day": REMINDER_UI_LABELS[14],
+    "7-day": REMINDER_UI_LABELS[7],
+    expired: REMINDER_UI_LABELS.expired
+  };
+  var REMINDER_TYPE_TO_BUCKET = Object.fromEntries(
+    Object.entries(AUTOMATION_REMINDER_TYPE_BUCKETS).map(([bucket, reminderType]) => [
+      reminderType,
+      bucket
+    ])
+  );
+  function createEmptyReminderTypeCounts() {
+    return {
+      "30-day": 0,
+      "14-day": 0,
+      "7-day": 0,
+      expired: 0
+    };
+  }
+  function computeReminderCandidates(rows, ctx) {
+    const byType = createEmptyReminderTypeCounts();
+    let withEmail = 0;
+    let missingEmail = 0;
+    let total = 0;
+    rows.forEach((row) => {
+      const reminderType = getActiveReminderType(row.expiryDate, ctx.settings, ctx);
+      if (!reminderType) {
+        return;
+      }
+      total += 1;
+      const bucket = REMINDER_TYPE_TO_BUCKET[reminderType];
+      if (bucket) {
+        byType[bucket] += 1;
+      }
+      if (personRowHasEmail(row)) {
+        withEmail += 1;
+      } else {
+        missingEmail += 1;
+      }
+    });
+    return {
+      total,
+      byType,
+      withEmail,
+      missingEmail
+    };
+  }
+  function countExpiredRecordsMissingFollowUp(rows, ctx) {
+    let expiredNoFollowUp = 0;
+    rows.forEach((row) => {
+      const reminderType = getActiveReminderType(row.expiryDate, ctx.settings, ctx);
+      if (reminderType !== REMINDER_UI_LABELS.expired) {
+        return;
+      }
+      if (!hasReminderActivityForType(row, reminderType)) {
+        expiredNoFollowUp += 1;
+      }
+    });
+    return expiredNoFollowUp;
+  }
+  function computeAutomationDryRun(rows, settings = DEFAULT_REMINDER_SETTINGS, asOfDate) {
+    const inputRows = Array.isArray(rows) ? rows : [];
+    const normalizedRows = inputRows.map(normalizeComplianceRow);
+    const insights = computeComplianceInsights(inputRows, settings, asOfDate);
+    const ctx = createInsightsContext(asOfDate, settings);
+    return {
+      asOfDate: insights.asOfDate,
+      totalRecords: normalizedRows.length,
+      reminderCandidates: computeReminderCandidates(normalizedRows, ctx),
+      actionCandidates: {
+        expiredRecords: insights.risk.expiredRecords,
+        criticalEvidenceGaps: insights.evidenceGaps.byTier[EVIDENCE_GAP_TIERS.CRITICAL] ?? 0,
+        missingFollowUp: insights.operationalHealth.recordsMissingReminderActivity ?? 0
+      },
+      escalationCandidates: {
+        expiredNoFollowUp: countExpiredRecordsMissingFollowUp(normalizedRows, ctx),
+        missingEmailInReminderWindow: insights.contactReadiness.peopleInReminderWindowMissingEmail ?? 0
+      }
+    };
+  }
+
+  // js/app/automation/reminder-queue.js
+  var REMINDER_QUEUE_STATUS = "queued";
+  var REMINDER_QUEUE_SOURCE = "dry_run_candidate";
+  var REMINDER_QUEUE_EXECUTION_DEFAULTS = Object.freeze({
+    sent: false,
+    delivered: false,
+    markedSent: false,
+    sentAt: null,
+    deliveredAt: null,
+    markedSentAt: null,
+    failed: false,
+    failureReason: null
+  });
+  var REMINDER_TYPE_TO_BUCKET2 = Object.fromEntries(
+    Object.entries(AUTOMATION_REMINDER_TYPE_BUCKETS).map(([bucket, reminderType]) => [
+      reminderType,
+      bucket
+    ])
+  );
+  var REMINDER_WINDOW_URGENCY = {
+    expired: 0,
+    "7-day": 1,
+    "14-day": 2,
+    "30-day": 3
+  };
+  function createEmptyWindowCounts() {
+    return {
+      "30-day": 0,
+      "14-day": 0,
+      "7-day": 0,
+      expired: 0
+    };
+  }
+  function createReminderQueueItem(fields) {
+    return {
+      ...fields,
+      ...REMINDER_QUEUE_EXECUTION_DEFAULTS
+    };
+  }
+  function getQueueEmailForRow(row) {
+    const contact = normalizePersonContactFields(row);
+    return contact.email || null;
+  }
+  function compareReminderQueueItems(left, right) {
+    const leftUrgency = REMINDER_WINDOW_URGENCY[left.reminderWindow] ?? 99;
+    const rightUrgency = REMINDER_WINDOW_URGENCY[right.reminderWindow] ?? 99;
+    if (leftUrgency !== rightUrgency) {
+      return leftUrgency - rightUrgency;
+    }
+    const nameCompare = left.personName.localeCompare(right.personName, "en-GB");
+    if (nameCompare !== 0) {
+      return nameCompare;
+    }
+    return left.complianceType.localeCompare(right.complianceType, "en-GB");
+  }
+  function buildReminderQueueFromDryRun({
+    dryRunResult,
+    asOfDate,
+    rows,
+    settings = DEFAULT_REMINDER_SETTINGS
+  }) {
+    const resolvedAsOfDate = typeof asOfDate === "string" && asOfDate.trim() ? asOfDate.trim() : typeof dryRunResult?.asOfDate === "string" && dryRunResult.asOfDate.trim() ? dryRunResult.asOfDate.trim() : "";
+    const inputRows = Array.isArray(rows) ? rows : [];
+    const normalizedRows = inputRows.map(normalizeComplianceRow);
+    const ctx = createInsightsContext(resolvedAsOfDate || void 0, settings);
+    const items = [];
+    normalizedRows.forEach((row) => {
+      const reminderType = getActiveReminderType(row.expiryDate, ctx.settings, ctx);
+      if (!reminderType) {
+        return;
+      }
+      const reminderWindow = REMINDER_TYPE_TO_BUCKET2[reminderType] ?? reminderType;
+      const email = getQueueEmailForRow(row);
+      const emailMissing = email === null;
+      items.push(
+        createReminderQueueItem({
+          personName: row.name,
+          complianceType: row.complianceType,
+          expiryDate: row.expiryDate,
+          reminderWindow,
+          reminderType,
+          email,
+          emailMissing,
+          status: REMINDER_QUEUE_STATUS,
+          source: REMINDER_QUEUE_SOURCE,
+          asOfDate: resolvedAsOfDate
+        })
+      );
+    });
+    items.sort(compareReminderQueueItems);
+    const summary = {
+      total: items.length,
+      withEmail: 0,
+      missingEmail: 0,
+      byWindow: createEmptyWindowCounts()
+    };
+    items.forEach((item) => {
+      if (item.emailMissing) {
+        summary.missingEmail += 1;
+      } else {
+        summary.withEmail += 1;
+      }
+      if (Object.prototype.hasOwnProperty.call(summary.byWindow, item.reminderWindow)) {
+        summary.byWindow[item.reminderWindow] += 1;
+      }
+    });
+    return {
+      asOfDate: resolvedAsOfDate,
+      items,
+      summary
+    };
+  }
+
+  // js/app/automation/reminder-queue-ui.js
+  var REMINDER_QUEUE_PREVIEW_EMPTY_MESSAGE = "No reminder queue items for this scan.";
+  var REMINDER_QUEUE_MISSING_EMAIL_LABEL = "Missing email";
+  var REMINDER_QUEUE_PREVIEW_COLUMNS = [
+    { key: "personName", label: "Person name" },
+    { key: "complianceType", label: "Compliance type" },
+    { key: "expiryDate", label: "Expiry date" },
+    { key: "reminderWindow", label: "Reminder window" },
+    { key: "email", label: "Email" },
+    { key: "status", label: "Status" },
+    { key: "source", label: "Source" }
+  ];
+  var REMINDER_WINDOW_LABELS = {
+    "30-day": REMINDER_UI_LABELS[30],
+    "14-day": REMINDER_UI_LABELS[14],
+    "7-day": REMINDER_UI_LABELS[7],
+    expired: REMINDER_UI_LABELS.expired
+  };
+  function formatReminderQueueWindowLabel(reminderWindow) {
+    if (typeof reminderWindow !== "string" || !reminderWindow.trim()) {
+      return "\u2014";
+    }
+    return REMINDER_WINDOW_LABELS[reminderWindow] ?? reminderWindow;
+  }
+  function mapReminderQueueItemToPreviewRow(item, formatExpiryDate) {
+    const formatDate2 = typeof formatExpiryDate === "function" ? formatExpiryDate : (dateString) => dateString;
+    const emailMissing = item.emailMissing === true || item.email === null;
+    const email = emailMissing ? REMINDER_QUEUE_MISSING_EMAIL_LABEL : String(item.email || "").trim() || REMINDER_QUEUE_MISSING_EMAIL_LABEL;
+    return {
+      personName: item.personName || "\u2014",
+      complianceType: item.complianceType || "\u2014",
+      expiryDate: formatDate2(item.expiryDate),
+      reminderWindow: formatReminderQueueWindowLabel(item.reminderWindow),
+      email,
+      emailMissing,
+      status: item.status || REMINDER_QUEUE_STATUS,
+      source: item.source || REMINDER_QUEUE_SOURCE
+    };
+  }
+  function mapReminderQueueItemsToPreviewRows(items, formatExpiryDate) {
+    if (!Array.isArray(items)) {
+      return [];
+    }
+    return items.map((item) => mapReminderQueueItemToPreviewRow(item, formatExpiryDate));
+  }
+
+  // js/app/automation/reminder-queue-export.js
+  var REMINDER_QUEUE_EXPORT_EMAIL_MISSING_YES = "Yes";
+  var REMINDER_QUEUE_EXPORT_EMAIL_MISSING_NO = "No";
+  var REMINDER_QUEUE_EXPORT_COLUMNS = [
+    { key: "personName", label: "Person name" },
+    { key: "complianceType", label: "Compliance type" },
+    { key: "expiryDate", label: "Expiry date" },
+    { key: "reminderWindow", label: "Reminder window/type" },
+    { key: "email", label: "Email" },
+    { key: "emailMissing", label: "Email missing" },
+    { key: "status", label: "Status" },
+    { key: "source", label: "Source" },
+    { key: "asOfDate", label: "As of date" }
+  ];
+  function getReminderQueueExportFilename(asOfDate, generatedAt = /* @__PURE__ */ new Date()) {
+    const scanDate = typeof asOfDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(asOfDate.trim()) ? asOfDate.trim() : formatReminderQueueExportDate(generatedAt);
+    return `reminder-queue-preview-${scanDate}.csv`;
+  }
+  function formatReminderQueueExportDate(date = /* @__PURE__ */ new Date()) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }
+  function mapReminderQueueItemToExportRow(item, formatExpiryDate) {
+    const formatDate2 = typeof formatExpiryDate === "function" ? formatExpiryDate : (dateString) => dateString;
+    const emailMissing = item.emailMissing === true || item.email === null;
+    const email = emailMissing ? "" : String(item.email || "").trim();
+    return {
+      personName: item.personName || "",
+      complianceType: item.complianceType || "",
+      expiryDate: formatDate2(item.expiryDate),
+      reminderWindow: formatReminderQueueWindowLabel(item.reminderWindow),
+      email,
+      emailMissing: emailMissing ? REMINDER_QUEUE_EXPORT_EMAIL_MISSING_YES : REMINDER_QUEUE_EXPORT_EMAIL_MISSING_NO,
+      status: item.status || REMINDER_QUEUE_STATUS,
+      source: item.source || REMINDER_QUEUE_SOURCE,
+      asOfDate: item.asOfDate || ""
+    };
+  }
+  function buildReminderQueueExportCsv(queue, formatExpiryDate) {
+    const items = Array.isArray(queue?.items) ? queue.items : [];
+    const exportRows = items.map((item) => mapReminderQueueItemToExportRow(item, formatExpiryDate));
+    const headerRow = REMINDER_QUEUE_EXPORT_COLUMNS.map(
+      (column) => escapeCsvValue(column.label)
+    ).join(",");
+    const dataRows = exportRows.map(
+      (row) => REMINDER_QUEUE_EXPORT_COLUMNS.map((column) => escapeCsvValue(row[column.key] ?? "")).join(",")
+    );
+    return [headerRow, ...dataRows].join("\n");
+  }
+
   // app.js
   console.log(
     `Compliance Reminder System ${APP_VERSION} \u2014 app.js loaded (${DATA_BACKEND} data, ${AUTH_MODE} auth)`
@@ -26190,6 +26484,25 @@ ${suffix}`;
   var reminderPreviewDashboardCards = document.querySelectorAll(
     "[data-reminder-preview-dashboard]"
   );
+  var reminderQueuePreviewSection = document.getElementById("reminder-queue-preview-section");
+  var reminderQueuePreviewTotalCount = document.getElementById("reminder-queue-preview-total-count");
+  var reminderQueuePreviewMissingEmailCount = document.getElementById(
+    "reminder-queue-preview-missing-email-count"
+  );
+  var reminderQueuePreviewExpiredCount = document.getElementById(
+    "reminder-queue-preview-expired-count"
+  );
+  var reminderQueuePreview30Count = document.getElementById("reminder-queue-preview-30-count");
+  var reminderQueuePreview14Count = document.getElementById("reminder-queue-preview-14-count");
+  var reminderQueuePreview7Count = document.getElementById("reminder-queue-preview-7-count");
+  var reminderQueuePreviewMeta = document.getElementById("reminder-queue-preview-meta");
+  var reminderQueuePreviewEmpty = document.getElementById("reminder-queue-preview-empty");
+  var reminderQueuePreviewTableWrapper = document.getElementById(
+    "reminder-queue-preview-table-wrapper"
+  );
+  var reminderQueuePreviewTableHead = document.getElementById("reminder-queue-preview-table-head");
+  var reminderQueuePreviewTableBody = document.getElementById("reminder-queue-preview-table-body");
+  var exportReminderQueueCsvBtn = document.getElementById("export-reminder-queue-csv-btn");
   var automationRunAuditSection = document.getElementById("automation-run-audit-section");
   var automationRunAuditLocalHint = document.getElementById("automation-run-audit-local-hint");
   var automationRunAuditError = document.getElementById("automation-run-audit-error");
@@ -30124,6 +30437,78 @@ This cannot be undone.`
       reminderPreviewDashboardTotalCount.textContent = metrics[REMINDER_PREVIEW_DASHBOARD_TYPES.TOTAL];
     }
   }
+  function buildReminderQueuePreviewData() {
+    const rows = getAllComplianceRows();
+    const dryRunResult = computeAutomationDryRun(rows, reminderSettings);
+    return buildReminderQueueFromDryRun({
+      dryRunResult,
+      asOfDate: dryRunResult.asOfDate,
+      rows,
+      settings: reminderSettings
+    });
+  }
+  function renderReminderQueuePreview() {
+    if (!reminderQueuePreviewSection || !reminderQueuePreviewTotalCount || !reminderQueuePreviewMissingEmailCount || !reminderQueuePreviewExpiredCount || !reminderQueuePreview30Count || !reminderQueuePreview14Count || !reminderQueuePreview7Count || !reminderQueuePreviewEmpty || !reminderQueuePreviewTableWrapper || !reminderQueuePreviewTableHead || !reminderQueuePreviewTableBody) {
+      return;
+    }
+    const queue = buildReminderQueuePreviewData();
+    reminderQueuePreviewTotalCount.textContent = String(queue.summary.total);
+    reminderQueuePreviewMissingEmailCount.textContent = String(queue.summary.missingEmail);
+    reminderQueuePreviewExpiredCount.textContent = String(queue.summary.byWindow.expired);
+    reminderQueuePreview30Count.textContent = String(queue.summary.byWindow["30-day"]);
+    reminderQueuePreview14Count.textContent = String(queue.summary.byWindow["14-day"]);
+    reminderQueuePreview7Count.textContent = String(queue.summary.byWindow["7-day"]);
+    if (reminderQueuePreviewMeta) {
+      const scanDateLabel = queue.asOfDate && !Number.isNaN(parseDateAtMidnight(queue.asOfDate).getTime()) ? formatDate(queue.asOfDate) : "today";
+      reminderQueuePreviewMeta.textContent = `Scan as of ${scanDateLabel} \xB7 ${queue.summary.total} queued`;
+    }
+    reminderQueuePreviewEmpty.classList.add("hidden");
+    reminderQueuePreviewTableWrapper.classList.add("hidden");
+    reminderQueuePreviewTableHead.innerHTML = "";
+    reminderQueuePreviewTableBody.innerHTML = "";
+    if (exportReminderQueueCsvBtn) {
+      exportReminderQueueCsvBtn.disabled = queue.items.length === 0;
+    }
+    if (queue.items.length === 0) {
+      reminderQueuePreviewEmpty.classList.remove("hidden");
+      return;
+    }
+    const previewRows = mapReminderQueueItemsToPreviewRows(queue.items, formatDate);
+    reminderQueuePreviewTableWrapper.classList.remove("hidden");
+    reminderQueuePreviewTableHead.innerHTML = `<tr>${REMINDER_QUEUE_PREVIEW_COLUMNS.map(
+      (column) => `<th scope="col">${escapeHtml(column.label)}</th>`
+    ).join("")}</tr>`;
+    reminderQueuePreviewTableBody.innerHTML = previewRows.map(
+      (row) => `
+        <tr class="reminder-queue-preview-row">
+          <td>${escapeHtml(row.personName)}</td>
+          <td>${escapeHtml(row.complianceType)}</td>
+          <td>${escapeHtml(row.expiryDate)}</td>
+          <td>${escapeHtml(row.reminderWindow)}</td>
+          <td class="${row.emailMissing ? "reminder-queue-preview-email-missing" : ""}">${escapeHtml(row.email)}</td>
+          <td>${escapeHtml(row.status)}</td>
+          <td>${escapeHtml(row.source)}</td>
+        </tr>`
+    ).join("");
+  }
+  function exportReminderQueueCsv() {
+    const queue = buildReminderQueuePreviewData();
+    if (queue.items.length === 0) {
+      showMessage(appMessage, REMINDER_QUEUE_PREVIEW_EMPTY_MESSAGE, "error");
+      return;
+    }
+    const generatedAt = /* @__PURE__ */ new Date();
+    const csvContent = buildReminderQueueExportCsv(queue, formatDate);
+    downloadFile(
+      csvContent,
+      getReminderQueueExportFilename(queue.asOfDate, generatedAt),
+      "text/csv"
+    );
+    showMessage(appMessage, "Reminder queue preview CSV downloaded.", "success");
+  }
+  function setupReminderQueuePreviewListeners() {
+    exportReminderQueueCsvBtn?.addEventListener("click", exportReminderQueueCsv);
+  }
   function renderReminderPreviewDashboardPreview(report) {
     if (!reminderPreviewDashboardPreview || !reminderPreviewDashboardPreviewTitle || !reminderPreviewDashboardPreviewMeta || !reminderPreviewDashboardTableHead || !reminderPreviewDashboardTableBody) {
       return;
@@ -30641,6 +31026,7 @@ This cannot be undone.`
     await saveReminderSettings();
     renderReminders();
     renderReminderPreviewDashboardCards();
+    renderReminderQueuePreview();
     refreshActiveReminderPreviewDashboardPreview();
   }
   function getActiveReminderDays() {
@@ -31435,6 +31821,7 @@ ${auditLine}` : auditLine;
     dashboard90Count.textContent = countExpiringWithinDays(90);
     renderReminders();
     renderReminderPreviewDashboardCards();
+    renderReminderQueuePreview();
     updateFilterActiveState();
   }
   function renderReminders() {
@@ -33828,6 +34215,7 @@ Your current data will be overwritten. Continue?`
     setupVisualInsightsListeners();
     setupActionDashboardListeners();
     setupReminderPreviewDashboardListeners();
+    setupReminderQueuePreviewListeners();
     setupAutomationRunAuditListeners();
     setupRecordWorkspaceListeners();
     setupReportListeners();

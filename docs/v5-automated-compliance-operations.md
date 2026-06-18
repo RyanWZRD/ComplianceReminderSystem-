@@ -3,8 +3,8 @@
 **Theme:** Move from *knowing* what needs attention (V4 Compliance Insights) to *acting on it automatically* — scheduled reminders, orchestrated actions, escalations, and auditable operations.
 
 **Target:** v5.0.0 (major release)  
-**Current alpha:** v5.0.0-alpha.3 — V5-0 Automation Platform Foundation (see release-readiness note below)  
-**Prior alpha:** v5.0.0-alpha.2 — V5-1A Contact Management + V5-1B Reminder Template Preview (see [`docs/v5-0-0-alpha-2-release-notes.md`](v5-0-0-alpha-2-release-notes.md))  
+**Current alpha:** v5.0.0-alpha.4 — V5-1 Reminder Queue Foundation (see release-readiness note below)  
+**Prior alpha:** v5.0.0-alpha.3 — V5-0 Automation Platform Foundation; v5.0.0-alpha.2 — V5-1A + V5-1B (see [`docs/v5-0-0-alpha-2-release-notes.md`](v5-0-0-alpha-2-release-notes.md))  
 **Prerequisites:** v4.0.1 GA, v3.1.0 cloud follow-on (evidence Storage, restore/bulk ops, production cloud-writes policy)  
 **Date:** Planned — post v4.0.1 sign-off (June 2026+)
 
@@ -89,7 +89,7 @@ V5 adds a **server-side automation layer** on top of the existing RPC-only write
 
 ## Release slices
 
-Slices are ordered **V5-1A (contact foundation) → V5-1B (preview) → V5-0 → V5-1 automation → V5-2 → V5-4**. Contact Management shipped as **v5.0.0-alpha.1**; Reminder Template Preview as **v5.0.0-alpha.2**; automation platform foundation as **v5.0.0-alpha.3**; live automation delivery follows with **V5-1**.
+Slices are ordered **V5-1A (contact foundation) → V5-1B (preview) → V5-0 → V5-1 automation → V5-2 → V5-4**. Contact Management shipped as **v5.0.0-alpha.1**; Reminder Template Preview as **v5.0.0-alpha.2**; automation platform foundation as **v5.0.0-alpha.3**; reminder queue foundation as **v5.0.0-alpha.4**; live reminder delivery follows in subsequent V5-1 slices.
 
 ### V5-1A — Contact Management · **COMPLETE (alpha)**
 
@@ -236,11 +236,57 @@ Read-only **Automation Audit** dashboard section loads `automation_runs` for the
 
 ---
 
-### V5-1 — Automated reminders & digests
+### V5-1 — Automated reminders & digests · **FOUNDATION COMPLETE (alpha)**
 
 **Goal:** Replace manual “who needs a reminder today?” with scheduled identification and delivery.
 
-**Prerequisite slices:** V5-1A Contact Management (shipped), V5-1B Reminder Template Preview (planned), V5-0 automation platform.
+**Prerequisite slices:** V5-1A Contact Management (shipped), V5-1B Reminder Template Preview (shipped), V5-0 automation platform (shipped).
+
+**Status:** Foundation complete — application version **v5.0.0-alpha.4**. Phases 1–4 implementation plus Phase 5 release-readiness gate. No live email sending.
+
+**Release-readiness note (v5.0.0-alpha.4):**
+
+- Queue generation complete (`buildReminderQueueFromDryRun` — in-memory from dry-run candidates)
+- Queue preview UI complete (read-only Reminder Queue Preview dashboard section)
+- Queue CSV export complete (`buildReminderQueueExportCsv` — manual review/chasing only)
+- Queue verification orchestrator complete (`npm run verify-reminder-queue-foundation`)
+- **No live email sending**
+- **No mark-as-sent automation**
+- **No compliance/action/history mutation**
+
+**Implementation phases (incremental):**
+
+| Phase | Deliverable | Status |
+|-------|-------------|--------|
+| 1 | Reminder queue foundation (`js/app/automation/reminder-queue.js`) | **COMPLETE** |
+| 2 | Reminder queue preview UI (read-only dashboard section) | **COMPLETE** |
+| 3 | Reminder queue preview CSV export (`js/app/automation/reminder-queue-export.js`) | **COMPLETE** |
+| 4 | Foundation verification orchestrator (`scripts/verify-reminder-queue-foundation.mjs`) | **COMPLETE** |
+| 5 | Release readiness / alpha tag prep (`v5.0.0-alpha.4`) | **COMPLETE** |
+
+**Release candidate:** **v5.0.0-alpha.4**
+
+**Release verification:** `npm run build` · `npm run verify-reminder-queue-foundation`
+
+**Next slice:** template/digest preparation or controlled delivery planning
+
+**Phase 1 reminder queue foundation:**
+
+`buildReminderQueueFromDryRun({ dryRunResult, asOfDate, rows, settings })` converts dry-run reminder candidates into in-memory queue items with person name, compliance type, expiry date, reminder window/type, email (or null), `status: "queued"`, `source: "dry_run_candidate"`, and execution fields explicitly false/null (`sent`, `delivered`, `markedSent`, timestamps, `failed`, `failureReason`). Missing-email candidates are still queued and flagged with `emailMissing: true`. **Queue-only** — no email delivery, mark-sent, compliance/action mutation, history writes, or live automation execution.
+
+**Phase 2 reminder queue preview UI:**
+
+Read-only **Reminder Queue Preview** card on the dashboard uses `computeAutomationDryRun` + `buildReminderQueueFromDryRun` over the current compliance dataset. Shows person name, compliance type, expiry date, reminder window/type, email or “Missing email”, `status: queued`, `source: dry_run_candidate`, plus summary counts (total queued, missing email, expired, 30/14/7-day). Empty state: “No reminder queue items for this scan.” Safety note: “Preview only — no reminders are sent.” **Preview-only** — no send button, run automation button, mark-sent control, or execution handler.
+
+**Phase 3 reminder queue CSV export:**
+
+**Export queue CSV** downloads the current preview rows for manual review/chasing. Columns: person name, compliance type, expiry date, reminder window/type, email, email missing (Yes/No), status, source, as of date. CSV escaping handles commas, quotes, line breaks, and missing values. Export button is disabled when the queue is empty; clicking export with no rows shows the same friendly empty message. **Export-only** — no email delivery, mark-sent, or compliance/action/history mutation.
+
+**Phase 4 reminder queue foundation orchestrator:**
+
+`npm run verify-reminder-queue-foundation` runs `verify-automation-v5-foundation`, then V5-1 phases 1–3 verification scripts in order (queue module, preview UI, CSV export). Stops on first failure. Verification-only — no reminder/action/email execution.
+
+**Verification:** `npm run verify-reminder-queue-foundation` (master gate); individual phase scripts remain available for targeted checks (no Supabase).
 
 | ID | Deliverable | Notes |
 |----|-------------|-------|
@@ -401,6 +447,10 @@ Extend the existing pattern from V3/V4:
 | `npm run verify-automation-dry-run-logging` | V5-0 Phase 6 — dry-run audit logging only, no execution |
 | `npm run verify-automation-run-ui` | V5-0 Phase 7 — read-only automation audit UI, no execution hooks |
 | `npm run verify-automation-v5-foundation` | V5-0 Phase 8 — orchestrator; runs phases 1–7 in order, stop on first failure |
+| `npm run verify-reminder-queue` | V5-1 Phase 1 — in-memory reminder queue from dry-run, no delivery hooks |
+| `npm run verify-reminder-queue-ui` | V5-1 Phase 2 — read-only reminder queue preview UI, no execution hooks |
+| `npm run verify-reminder-queue-export` | V5-1 Phase 3 — reminder queue preview CSV export, no execution or mutation hooks |
+| `npm run verify-reminder-queue-foundation` | V5-1 Phase 4 — orchestrator; runs V5-0 foundation + phases 1–3 in order, stop on first failure |
 | `npm run verify-automation-schema` | V5-0 migrations + RPC |
 | `npm run verify-automation-reminders` | V5-1 queue + mark sent |
 | `npm run verify-automation-actions` | V5-2 policy apply |
@@ -498,7 +548,8 @@ Secrets (SMTP API keys) live in Supabase Edge Function secrets only — never in
 | V5-1A | **COMPLETE** | Contact Management — email fields, insights, drilldown-to-edit; **v5.0.0-alpha.1** |
 | V5-1B | **COMPLETE** | Reminder Template Preview — template, UI, copy/export, dashboard; **v5.0.0-alpha.2** |
 | V5-0 | **COMPLETE** | Automation platform foundation — schema, RPCs, dry-run scan + audit logging + audit UI; **v5.0.0-alpha.3** |
-| V5-1 (automation) | **PLANNED** | Automated reminders & digests (post V5-0) |
+| V5-1 (foundation) | **COMPLETE** | Reminder queue foundation — queue, preview UI, CSV export, orchestrator; **v5.0.0-alpha.4** |
+| V5-1 (delivery) | **PLANNED** | Template/digest preparation, controlled delivery, live send |
 | V5-2 | **PLANNED** | Automated action orchestration |
 | V5-3 | **PLANNED** | Escalation & operational closure |
 | V5-4 | **PLANNED** | Policy engine GA & operations pack |

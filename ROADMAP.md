@@ -6,6 +6,33 @@ A local-first safeguarding compliance tracker. Runs in the browser with localSto
 
 # Current Release
 
+## v5.0.0-alpha.4 — V5-1 Reminder Queue Foundation
+
+**Date:** June 2026
+
+### Summary
+
+Fourth v5 alpha checkpoint: **V5-1** reminder queue foundation (in-memory queue from dry-run, read-only preview UI, CSV export, orchestrated verification). Builds on **v5.0.0-alpha.3** (V5-0 automation platform). No live email sending, mark-as-sent automation, compliance/action/history mutation, or cloud mutation default changes.
+
+**Documentation:**
+
+- [`docs/v5-automated-compliance-operations.md`](docs/v5-automated-compliance-operations.md) — V5-1 detail and release-readiness note
+- [`docs/v5-automated-compliance-operations.md`](docs/v5-automated-compliance-operations.md#v5-0--automation-platform-foundation--complete-alpha) — prior V5-0 alpha.3 release gate
+
+**Release verification (required before tag):**
+
+- `npm run build` — rebuild `app.bundle.js` after version bump
+- `npm run verify-reminder-queue-foundation` — V5-0 foundation + V5-1 phases 1–4 orchestrator (no live execution)
+
+Application version: **v5.0.0-alpha.4**
+
+**Next slice:** template/digest preparation or controlled delivery planning
+
+Status: Release candidate (V5-1 Phase 5)  
+Tag: **v5.0.0-alpha.4** — not created unless explicitly requested
+
+---
+
 ## v5.0.0-alpha.3 — V5-0 Automation Platform Foundation
 
 **Date:** June 2026
@@ -24,12 +51,7 @@ Third v5 alpha checkpoint: **V5-0** automation platform foundation (schema, poli
 - `npm run build` — rebuild `app.bundle.js` after version bump
 - `npm run verify-automation-v5-foundation` — V5-0 phases 1–8 orchestrator (no live execution)
 
-Application version: **v5.0.0-alpha.3**
-
-**Next slice:** V5-1 Automated reminders & digests
-
-Status: Release candidate (V5-0 Phase 9)  
-Tag: **v5.0.0-alpha.3** — not created unless explicitly requested
+Application version: **v5.0.0-alpha.3** (superseded by alpha.4)
 
 ---
 
@@ -150,13 +172,27 @@ Tag: v3.0.0
 
 # Next Planned Release
 
-## V5-1 — Automated reminders & digests
+## V5-1 — Automated reminders & digests · Foundation complete
 
-Scheduled reminder identification, notification queue, and delivery. Prerequisite: **V5-0** automation platform foundation (**v5.0.0-alpha.3**).
+Reminder queue foundation shipped as **v5.0.0-alpha.4**. Next work: template/digest preparation or controlled delivery planning. Prerequisite **V5-0** automation platform foundation (**v5.0.0-alpha.3**) satisfied.
 
 **Documentation:** [`docs/v5-automated-compliance-operations.md`](docs/v5-automated-compliance-operations.md) (V5-1 section)
 
-**Prior alpha:** v5.0.0-alpha.3 — V5-0 Phases 1–8 complete; see [`docs/v5-automated-compliance-operations.md`](docs/v5-automated-compliance-operations.md#v5-0--automation-platform-foundation)
+**Prior alpha:** v5.0.0-alpha.4 — V5-1 Phases 1–5 complete; see [`docs/v5-automated-compliance-operations.md`](docs/v5-automated-compliance-operations.md#v5-1--automated-reminders--digests)
+
+| Phase | Deliverable | Status |
+|-------|-------------|--------|
+| 1 | Reminder queue foundation (`buildReminderQueueFromDryRun`) | **Complete** |
+| 2 | Reminder queue preview UI (read-only dashboard section) | **Complete** |
+| 3 | Reminder queue preview CSV export (`buildReminderQueueExportCsv`) | **Complete** |
+| 4 | Foundation verification orchestrator (`verify-reminder-queue-foundation`) | **Complete** |
+| 5 | Release readiness / alpha tag prep (`v5.0.0-alpha.4`) | **Complete** |
+
+**Release candidate:** **v5.0.0-alpha.4**
+
+**Verification:** `npm run build` · `npm run verify-reminder-queue-foundation` (runs V5-0 foundation + phases 1–3 in order; stop on first failure) · individual phase scripts remain available (no Supabase)
+
+**Next slice:** template/digest preparation or controlled delivery planning
 
 ---
 
@@ -200,13 +236,13 @@ Scheduled compliance operations: reminder delivery, action orchestration, escala
 - `npm run verify-contact-management` — V5-1A release gate (no Supabase)
 - `npm run verify:phase2` — cloud regression including contact RPC smokes
 
-**Next slice:** V5-1 Automated reminders & digests
+**Next slice:** template/digest preparation or controlled delivery planning
 
 ## v4.0.1 — Compliance Insights GA · RC hardening complete
 
 Read-only compliance insights on the dashboard: health score, risk summary, renewal forecast, and rule-based recommendations. See [`docs/compliance-insights.md`](docs/compliance-insights.md) and [Version Roadmap — v4](#v4--compliance-insights-release-candidate).
 
-Application version: **v5.0.0-alpha.3** in source (V5-0 automation foundation alpha); v4 GA target **v4.0.1**.
+Application version: **v5.0.0-alpha.4** in source (V5-1 reminder queue foundation alpha); v4 GA target **v4.0.1**.
 
 **RC hardening summary (June 2026):**
 
@@ -810,7 +846,7 @@ V4 answers *what needs attention*. V5 **acts on it automatically** once the auto
 | V5-1A | **COMPLETE** | Contact Management — email fields, Contact Readiness insights, drilldown-to-edit; **v5.0.0-alpha.1** |
 | V5-1B | **COMPLETE** | Reminder Template Preview — template, preview UI, copy/export, dashboard; **v5.0.0-alpha.2** |
 | V5-0 | **COMPLETE** | Automation platform foundation — schema, RPCs, dry-run scan + audit logging + audit UI; **v5.0.0-alpha.3** |
-| V5-1 | **PLANNED** | Automated reminders & digests — queue, email delivery, mark sent on delivery |
+| V5-1 | **COMPLETE** | Reminder queue foundation — queue, preview UI, CSV export, orchestrator; **v5.0.0-alpha.4** |
 | V5-2 | **PLANNED** | Automated action orchestration — policies map V4 recommendations → `add_default_actions` |
 | V5-3 | **PLANNED** | Escalation & operational closure — missing follow-up → admin notify + audit |
 | V5-4 | **PLANNED** | Policy engine GA — templates, dry-run, operations export, `verify:automation` |
@@ -819,7 +855,7 @@ V4 answers *what needs attention*. V5 **acts on it automatically** once the auto
 
 **Non-goals:** AI/LLM, third-party DBS APIs, mobile apps, visual workflow builder.
 
-**Alpha tag in source:** v5.0.0-alpha.3  
+**Alpha tag in source:** v5.0.0-alpha.4  
 **GA tag target:** `v5.0.0`
 
 ---

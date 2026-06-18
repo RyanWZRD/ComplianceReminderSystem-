@@ -65,6 +65,14 @@
     "verify-reminder-digest-builder": "node scripts/verify-reminder-digest-builder.mjs",
     "verify-reminder-digest-preview-ui": "node scripts/verify-reminder-digest-preview-ui.mjs",
     "verify-reminder-template-digest-foundation": "node scripts/verify-reminder-template-digest-foundation.mjs",
+    "verify-delivery-architecture": "node scripts/verify-delivery-architecture.mjs",
+    "verify-reminder-delivery-record-builder": "node scripts/verify-reminder-delivery-record-builder.mjs",
+    "verify-reminder-delivery-log-schema": "node scripts/verify-reminder-delivery-log-schema.mjs",
+    "verify-reminder-delivery-log-rpcs": "node scripts/verify-reminder-delivery-log-rpcs.mjs",
+    "verify-reminder-delivery-state-machine": "node scripts/verify-reminder-delivery-state-machine.mjs",
+    "verify-mock-email-provider": "node scripts/verify-mock-email-provider.mjs",
+    "verify-mock-delivery-executor": "node scripts/verify-mock-delivery-executor.mjs",
+    "verify-delivery-foundation": "node scripts/verify-delivery-foundation.mjs",
     "verify:phase2": "node scripts/verify-phase2.mjs"
   },
   "dependencies": {

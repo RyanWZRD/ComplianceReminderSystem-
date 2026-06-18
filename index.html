@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Compliance Reminder System v6.0.0-alpha.7</title>
-  <link rel="stylesheet" href="styles.css?v=v6.0.0-alpha.7">
+  <title>Compliance Reminder System v6.0.0-beta.1</title>
+  <link rel="stylesheet" href="styles.css?v=v6.0.0-beta.1">
 </head>
 <body>
   <section id="auth-login-screen" class="auth-login-screen hidden" aria-labelledby="auth-login-title">
@@ -33,7 +33,7 @@
     <header>
       <h1>Compliance Reminder System</h1>
       <div class="header-badges">
-        <p class="version-badge">v6.0.0-alpha.7</p>
+        <p class="version-badge">v6.0.0-beta.1</p>
         <p id="data-backend-badge" class="data-backend-badge">Local storage mode</p>
         <p id="auth-mode-badge" class="auth-mode-badge hidden">Local auth</p>
       </div>
@@ -369,6 +369,62 @@
           <thead id="delivery-operations-log-table-head"></thead>
           <tbody id="delivery-operations-log-table-body"></tbody>
         </table>
+      </div>
+    </section>
+
+    <section class="card manual-delivery-test-section hidden" id="manual-delivery-test-section">
+      <h2>Manual Delivery Test</h2>
+      <p id="manual-delivery-test-safety-note" class="settings-hint manual-delivery-test-safety-note">
+        Manual test execution only. No scheduling is enabled.
+      </p>
+      <div class="manual-delivery-test-summary">
+        <div class="manual-delivery-test-summary-card manual-delivery-test-total">
+          <p class="summary-label">Total queued</p>
+          <p id="manual-delivery-test-total-count" class="summary-number">0</p>
+        </div>
+        <div class="manual-delivery-test-summary-card manual-delivery-test-missing-email">
+          <p class="summary-label">Missing email</p>
+          <p id="manual-delivery-test-missing-email-count" class="summary-number">0</p>
+        </div>
+        <div class="manual-delivery-test-summary-card manual-delivery-test-mode">
+          <p class="summary-label">Delivery mode</p>
+          <p id="manual-delivery-test-mode-value" class="summary-number manual-delivery-test-mode-value">disabled</p>
+        </div>
+      </div>
+      <p id="manual-delivery-test-provider-hint" class="settings-hint manual-delivery-test-provider-hint hidden">
+        Email provider is disabled. Configure provider settings before running a delivery test.
+      </p>
+      <p id="manual-delivery-test-loading" class="settings-hint manual-delivery-test-loading hidden" role="status">
+        Running delivery test…
+      </p>
+      <p id="manual-delivery-test-error" class="manual-delivery-test-error hidden" role="alert"></p>
+      <div id="manual-delivery-test-result" class="manual-delivery-test-result hidden" role="status">
+        <h3 class="manual-delivery-test-result-title">Last test result</h3>
+        <div class="manual-delivery-test-result-grid">
+          <div class="manual-delivery-test-result-card">
+            <p class="summary-label">Attempted</p>
+            <p id="manual-delivery-test-result-attempted" class="summary-number">0</p>
+          </div>
+          <div class="manual-delivery-test-result-card">
+            <p class="summary-label">Delivered</p>
+            <p id="manual-delivery-test-result-delivered" class="summary-number">0</p>
+          </div>
+          <div class="manual-delivery-test-result-card">
+            <p class="summary-label">Failed</p>
+            <p id="manual-delivery-test-result-failed" class="summary-number">0</p>
+          </div>
+          <div class="manual-delivery-test-result-card">
+            <p class="summary-label">Persisted</p>
+            <p id="manual-delivery-test-result-persisted" class="summary-number">0</p>
+          </div>
+        </div>
+      </div>
+      <div class="manual-delivery-test-actions no-print">
+        <button
+          type="button"
+          id="manual-delivery-test-run-btn"
+          class="quick-action-btn manual-delivery-test-run-btn"
+        >Run Delivery Test</button>
       </div>
     </section>
 
@@ -1266,7 +1322,7 @@
   </div>
   </div>
 
-  <script src="app.bundle.js?v=v6.0.0-alpha.7"></script>
+  <script src="app.bundle.js?v=v6.0.0-beta.1"></script>
   <script>
     window.addEventListener("load", function () {
       window.setTimeout(function () {

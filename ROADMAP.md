@@ -6,6 +6,148 @@ A local-first safeguarding compliance tracker. Runs in the browser with localSto
 
 # Current Release
 
+## v6.0.0-beta.1 — V6 Manual Delivery E2E Release Readiness
+
+**Date:** June 2026
+
+### Summary
+
+First v6 beta checkpoint: **V6** manual delivery E2E release readiness on top of **v6.0.0-alpha.8** manual delivery foundation. Admin-only **Manual Delivery Test** UI and E2E verification gate (`verify-manual-delivery-e2e-foundation`) complete. **No scheduled execution, automatic execution, or mark-as-sent automation yet.**
+
+**Documentation:**
+
+- [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md) — V6 phases 1–35 detail and release-readiness note
+- [`docs/v6-email-provider-configuration.md`](docs/v6-email-provider-configuration.md) — cross-reference
+- [`docs/v5-automated-compliance-operations.md`](docs/v5-automated-compliance-operations.md#v6--reminder-delivery--phase-35-complete) — V6 manual delivery E2E release readiness summary
+
+**Release verification (required before tag):**
+
+- `npm run build` — rebuild `app.bundle.js` after version bump
+- `npm run verify-manual-delivery-e2e-foundation` — full manual delivery E2E foundation stack
+
+Application version: **v6.0.0-beta.1**
+
+Status: Release candidate (V6 Phase 35)  
+Tag: **v6.0.0-beta.1** — not created unless explicitly requested
+
+---
+
+## V6 Phase 34 — Manual Delivery UI End-to-End Verification Gate
+
+**Date:** June 2026
+
+### Summary
+
+V6 Phase 34 adds `verify-manual-delivery-e2e-foundation` — one orchestrator command proving the manual delivery UI, provider foundation, delivery pipeline, and operations log work together safely. Includes static secret-safety checks. Verification only — no scheduled execution, automatic execution, mark-as-sent automation, or compliance/history mutation.
+
+**Documentation:**
+
+- [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md) — Phase 34 E2E foundation orchestrator
+- [`docs/v6-email-provider-configuration.md`](docs/v6-email-provider-configuration.md) — cross-reference
+- [`docs/v5-automated-compliance-operations.md`](docs/v5-automated-compliance-operations.md#v6--reminder-delivery--phase-34-complete) — Phase 34 summary
+
+**Verification (required):**
+
+- `npm run verify-manual-delivery-e2e-foundation` — full manual delivery E2E foundation stack
+
+**Next slice:** V6 Phase 35 — Manual delivery E2E release readiness (planned)
+
+---
+
+## v6.0.0-alpha.8 — V6 Manual Delivery Foundation Release Readiness
+
+**Date:** June 2026
+
+### Summary
+
+V6 Phase 33 adds the **Manual Delivery Test** card — admin-only, cloud-mode manual execution UI that invokes `runManualDeliveryPipeline` via the current reminder preview queue. First user-visible execution path. **No scheduling, automatic execution, or mark-as-sent automation.**
+
+**Documentation:**
+
+- [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md) — Phase 33 admin manual delivery UI
+- [`docs/v6-email-provider-configuration.md`](docs/v6-email-provider-configuration.md) — cross-reference
+- [`docs/v5-automated-compliance-operations.md`](docs/v5-automated-compliance-operations.md#v6--reminder-delivery--phase-33-complete) — Phase 33 summary
+
+**Verification (required):**
+
+- `npm run verify-manual-delivery-ui` — admin-only card, confirmation, manual runner wiring, no forbidden hooks
+- `npm run verify-manual-delivery-foundation` — underlying stack still safe
+
+**Next slice:** V6 Phase 34 — Manual delivery UI end-to-end verification gate (planned)
+
+---
+
+## v6.0.0-alpha.8 — V6 Manual Delivery Foundation Release Readiness
+
+**Date:** June 2026
+
+### Summary
+
+Eighth v6 alpha checkpoint: **V6** manual delivery foundation release readiness on top of **v6.0.0-alpha.7** delivery pipeline foundation. Manual delivery runner (`runManualDeliveryPipeline`) and foundation verification (`verify-manual-delivery-foundation`) complete at service level. **No UI send button, scheduled execution, mark-as-sent automation, or `app.js` execution wiring.**
+
+**Documentation:**
+
+- [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md) — V6 phases 1–32 detail and release-readiness note
+- [`docs/v6-email-provider-configuration.md`](docs/v6-email-provider-configuration.md) — cross-reference
+- [`docs/v5-automated-compliance-operations.md`](docs/v5-automated-compliance-operations.md#v6--reminder-delivery--phase-32-complete) — V6 manual delivery foundation release readiness summary
+
+**Release verification (required before tag):**
+
+- `npm run build` — rebuild `app.bundle.js` after version bump
+- `npm run verify-manual-delivery-foundation` — full manual delivery stack at service level
+
+Application version: **v6.0.0-alpha.8**
+
+Status: Release candidate (V6 Phase 32)  
+Tag: **v6.0.0-alpha.8** — not created unless explicitly requested
+
+---
+
+## V6 Phase 31 — Manual Delivery Runner Verification Orchestrator
+
+**Date:** June 2026
+
+### Summary
+
+V6 Phase 31 adds `verify-manual-delivery-foundation` — one orchestrator command that proves the manual delivery runner stack works end-to-end at service level (delivery pipeline foundation + manual runner). Verification only — no app behaviour changes, UI send button, scheduled execution, or mark-as-sent automation.
+
+**Documentation:**
+
+- [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md) — Phase 31 manual delivery foundation orchestrator
+- [`docs/v6-email-provider-configuration.md`](docs/v6-email-provider-configuration.md) — cross-reference
+- [`docs/v5-automated-compliance-operations.md`](docs/v5-automated-compliance-operations.md#v6--reminder-delivery--phase-31-complete) — Phase 31 summary
+
+**Verification (required):**
+
+- `npm run verify-manual-delivery-foundation` — full manual delivery stack at service level
+
+**Next slice:** V6 Phase 32 — Manual delivery foundation release readiness (planned)
+
+---
+
+## V6 Phase 30 — Manual Delivery Pipeline Runner
+
+**Date:** June 2026
+
+### Summary
+
+V6 Phase 30 adds `runManualDeliveryPipeline` in `manual-delivery-runner.js` — the first manually invoked end-to-end delivery path: `queueItems` → `buildReminderDeliveryRecords` → `runDeliveryPipeline`. Service layer only — no scheduler, recurring automation, automatic delivery, `app.js` wiring, or mark-as-sent automation.
+
+**Documentation:**
+
+- [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md) — Phase 30 manual delivery pipeline runner
+- [`docs/v6-email-provider-configuration.md`](docs/v6-email-provider-configuration.md) — cross-reference
+- [`docs/v5-automated-compliance-operations.md`](docs/v5-automated-compliance-operations.md#v6--reminder-delivery--phase-30-complete) — Phase 30 summary
+
+**Verification (required):**
+
+- `npm run verify-manual-delivery-runner` — queue → records → pipeline, immutable queue items, no scheduler/app/mark-sent hooks
+- `npm run verify-delivery-pipeline-foundation` — underlying stack still safe
+
+**Next slice:** V6 Phase 31 — Manual delivery runner verification orchestrator (planned)
+
+---
+
 ## v6.0.0-alpha.7 — V6 Delivery Pipeline Foundation Release Readiness
 
 **Date:** June 2026
@@ -26,8 +168,6 @@ Seventh v6 alpha checkpoint: **V6** delivery pipeline foundation release readine
 - `npm run verify-delivery-pipeline-foundation` — full delivery pipeline stack at service level
 
 Application version: **v6.0.0-alpha.7**
-
-**Next slice:** V6 Phase 30 — Worker delivery execution wiring — see [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md) · [`docs/v6-email-provider-configuration.md`](docs/v6-email-provider-configuration.md)
 
 Status: Release candidate (V6 Phase 29)  
 Tag: **v6.0.0-alpha.7** — not created unless explicitly requested
@@ -75,7 +215,7 @@ V6 Phase 27 adds `runDeliveryPipeline` in `delivery-pipeline-service.js` — com
 - `npm run verify-delivery-pipeline-service` — pipeline composition, summaries, partial persistence failures, immutable inputs, no app/UI/schedule wiring
 - `npm run verify-delivery-worker` · `npm run verify-delivery-worker-persistence` · `npm run verify-delivery-log-persistence-service` — underlying layers still safe
 
-**Next slice:** V6 Phase 28 — Worker delivery execution wiring (planned)
+**Next slice:** V6 Phase 28 — Delivery pipeline foundation verification (planned)
 
 ---
 
@@ -639,6 +779,90 @@ Tag: v3.0.0
 
 # Next Planned Release
 
+## V6.0.0 Phase 35 — Manual Delivery E2E Release Readiness · Complete
+
+**Date:** June 2026
+
+Documentation and version bump (`v6.0.0-beta.1`) confirming the admin-only manual delivery UI and E2E safety gate are safe to tag before mark-as-sent automation. V6 Phases 1–35 complete. Gates: `npm run build`, `npm run verify-manual-delivery-e2e-foundation`.
+
+**Documentation:** [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md) · [`docs/v6-email-provider-configuration.md`](docs/v6-email-provider-configuration.md) · [`docs/v5-automated-compliance-operations.md`](docs/v5-automated-compliance-operations.md#v6--reminder-delivery--phase-35-complete)
+
+**Release candidate:** **v6.0.0-beta.1**
+
+**Next slice:** V6 Phase 36 — Mark-as-sent on confirmed delivery (policy-gated)
+
+---
+
+## V6.0.0 Phase 34 — Manual Delivery UI End-to-End Verification Gate · Complete
+
+**Date:** June 2026
+
+`verify-manual-delivery-e2e-foundation` runs in order: `verify-manual-delivery-foundation`, `verify-resend-provider-foundation`, `verify-delivery-operations-log-ui`, `verify-manual-delivery-ui`. Static safety checks for committed secrets and admin/cloud-write gating. Stops on first failure.
+
+**Documentation:** [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md) · [`docs/v6-email-provider-configuration.md`](docs/v6-email-provider-configuration.md) · [`docs/v5-automated-compliance-operations.md`](docs/v5-automated-compliance-operations.md#v6--reminder-delivery--phase-34-complete)
+
+**Verification:** `npm run verify-manual-delivery-e2e-foundation`
+
+**Next slice:** V6 Phase 35 — Manual delivery E2E release readiness
+
+---
+
+## V6.0.0 Phase 33 — Admin Manual Delivery UI · Complete
+
+**Date:** June 2026
+
+Admin-only **Manual Delivery Test** card in cloud mode. Invokes `runManualDeliveryPipeline` from the reminder preview queue with confirmation dialog, loading state, and result summary. No scheduling, automatic execution, or mark-as-sent automation.
+
+**Documentation:** [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md) · [`docs/v6-email-provider-configuration.md`](docs/v6-email-provider-configuration.md) · [`docs/v5-automated-compliance-operations.md`](docs/v5-automated-compliance-operations.md#v6--reminder-delivery--phase-33-complete)
+
+**Verification:** `npm run verify-manual-delivery-ui` · `npm run verify-manual-delivery-foundation`
+
+**Next slice:** V6 Phase 34 — Manual delivery UI end-to-end verification gate
+
+---
+
+## V6.0.0 Phase 32 — Manual Delivery Foundation Release Readiness · Complete
+
+**Date:** June 2026
+
+Documentation and version bump (`v6.0.0-alpha.8`) confirming the manual delivery foundation is safe to tag before any app/UI execution wiring. V6 Phases 1–32 complete. Gates: `npm run build`, `npm run verify-manual-delivery-foundation`.
+
+**Documentation:** [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md) · [`docs/v6-email-provider-configuration.md`](docs/v6-email-provider-configuration.md) · [`docs/v5-automated-compliance-operations.md`](docs/v5-automated-compliance-operations.md#v6--reminder-delivery--phase-32-complete)
+
+**Release candidate:** **v6.0.0-alpha.8**
+
+**Next slice:** V6 Phase 33 — Admin manual delivery UI
+
+---
+
+## V6.0.0 Phase 31 — Manual Delivery Runner Verification Orchestrator · Complete
+
+**Date:** June 2026
+
+`verify-manual-delivery-foundation` runs in order: `verify-delivery-pipeline-foundation`, `verify-manual-delivery-runner`. Stops on first failure. Verification only — no app/UI/scheduler/mark-as-sent wiring.
+
+**Documentation:** [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md) · [`docs/v6-email-provider-configuration.md`](docs/v6-email-provider-configuration.md) · [`docs/v5-automated-compliance-operations.md`](docs/v5-automated-compliance-operations.md#v6--reminder-delivery--phase-31-complete)
+
+**Verification:** `npm run verify-manual-delivery-foundation`
+
+**Next slice:** V6 Phase 32 — Manual delivery foundation release readiness
+
+---
+
+## V6.0.0 Phase 30 — Manual Delivery Pipeline Runner · Complete
+
+**Date:** June 2026
+
+`runManualDeliveryPipeline({ queueItems, provider, db, organisationId, automationRunId, organisationName, asOfDate, now })` chains `buildReminderDeliveryRecords` → `runDeliveryPipeline`. Returns `deliveryRecords`, `executionSummary`, `persistenceSummary`, `persistenceResults`. No scheduler, automatic delivery, `app.js` wiring, or mark-as-sent automation.
+
+**Documentation:** [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md) · [`docs/v6-email-provider-configuration.md`](docs/v6-email-provider-configuration.md) · [`docs/v5-automated-compliance-operations.md`](docs/v5-automated-compliance-operations.md#v6--reminder-delivery--phase-30-complete)
+
+**Verification:** `npm run verify-manual-delivery-runner` · `npm run verify-delivery-pipeline-foundation`
+
+**Next slice:** V6 Phase 31 — Manual delivery runner verification orchestrator
+
+---
+
 ## V6.0.0 Phase 29 — Delivery Pipeline Foundation Release Readiness · Complete
 
 **Date:** June 2026
@@ -649,7 +873,7 @@ Documentation and version bump (`v6.0.0-alpha.7`) confirming the service-level d
 
 **Release candidate:** **v6.0.0-alpha.7**
 
-**Next slice:** V6 Phase 30 — Worker delivery execution wiring
+**Next slice:** V6 Phase 30 — Manual delivery pipeline runner
 
 ---
 
@@ -1235,7 +1459,7 @@ Scheduled compliance operations: reminder delivery, action orchestration, escala
 
 Read-only compliance insights on the dashboard: health score, risk summary, renewal forecast, and rule-based recommendations. See [`docs/compliance-insights.md`](docs/compliance-insights.md) and [Version Roadmap — v4](#v4--compliance-insights-release-candidate).
 
-Application version: **v6.0.0-alpha.7** in source (V6 delivery pipeline foundation release readiness alpha); v4 GA target **v4.0.1**.
+Application version: **v6.0.0-beta.1** in source (V6 manual delivery E2E release readiness beta); v4 GA target **v4.0.1**.
 
 **RC hardening summary (June 2026):**
 

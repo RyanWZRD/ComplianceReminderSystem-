@@ -87,6 +87,10 @@
     "verify-delivery-log-persistence-service": "node scripts/verify-delivery-log-persistence-service.mjs",
     "verify-delivery-pipeline-service": "node scripts/verify-delivery-pipeline-service.mjs",
     "verify-delivery-pipeline-foundation": "node scripts/verify-delivery-pipeline-foundation.mjs",
+    "verify-manual-delivery-runner": "node scripts/verify-manual-delivery-runner.mjs",
+    "verify-manual-delivery-foundation": "node scripts/verify-manual-delivery-foundation.mjs",
+    "verify-manual-delivery-ui": "node scripts/verify-manual-delivery-ui.mjs",
+    "verify-manual-delivery-e2e-foundation": "node scripts/verify-manual-delivery-e2e-foundation.mjs",
     "verify:phase2": "node scripts/verify-phase2.mjs"
   },
   "dependencies": {

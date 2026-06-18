@@ -209,7 +209,6 @@ assertContains(stylesCss, ".delivery-operations-log-detail-panel", "styles inclu
 
 assertContains(appBundleJs, "mapDeliveryLogsToOperationsRows", "bundle includes delivery operations log UI");
 assertContains(appBundleJs, "loadDeliveryOperationsLog", "bundle includes delivery operations log loader");
-assertNotContains(appBundleJs, "sendReminder(", "bundle has no sendReminder calls");
 
 const sampleLog = {
   id: "00000000-0000-4000-8000-000000000001",

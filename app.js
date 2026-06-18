@@ -2,6 +2,7 @@ import {
   AUTH_MODE,
   initAuth,
   getCurrentUser,
+  getOrganisationId,
   isAuthenticated,
   waitForAuthReady,
 } from "./js/auth/session.js";
@@ -21,6 +22,7 @@ import {
   canMutateEvidence,
   canMutateReminderSettings,
   canRenewCompliance,
+  canRunManualDeliveryTest,
   canSetActionStatus,
   canUpdateComplianceRecordNotes,
   canArchiveComplianceRecord,
@@ -108,6 +110,7 @@ import {
   buildReminderTemplatePreviewFromRow,
   buildReminderPreviewExportFilename,
   buildReminderTemplateFullEmailText,
+  DEFAULT_ORGANISATION_NAME,
 } from "./js/app/reminders/reminder-templates.js";
 import {
   REMINDER_PREVIEW_DASHBOARD_TYPES,
@@ -131,6 +134,16 @@ import {
   buildDeliveryOperationsLogExportCsv,
   getDeliveryOperationsLogExportFilename,
 } from "./js/app/automation/delivery-operations-log-export.js";
+import { executeManualDeliveryTest } from "./js/app/automation/manual-delivery-execution.js";
+import {
+  MANUAL_DELIVERY_CONFIRMATION_MESSAGE,
+  MANUAL_DELIVERY_RUN_BUTTON_LABEL,
+  MANUAL_DELIVERY_TEST_SAFETY_NOTE,
+  buildManualDeliveryResultSummary,
+  computeManualDeliveryQueueSummary,
+  formatManualDeliveryModeLabel,
+  getManualDeliveryProviderConfig,
+} from "./js/app/automation/manual-delivery-ui.js";
 import { computeAutomationDryRun } from "./js/app/automation/automation-dry-run.js";
 import { buildReminderQueueFromDryRun } from "./js/app/automation/reminder-queue.js";
 import {
@@ -429,6 +442,28 @@ const deliveryOperationsLogTableWrapper = document.getElementById(
 );
 const deliveryOperationsLogTableHead = document.getElementById("delivery-operations-log-table-head");
 const deliveryOperationsLogTableBody = document.getElementById("delivery-operations-log-table-body");
+const manualDeliveryTestSection = document.getElementById("manual-delivery-test-section");
+const manualDeliveryTestSafetyNote = document.getElementById("manual-delivery-test-safety-note");
+const manualDeliveryTestTotalCount = document.getElementById("manual-delivery-test-total-count");
+const manualDeliveryTestMissingEmailCount = document.getElementById(
+  "manual-delivery-test-missing-email-count"
+);
+const manualDeliveryTestModeValue = document.getElementById("manual-delivery-test-mode-value");
+const manualDeliveryTestProviderHint = document.getElementById("manual-delivery-test-provider-hint");
+const manualDeliveryTestLoading = document.getElementById("manual-delivery-test-loading");
+const manualDeliveryTestError = document.getElementById("manual-delivery-test-error");
+const manualDeliveryTestResult = document.getElementById("manual-delivery-test-result");
+const manualDeliveryTestResultAttempted = document.getElementById(
+  "manual-delivery-test-result-attempted"
+);
+const manualDeliveryTestResultDelivered = document.getElementById(
+  "manual-delivery-test-result-delivered"
+);
+const manualDeliveryTestResultFailed = document.getElementById("manual-delivery-test-result-failed");
+const manualDeliveryTestResultPersisted = document.getElementById(
+  "manual-delivery-test-result-persisted"
+);
+const manualDeliveryTestRunBtn = document.getElementById("manual-delivery-test-run-btn");
 const insightStaleEvidence = document.getElementById("insight-stale-evidence");
 
 let renewModalContext = null;
@@ -441,6 +476,8 @@ let automationRunAuditLoadState = "idle";
 let automationRunAuditLoadError = "";
 let deliveryOperationsLogLoadState = "idle";
 let deliveryOperationsLogLoadError = "";
+let manualDeliveryTestExecutionState = "idle";
+let manualDeliveryTestErrorMessage = "";
 const expandedDeliveryLogIds = new Set();
 const expandedAutomationRunIds = new Set();
 const expandedReminderQueueTemplatePreviewKeys = new Set();
@@ -5977,6 +6014,8 @@ function renderReminderQueuePreview() {
       populateReminderQueueTemplatePreviewDetail(detailRow, queueItem);
     }
   });
+
+  renderManualDeliveryTest();
 }
 
 function exportReminderQueueCsv() {
@@ -6619,6 +6658,136 @@ function exportDeliveryOperationsLogCsv() {
     getDeliveryOperationsLogExportFilename(),
     "text/csv;charset=utf-8"
   );
+}
+
+function renderManualDeliveryTest() {
+  if (
+    !manualDeliveryTestSection ||
+    !manualDeliveryTestSafetyNote ||
+    !manualDeliveryTestTotalCount ||
+    !manualDeliveryTestMissingEmailCount ||
+    !manualDeliveryTestModeValue ||
+    !manualDeliveryTestProviderHint ||
+    !manualDeliveryTestLoading ||
+    !manualDeliveryTestError ||
+    !manualDeliveryTestResult ||
+    !manualDeliveryTestResultAttempted ||
+    !manualDeliveryTestResultDelivered ||
+    !manualDeliveryTestResultFailed ||
+    !manualDeliveryTestResultPersisted ||
+    !manualDeliveryTestRunBtn
+  ) {
+    return;
+  }
+
+  const visible = canRunManualDeliveryTest();
+  manualDeliveryTestSection.classList.toggle("hidden", !visible);
+
+  if (!visible) {
+    return;
+  }
+
+  manualDeliveryTestSafetyNote.textContent = MANUAL_DELIVERY_TEST_SAFETY_NOTE;
+  manualDeliveryTestRunBtn.textContent = MANUAL_DELIVERY_RUN_BUTTON_LABEL;
+
+  const queue = buildReminderQueuePreviewData();
+  const queueSummary = computeManualDeliveryQueueSummary(queue.items);
+  const providerConfig = getManualDeliveryProviderConfig();
+
+  manualDeliveryTestTotalCount.textContent = String(queueSummary.totalQueued);
+  manualDeliveryTestMissingEmailCount.textContent = String(queueSummary.missingEmail);
+  manualDeliveryTestModeValue.textContent = formatManualDeliveryModeLabel(providerConfig.mode);
+
+  const isRunning = manualDeliveryTestExecutionState === "running";
+  manualDeliveryTestLoading.classList.toggle("hidden", !isRunning);
+  manualDeliveryTestRunBtn.disabled = isRunning || !providerConfig.enabled;
+  manualDeliveryTestProviderHint.classList.toggle("hidden", providerConfig.enabled);
+
+  if (manualDeliveryTestErrorMessage) {
+    manualDeliveryTestError.textContent = manualDeliveryTestErrorMessage;
+    manualDeliveryTestError.classList.remove("hidden");
+  } else {
+    manualDeliveryTestError.textContent = "";
+    manualDeliveryTestError.classList.add("hidden");
+  }
+}
+
+async function handleManualDeliveryTestRun() {
+  if (!canRunManualDeliveryTest() || manualDeliveryTestExecutionState === "running") {
+    return;
+  }
+
+  const providerConfig = getManualDeliveryProviderConfig();
+
+  if (!providerConfig.enabled) {
+    manualDeliveryTestErrorMessage =
+      "Email provider is not enabled. Configure provider settings before running a delivery test.";
+    renderManualDeliveryTest();
+    return;
+  }
+
+  const confirmed = confirm(MANUAL_DELIVERY_CONFIRMATION_MESSAGE);
+
+  if (!confirmed) {
+    return;
+  }
+
+  if (!automationRepository) {
+    manualDeliveryTestErrorMessage = "Manual delivery tests are available in cloud mode only.";
+    renderManualDeliveryTest();
+    return;
+  }
+
+  const organisationId = getOrganisationId();
+
+  if (!organisationId) {
+    manualDeliveryTestErrorMessage = "Organisation context is missing. Sign in again and retry.";
+    renderManualDeliveryTest();
+    return;
+  }
+
+  manualDeliveryTestExecutionState = "running";
+  manualDeliveryTestErrorMessage = "";
+  renderManualDeliveryTest();
+
+  try {
+    const queue = buildReminderQueuePreviewData();
+    const result = await executeManualDeliveryTest({
+      queueItems: queue.items,
+      db: automationRepository,
+      organisationId,
+      organisationName: DEFAULT_ORGANISATION_NAME,
+      asOfDate: queue.asOfDate,
+    });
+
+    const summary = buildManualDeliveryResultSummary(
+      result.executionSummary,
+      result.persistenceSummary
+    );
+
+    manualDeliveryTestResultAttempted.textContent = String(summary.attempted);
+    manualDeliveryTestResultDelivered.textContent = String(summary.delivered);
+    manualDeliveryTestResultFailed.textContent = String(summary.failed);
+    manualDeliveryTestResultPersisted.textContent = String(summary.persisted);
+    manualDeliveryTestResult.classList.remove("hidden");
+
+    await loadDeliveryOperationsLog();
+  } catch (error) {
+    console.error("Manual delivery test failed.", error);
+    manualDeliveryTestErrorMessage =
+      error instanceof Error
+        ? error.message
+        : "Manual delivery test failed. Check provider configuration and try again.";
+  } finally {
+    manualDeliveryTestExecutionState = "idle";
+    renderManualDeliveryTest();
+  }
+}
+
+function setupManualDeliveryTestListeners() {
+  manualDeliveryTestRunBtn?.addEventListener("click", () => {
+    void handleManualDeliveryTestRun();
+  });
 }
 
 function setupDeliveryOperationsLogListeners() {
@@ -10705,6 +10874,7 @@ if (paginationNextBtn) {
 
 function applyReadOnlyMode() {
   if (!isCloudMode()) {
+    renderManualDeliveryTest();
     return;
   }
 
@@ -10961,6 +11131,8 @@ function applyReadOnlyMode() {
       saveNotesBtn.classList.remove("read-only-disabled");
     }
   }
+
+  renderManualDeliveryTest();
 }
 
 async function finishAppBoot() {
@@ -11006,6 +11178,7 @@ async function finishAppBoot() {
 
   applyReadOnlyMode();
   renderTable();
+  renderManualDeliveryTest();
   await loadAutomationRunAudit();
   await loadDeliveryOperationsLog();
   document.documentElement.dataset.appReady = "true";
@@ -11028,6 +11201,7 @@ function runBootSetup() {
   setupReminderQueuePreviewListeners();
   setupAutomationRunAuditListeners();
   setupDeliveryOperationsLogListeners();
+  setupManualDeliveryTestListeners();
   setupRecordWorkspaceListeners();
   setupReportListeners();
 }

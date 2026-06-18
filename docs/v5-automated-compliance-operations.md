@@ -3,7 +3,7 @@
 **Theme:** Move from *knowing* what needs attention (V4 Compliance Insights) to *acting on it automatically* — scheduled reminders, orchestrated actions, escalations, and auditable operations.
 
 **Target:** v5.0.0 (major release)  
-**Current alpha:** v6.0.0-alpha.7 — V6 Delivery Pipeline Foundation Release Readiness (see release-readiness note below)  
+**Current alpha:** v6.0.0-beta.1 — V6 Manual Delivery E2E Release Readiness (see release-readiness note below)  
 **Prior alpha:** v5.0.0-alpha.5 — V5-2 Template & Digest Foundation; v5.0.0-alpha.4 — V5-1 Reminder Queue Foundation; v5.0.0-alpha.3 — V5-0 Automation Platform Foundation; v5.0.0-alpha.2 — V5-1A + V5-1B (see [`docs/v5-0-0-alpha-2-release-notes.md`](v5-0-0-alpha-2-release-notes.md))  
 **Prerequisites:** v4.0.1 GA, v3.1.0 cloud follow-on (evidence Storage, restore/bulk ops, production cloud-writes policy)  
 **Date:** Planned — post v4.0.1 sign-off (June 2026+)
@@ -564,7 +564,7 @@ The Reminder Queue Preview section includes a **Digest preview** area wired to `
 | Phase | Deliverable | Status |
 |-------|-------------|--------|
 | 29 | Delivery pipeline foundation release readiness (`v6.0.0-alpha.7`) | **Complete** |
-| 30 | Worker delivery execution wiring | Planned |
+| 30 | Manual delivery pipeline runner (`runManualDeliveryPipeline`) | Planned |
 
 **Release candidate:** **v6.0.0-alpha.7**
 
@@ -573,11 +573,179 @@ The Reminder Queue Preview section includes a **Digest preview** area wired to `
 - `npm run build` — rebuild `app.bundle.js` after version bump
 - `npm run verify-delivery-pipeline-foundation` — full delivery pipeline stack at service level
 
-**Next slice:** V6 Phase 30 — Worker delivery execution wiring.
+**Next slice:** V6 Phase 30 — Manual delivery pipeline runner.
 
 ---
 
-## V6 — Reminder delivery · Phase 28 complete
+## V6 — Reminder delivery · Phase 30 complete
+
+**Goal:** Provide a manually invoked delivery pipeline runner for admins — the first end-to-end execution path without scheduling or automatic delivery.
+
+**Status:** Manual delivery pipeline runner complete. V6 Phase 30 complete.
+
+**Phase 30 deliverables:**
+
+- `runManualDeliveryPipeline({ queueItems, provider, db, organisationId, automationRunId, organisationName, asOfDate, now })` in `manual-delivery-runner.js`
+- Pipeline: `queueItems` → `buildReminderDeliveryRecords` → `runDeliveryPipeline`
+- Returns `deliveryRecords`, `executionSummary`, `persistenceSummary`, `persistenceResults`
+- `npm run verify-manual-delivery-runner`
+
+| Phase | Deliverable | Status |
+|-------|-------------|--------|
+| 30 | Manual delivery pipeline runner (`runManualDeliveryPipeline`) | **Complete** |
+| 31 | Manual delivery foundation verification (`verify-manual-delivery-foundation`) | Planned |
+
+**Verification:** `npm run verify-manual-delivery-runner` · `npm run verify-delivery-pipeline-foundation`
+
+**Constraints:** Service layer only. No scheduler, recurring automation, automatic delivery, `app.js` wiring, or mark-as-sent automation.
+
+**Next slice:** V6 Phase 31 — Manual delivery runner verification orchestrator.
+
+---
+
+## V6 — Reminder delivery · Phase 31 complete
+
+**Goal:** One verification command proving the manual delivery runner stack works without app/UI/scheduler wiring.
+
+**Status:** Manual delivery foundation verification complete. V6 Phase 31 complete.
+
+**Phase 31 deliverables:**
+
+- `scripts/verify-manual-delivery-foundation.mjs` orchestrator
+- Runs: `verify-delivery-pipeline-foundation`, `verify-manual-delivery-runner`
+- Stops on first failure; prints `V6 manual delivery foundation verification: OK`
+- `npm run verify-manual-delivery-foundation`
+
+| Phase | Deliverable | Status |
+|-------|-------------|--------|
+| 31 | Manual delivery foundation verification (`verify-manual-delivery-foundation`) | **Complete** |
+| 32 | Manual delivery foundation release readiness (`v6.0.0-alpha.8`) | **Complete** |
+
+**Verification:** `npm run verify-manual-delivery-foundation`
+
+**Constraints:** Verification orchestrator only. No app behaviour changes, UI send button, scheduled execution, or mark-as-sent automation.
+
+**Next slice:** V6 Phase 32 — Manual delivery foundation release readiness.
+
+---
+
+## V6 — Reminder delivery · Phase 32 complete
+
+**Goal:** Confirm the manual delivery foundation is safe to tag as **v6.0.0-alpha.8** before any app/UI execution wiring.
+
+**Status:** Manual delivery foundation release readiness complete — application version **v6.0.0-alpha.8**. V6 Phases 1–32 complete.
+
+**Release-readiness note (v6.0.0-alpha.8):**
+
+- Manual delivery pipeline runner complete (`runManualDeliveryPipeline`)
+- Manual delivery foundation verification complete (`verify-manual-delivery-foundation`)
+- **No UI send button**
+- **No scheduled execution**
+- **No mark-as-sent automation**
+- **No `app.js` execution wiring**
+
+| Phase | Deliverable | Status |
+|-------|-------------|--------|
+| 32 | Manual delivery foundation release readiness (`v6.0.0-alpha.8`) | **Complete** |
+| 33 | Admin manual delivery UI (`Manual Delivery Test` card) | Planned |
+
+**Release candidate:** **v6.0.0-alpha.8**
+
+**Release verification (required before tag):**
+
+- `npm run build` — rebuild `app.bundle.js` after version bump
+- `npm run verify-manual-delivery-foundation` — full manual delivery stack at service level
+
+**Next slice:** V6 Phase 33 — Admin manual delivery UI.
+
+---
+
+## V6 — Reminder delivery · Phase 33 complete
+
+**Goal:** Provide an admin-only manual delivery execution UI — the first user-visible execution path.
+
+**Status:** Admin manual delivery UI complete. V6 Phase 33 complete.
+
+**Phase 33 deliverables:**
+
+- **Manual Delivery Test** card (cloud mode + admin only)
+- Queue summary and delivery mode display from provider config
+- **Run Delivery Test** button with confirmation dialog
+- Invokes `executeManualDeliveryTest` → `runManualDeliveryPipeline`
+- Result summary: attempted, delivered, failed, persisted
+- `npm run verify-manual-delivery-ui`
+
+| Phase | Deliverable | Status |
+|-------|-------------|--------|
+| 33 | Admin manual delivery UI (`Manual Delivery Test` card) | **Complete** |
+| 34 | Manual delivery E2E foundation verification (`verify-manual-delivery-e2e-foundation`) | Planned |
+
+**Verification:** `npm run verify-manual-delivery-ui` · `npm run verify-manual-delivery-foundation`
+
+**Constraints:** Manual execution only. No scheduling, automatic execution, mark-as-sent automation, or compliance/history mutation.
+
+**Next slice:** V6 Phase 34 — Manual delivery UI end-to-end verification gate.
+
+---
+
+## V6 — Reminder delivery · Phase 34 complete
+
+**Goal:** One verification command proving the manual delivery UI, provider foundation, delivery pipeline, and operations log work together safely.
+
+**Status:** Manual delivery E2E foundation verification complete. V6 Phase 34 complete.
+
+**Phase 34 deliverables:**
+
+- `scripts/verify-manual-delivery-e2e-foundation.mjs` orchestrator
+- Runs: `verify-manual-delivery-foundation`, `verify-resend-provider-foundation`, `verify-delivery-operations-log-ui`, `verify-manual-delivery-ui`
+- Static safety checks: no committed API keys, admin/cloud-write run button gating
+- Stops on first failure; prints `V6 manual delivery E2E foundation verification: OK`
+- `npm run verify-manual-delivery-e2e-foundation`
+
+| Phase | Deliverable | Status |
+|-------|-------------|--------|
+| 34 | Manual delivery E2E foundation verification (`verify-manual-delivery-e2e-foundation`) | **Complete** |
+| 35 | Manual delivery E2E release readiness (`v6.0.0-beta.1`) | Planned |
+
+**Verification:** `npm run verify-manual-delivery-e2e-foundation`
+
+**Constraints:** Verification orchestrator only. No scheduled execution, automatic execution, mark-as-sent automation, or compliance/history mutation.
+
+**Next slice:** V6 Phase 35 — Manual delivery E2E release readiness.
+
+---
+
+## V6 — Reminder delivery · Phase 35 complete
+
+**Goal:** Confirm the admin-only manual delivery UI and E2E safety gate are safe to tag as **v6.0.0-beta.1** before adding mark-as-sent automation.
+
+**Status:** Manual delivery E2E release readiness complete — application version **v6.0.0-beta.1**. V6 Phases 1–35 complete.
+
+**Release-readiness note (v6.0.0-beta.1):**
+
+- Admin-only manual delivery UI complete (`Manual Delivery Test` card)
+- Manual delivery E2E foundation verification complete (`verify-manual-delivery-e2e-foundation`)
+- **No scheduled execution**
+- **No automatic execution**
+- **No mark-as-sent automation yet**
+
+| Phase | Deliverable | Status |
+|-------|-------------|--------|
+| 35 | Manual delivery E2E release readiness (`v6.0.0-beta.1`) | **Complete** |
+| 36 | Mark-as-sent on confirmed delivery (policy-gated) | Planned |
+
+**Release candidate:** **v6.0.0-beta.1**
+
+**Release verification (required before tag):**
+
+- `npm run build` — rebuild `app.bundle.js` after version bump
+- `npm run verify-manual-delivery-e2e-foundation` — full manual delivery E2E foundation stack
+
+**Next slice:** V6 Phase 36 — Mark-as-sent on confirmed delivery.
+
+---
+
+## V6 — Reminder delivery · Phase 23 complete
 
 **Goal:** Confirm the read-only Delivery Operations Log UI/export is safe to tag as **v6.0.0-alpha.6** before any delivery execution is wired into the app.
 
@@ -1235,6 +1403,10 @@ Extend the existing pattern from V3/V4:
 | `npm run verify-delivery-log-persistence-service` | V6 Phase 26 — delivery log persistence service (RPC orchestration; no app wiring) |
 | `npm run verify-delivery-pipeline-service` | V6 Phase 27 — delivery pipeline service (execution + persistence composition; no app wiring) |
 | `npm run verify-delivery-pipeline-foundation` | V6 Phase 28 — delivery pipeline foundation orchestrator (full service-level stack) |
+| `npm run verify-manual-delivery-runner` | V6 Phase 30 — manual delivery pipeline runner (queue → pipeline; no scheduler/app wiring) |
+| `npm run verify-manual-delivery-foundation` | V6 Phase 31 — manual delivery foundation orchestrator (pipeline + manual runner stack) |
+| `npm run verify-manual-delivery-ui` | V6 Phase 33 — admin manual delivery test UI (confirmation + manual runner wiring) |
+| `npm run verify-manual-delivery-e2e-foundation` | V6 Phase 34 — manual delivery E2E foundation orchestrator (UI + provider + pipeline + ops log) |
 | `npm run verify-automation-schema` | V5-0 migrations + RPC |
 | `npm run verify-automation-reminders` | V5-1 queue + mark sent |
 | `npm run verify-automation-actions` | V5-2 policy apply |
@@ -1336,6 +1508,8 @@ Secrets (SMTP API keys) live in Supabase Edge Function secrets only — never in
 | V5-1 (foundation) | **COMPLETE** | Reminder queue foundation — queue, preview UI, CSV export, orchestrator; **v5.0.0-alpha.4** |
 | V5-2 | **COMPLETE** | Reminder email template builder — template builder, preview UI, copy template, digest builder, digest preview UI, foundation orchestrator; **v5.0.0-alpha.5**; no delivery |
 | V6-1 | **COMPLETE** | Delivery pipeline foundation — domain model through delivery pipeline foundation release readiness; **v6.0.0-alpha.7**; service-level worker, persistence adapter, persistence service, pipeline service, foundation verification; no UI send button, scheduled execution, or mark-as-sent automation |
+| V6-2 | **COMPLETE** | Manual delivery foundation — manual runner, foundation verification, release readiness; **v6.0.0-alpha.8**; no UI send button, scheduled execution, mark-as-sent automation, or `app.js` execution wiring |
+| V6-3 | **COMPLETE** | Manual delivery E2E — admin UI, E2E verification gate, release readiness; **v6.0.0-beta.1**; no scheduled execution, automatic execution, or mark-as-sent automation yet |
 | V5-2A | **PLANNED** | Automated action orchestration |
 | V5-3 | **PLANNED** | Escalation & operational closure |
 | V5-4 | **PLANNED** | Policy engine GA & operations pack |

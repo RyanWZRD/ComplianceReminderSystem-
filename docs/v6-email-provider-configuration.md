@@ -3,8 +3,8 @@
 **Theme:** Define how a real email provider will be configured safely — without implementing a provider, sending email, or wiring the application.
 
 **Target:** v6.0.0 (major release)  
-**Current phase:** V6 Phase 29 — Delivery Pipeline Foundation Release Readiness  
-**Release candidate:** v6.0.0-alpha.7  
+**Current phase:** V6 Phase 35 — Manual Delivery E2E Release Readiness  
+**Release candidate:** v6.0.0-beta.1  
 **Prerequisites:** v6.0.0-alpha.2 (V6 Phase 13 — provider foundation release readiness)  
 **Date:** Planned — June 2026+
 
@@ -316,6 +316,10 @@ The `mock` provider identifier is for tests and verification only — not set vi
 | `npm run verify-delivery-log-persistence-service` | Phase 26 — delivery log persistence service (RPC orchestration; no app wiring) |
 | `npm run verify-delivery-pipeline-service` | Phase 27 — delivery pipeline service (execution + persistence composition; no app wiring) |
 | `npm run verify-delivery-pipeline-foundation` | Phase 28 — delivery pipeline foundation orchestrator (full service-level stack) |
+| `npm run verify-manual-delivery-runner` | Phase 30 — manual delivery pipeline runner (queue → pipeline; no scheduler/app wiring) |
+| `npm run verify-manual-delivery-foundation` | Phase 31 — manual delivery foundation orchestrator (pipeline + manual runner stack) |
+| `npm run verify-manual-delivery-ui` | Phase 33 — admin manual delivery test UI |
+| `npm run verify-manual-delivery-e2e-foundation` | Phase 34 — manual delivery E2E foundation orchestrator |
 | `npm run verify-delivery-foundation` | Phases 1–8 — delivery foundation orchestrator (included in Phase 12 gate) |
 
 **Phase 10 gate:** `npm run verify-email-provider-config` must pass. No Supabase, browser, real email provider, or outbound delivery.
@@ -347,6 +351,18 @@ The `mock` provider identifier is for tests and verification only — not set vi
 **Phase 28 gate:** `npm run verify-delivery-pipeline-foundation` must pass. Verification orchestrator only — no app behaviour changes, UI send button, scheduled execution, or mark-as-sent automation.
 
 **Phase 29 gate:** `npm run build` and `npm run verify-delivery-pipeline-foundation` must pass. Documentation and version bump only — no application logic changes.
+
+**Phase 30 gate:** `npm run verify-manual-delivery-runner` must pass. Manual runner service only — no scheduler, automatic delivery, `app.js` wiring, or mark-as-sent automation.
+
+**Phase 31 gate:** `npm run verify-manual-delivery-foundation` must pass. Verification orchestrator only — no app behaviour changes, UI send button, scheduled execution, or mark-as-sent automation.
+
+**Phase 32 gate:** `npm run build` and `npm run verify-manual-delivery-foundation` must pass. Documentation and version bump only — no application logic changes.
+
+**Phase 33 gate:** `npm run verify-manual-delivery-ui` must pass. Admin-only manual delivery test UI — no scheduling, automatic execution, or mark-as-sent automation.
+
+**Phase 34 gate:** `npm run verify-manual-delivery-e2e-foundation` must pass. E2E foundation orchestrator with static secret-safety checks — no scheduled execution, automatic execution, or mark-as-sent automation.
+
+**Phase 35 gate:** `npm run build` and `npm run verify-manual-delivery-e2e-foundation` must pass. Documentation and version bump only — no mark-as-sent automation yet.
 
 ---
 
@@ -421,30 +437,76 @@ Stops on first failure. Prints section headings for each step. Verification-only
 | 27 | Delivery pipeline service (`runDeliveryPipeline`) | **Complete** |
 | 28 | Delivery pipeline foundation verification (`verify-delivery-pipeline-foundation`) | **Complete** |
 | 29 | Delivery pipeline foundation release readiness (`v6.0.0-alpha.7`) | **Complete** |
-| 30 | Worker delivery execution wiring | Planned |
-| 31 | Mark-as-sent on confirmed delivery (policy-gated) | Planned |
+| 30 | Manual delivery pipeline runner (`runManualDeliveryPipeline`) | **Complete** |
+| 31 | Manual delivery foundation verification (`verify-manual-delivery-foundation`) | **Complete** |
+| 32 | Manual delivery foundation release readiness (`v6.0.0-alpha.8`) | **Complete** |
+| 33 | Admin manual delivery UI (`Manual Delivery Test` card) | **Complete** |
+| 34 | Manual delivery E2E foundation verification (`verify-manual-delivery-e2e-foundation`) | **Complete** |
+| 35 | Manual delivery E2E release readiness (`v6.0.0-beta.1`) | **Complete** |
+| 36 | Mark-as-sent on confirmed delivery (policy-gated) | Planned |
 
-**Release candidate:** **v6.0.0-alpha.7**
+**Release candidate:** **v6.0.0-beta.1**
 
-**Release-readiness note (v6.0.0-alpha.7):**
+**Release-readiness note (v6.0.0-beta.1):**
 
-- V6 Phases 1–29 complete
-- Delivery worker complete (`executeReminderDeliveries`)
-- Persistence adapter complete (`buildDeliveryLogPayloads`)
-- Persistence service complete (`persistDeliveryLogPayloads`)
-- Delivery pipeline service complete (`runDeliveryPipeline`)
-- Pipeline foundation verification complete (`verify-delivery-pipeline-foundation`)
-- **No UI send button**
+- V6 Phases 1–35 complete
+- Admin-only manual delivery UI complete
+- Manual delivery E2E foundation verification complete
 - **No scheduled execution**
-- **No mark-as-sent automation**
-- **No `app.js` pipeline wiring**
+- **No automatic execution**
+- **No mark-as-sent automation yet**
 
 **Release verification (required before tag):**
 
 - `npm run build` — rebuild `app.bundle.js` after version bump
-- `npm run verify-delivery-pipeline-foundation` — full delivery pipeline stack at service level
+- `npm run verify-manual-delivery-e2e-foundation` — full manual delivery E2E foundation stack
 
-**Next slice after Phase 23:** V6 Phase 24 — Worker delivery execution engine.
+**Next slice after Phase 34:** V6 Phase 35 — Manual delivery E2E release readiness.
+
+---
+
+## Phase 35 — Manual delivery E2E release readiness
+
+**Scope:** Documentation, version bump (`v6.0.0-beta.1`), and release-readiness gate. No application logic changes.
+
+**Release verification (required before tag):**
+
+- `npm run build`
+- `npm run verify-manual-delivery-e2e-foundation`
+
+### Phase 35 constraints
+
+- Documentation and version display only
+- No mark-as-sent automation yet
+- No scheduled or automatic execution
+
+---
+
+## Phase 31 — Manual delivery foundation verification
+
+**Scope:** `verify-manual-delivery-foundation` orchestrator — proves manual delivery runner stack end-to-end at service level. **No app behaviour changes.**
+
+**Verification:** `npm run verify-manual-delivery-foundation`
+
+### Phase 31 constraints
+
+- Verification orchestrator and documentation only
+- No app behaviour changes, UI send button, or scheduled execution
+- No mark-as-sent automation
+
+---
+
+## Phase 30 — Manual delivery pipeline runner
+
+**Scope:** `runManualDeliveryPipeline` in `manual-delivery-runner.js` — queue → records → pipeline. **Not wired into `app.js`, UI, or scheduled jobs.**
+
+**Verification:** `npm run verify-manual-delivery-runner`
+
+### Phase 30 constraints
+
+- Manual runner service only
+- No scheduler, recurring automation, or automatic delivery
+- No `app.js` wiring or mark-as-sent automation
 
 ---
 

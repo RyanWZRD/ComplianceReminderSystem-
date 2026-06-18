@@ -178,3 +178,16 @@ export function canReadAutomationRuns() {
 
   return canEdit();
 }
+
+/** @returns {boolean} */
+export function canRunManualDeliveryTest() {
+  if (!isCloudMode()) {
+    return false;
+  }
+
+  if (!CLOUD_WRITES_ENABLED) {
+    return false;
+  }
+
+  return canAdmin();
+}

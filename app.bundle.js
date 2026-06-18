@@ -21321,7 +21321,7 @@ ${suffix}`;
     return null;
   }
   var AUTOMATION_ENABLED = readAutomationFromLocation() ?? (typeof process !== "undefined" && process.env?.AUTOMATION_ENABLED === "true");
-  var APP_VERSION = "v6.0.0-alpha.7";
+  var APP_VERSION = "v6.0.0-beta.1";
 
   // js/app/permissions.js
   function isCloudMode() {
@@ -21417,6 +21417,15 @@ ${suffix}`;
   function canMutateReminderSettings() {
     if (!isCloudMode()) {
       return canMutateData() && canAdmin();
+    }
+    if (!CLOUD_WRITES_ENABLED) {
+      return false;
+    }
+    return canAdmin();
+  }
+  function canRunManualDeliveryTest() {
+    if (!isCloudMode()) {
+      return false;
     }
     if (!CLOUD_WRITES_ENABLED) {
       return false;
@@ -26230,6 +26239,1073 @@ ${suffix}`;
     return [headerRow, ...dataRows].join("\n");
   }
 
+  // js/app/automation/mock-email-provider.js
+  var MOCK_EMAIL_PROVIDER_MODES = [
+    "success",
+    "transient_failure",
+    "permanent_failure"
+  ];
+  var mockMessageSequence = 0;
+  function nextMockProviderMessageId(prefix) {
+    mockMessageSequence += 1;
+    return `${prefix}-${mockMessageSequence}`;
+  }
+  function createMockEmailProvider({ mode = "success" } = {}) {
+    if (!MOCK_EMAIL_PROVIDER_MODES.includes(mode)) {
+      throw new Error(`Invalid mock email provider mode "${String(mode)}".`);
+    }
+    return {
+      /**
+       * @param {{
+       *   to: string;
+       *   subject: string;
+       *   bodyText: string;
+       *   metadata?: Record<string, unknown>;
+       * }} input
+       */
+      async sendReminder({ to, subject, bodyText, metadata }) {
+        if (!String(to ?? "").trim()) {
+          throw new Error("sendReminder requires a recipient address.");
+        }
+        if (!String(subject ?? "").trim()) {
+          throw new Error("sendReminder requires a subject.");
+        }
+        if (!String(bodyText ?? "").trim()) {
+          throw new Error("sendReminder requires bodyText.");
+        }
+        void metadata;
+        if (mode === "success") {
+          return {
+            status: "delivered",
+            providerMessageId: nextMockProviderMessageId("mock"),
+            deliveredAt: (/* @__PURE__ */ new Date()).toISOString()
+          };
+        }
+        if (mode === "transient_failure") {
+          return {
+            status: "failed",
+            failureType: "transient",
+            failureReason: "mock_transient_provider_error"
+          };
+        }
+        return {
+          status: "failed",
+          failureType: "permanent",
+          failureReason: "mock_permanent_provider_error"
+        };
+      },
+      async healthCheck() {
+        return {
+          status: "ok",
+          provider: "mock"
+        };
+      }
+    };
+  }
+
+  // js/app/automation/providers/resend-provider.js
+  var RESEND_EMAILS_URL = "https://api.resend.com/emails";
+  var TRANSIENT_HTTP_STATUS_CODES = /* @__PURE__ */ new Set([429, 500, 502, 503, 504]);
+  var PERMANENT_HTTP_STATUS_CODES = /* @__PURE__ */ new Set([400, 401, 403, 404, 422]);
+  function resolveResendConfigHealth(config) {
+    if (!config || config.enabled !== true) {
+      return { status: "disabled", provider: "resend" };
+    }
+    if (config.provider !== "resend") {
+      return { status: "invalid_config", provider: "resend" };
+    }
+    if (config.mode !== "test" && config.mode !== "production") {
+      return { status: "invalid_config", provider: "resend" };
+    }
+    if (!String(config.apiKey ?? "").trim()) {
+      return { status: "invalid_config", provider: "resend" };
+    }
+    if (!String(config.fromEmail ?? "").trim()) {
+      return { status: "invalid_config", provider: "resend" };
+    }
+    if (config.mode === "test" && !String(config.testRedirectTo ?? "").trim()) {
+      return { status: "invalid_config", provider: "resend" };
+    }
+    return {
+      status: "ok",
+      provider: "resend",
+      mode: String(config.mode)
+    };
+  }
+  function assertResendConfigForSend(config) {
+    const health = resolveResendConfigHealth(config);
+    if (health.status === "disabled") {
+      throw new Error("Resend email provider is disabled");
+    }
+    if (health.status === "invalid_config") {
+      throw new Error("Resend email provider configuration is invalid");
+    }
+    return health.mode;
+  }
+  function mapResendHttpFailure(status) {
+    if (TRANSIENT_HTTP_STATUS_CODES.has(status)) {
+      return {
+        failureType: "transient",
+        failureReason: `resend_http_${status}`
+      };
+    }
+    if (PERMANENT_HTTP_STATUS_CODES.has(status)) {
+      return {
+        failureType: "permanent",
+        failureReason: `resend_http_${status}`
+      };
+    }
+    return {
+      failureType: "transient",
+      failureReason: `resend_http_${status}`
+    };
+  }
+  function createResendEmailProvider({ config, fetchImpl } = {}) {
+    return {
+      async healthCheck() {
+        return resolveResendConfigHealth(config);
+      },
+      /**
+       * @param {{
+       *   to: string;
+       *   subject: string;
+       *   bodyText: string;
+       *   metadata?: Record<string, unknown>;
+       * }} input
+       */
+      async sendReminder({ to, subject, bodyText, metadata }) {
+        const mode = assertResendConfigForSend(config);
+        const recipient = String(to ?? "").trim();
+        if (!recipient) {
+          throw new Error("sendReminder requires a recipient address.");
+        }
+        if (!String(subject ?? "").trim()) {
+          throw new Error("sendReminder requires a subject.");
+        }
+        if (!String(bodyText ?? "").trim()) {
+          throw new Error("sendReminder requires bodyText.");
+        }
+        void metadata;
+        if (typeof fetchImpl !== "function") {
+          throw new Error("Resend email provider requires fetchImpl");
+        }
+        const resolvedRecipient = mode === "test" ? String(config.testRedirectTo).trim() : recipient;
+        const resolvedSubject = mode === "test" ? `[TEST] ${String(subject).trim()}` : String(subject).trim();
+        const payload = {
+          from: String(config.fromEmail).trim(),
+          to: [resolvedRecipient],
+          subject: resolvedSubject,
+          text: String(bodyText).trim()
+        };
+        const replyTo = String(config.replyToEmail ?? "").trim();
+        if (replyTo) {
+          payload.reply_to = replyTo;
+        }
+        let response;
+        try {
+          response = await fetchImpl(RESEND_EMAILS_URL, {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${String(config.apiKey).trim()}`,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify(payload)
+          });
+        } catch (error) {
+          return {
+            status: "failed",
+            failureType: "transient",
+            failureReason: "resend_network_error"
+          };
+        }
+        if (response.status >= 200 && response.status < 300) {
+          let responseBody = {};
+          try {
+            responseBody = await response.json();
+          } catch {
+            responseBody = {};
+          }
+          const providerMessageId = typeof responseBody.id === "string" && responseBody.id.length > 0 ? responseBody.id : `resend-${Date.now()}`;
+          return {
+            status: "delivered",
+            providerMessageId,
+            deliveredAt: (/* @__PURE__ */ new Date()).toISOString()
+          };
+        }
+        const failure = mapResendHttpFailure(response.status);
+        return {
+          status: "failed",
+          failureType: failure.failureType,
+          failureReason: failure.failureReason
+        };
+      }
+    };
+  }
+
+  // js/app/automation/providers/sendgrid-provider.js
+  function createSendgridEmailProvider({ config } = {}) {
+    void config;
+    return {
+      async healthCheck() {
+        return {
+          status: "not_implemented",
+          provider: "sendgrid"
+        };
+      },
+      async sendReminder() {
+        throw new Error("Provider sendgrid is not implemented yet");
+      }
+    };
+  }
+
+  // js/app/automation/providers/smtp-provider.js
+  function createSmtpEmailProvider({ config } = {}) {
+    void config;
+    return {
+      async healthCheck() {
+        return {
+          status: "not_implemented",
+          provider: "smtp"
+        };
+      },
+      async sendReminder() {
+        throw new Error("Provider smtp is not implemented yet");
+      }
+    };
+  }
+
+  // js/app/automation/email-provider-adapter.js
+  var SKELETON_EMAIL_PROVIDER_FACTORIES = {
+    resend: createResendEmailProvider,
+    sendgrid: createSendgridEmailProvider,
+    smtp: createSmtpEmailProvider
+  };
+  function createDisabledEmailProvider() {
+    return {
+      async healthCheck() {
+        return {
+          status: "disabled",
+          provider: "none"
+        };
+      },
+      async sendReminder() {
+        throw new Error("Email provider is disabled");
+      }
+    };
+  }
+  function createEmailProviderAdapter({ config, mockProvider } = {}) {
+    const resolvedConfig = config ?? {
+      provider: "none",
+      mode: "disabled",
+      fromEmail: null,
+      replyToEmail: null,
+      rateLimitPerRun: 50,
+      enabled: false
+    };
+    if (!resolvedConfig.enabled) {
+      return createDisabledEmailProvider();
+    }
+    if (resolvedConfig.provider === "mock") {
+      return mockProvider ?? createMockEmailProvider({ mode: "success" });
+    }
+    const skeletonFactory = SKELETON_EMAIL_PROVIDER_FACTORIES[resolvedConfig.provider];
+    if (skeletonFactory) {
+      return skeletonFactory({ config: resolvedConfig });
+    }
+    return createDisabledEmailProvider();
+  }
+
+  // js/app/automation/email-provider-config.js
+  var SUPPORTED_EMAIL_PROVIDERS = ["none", "resend", "sendgrid", "smtp"];
+  var SUPPORTED_EMAIL_MODES = ["disabled", "test", "production"];
+  var DEFAULT_EMAIL_RATE_LIMIT_PER_RUN = 50;
+  function parseBooleanEnv(value) {
+    return value === "true" || value === "1";
+  }
+  function parsePositiveIntEnv(value, fallback) {
+    const parsed = Number.parseInt(String(value ?? ""), 10);
+    if (!Number.isFinite(parsed) || parsed < 1) {
+      return fallback;
+    }
+    return parsed;
+  }
+  function parseProvider(value) {
+    const normalized = String(value ?? "none").trim().toLowerCase();
+    if (SUPPORTED_EMAIL_PROVIDERS.includes(normalized)) {
+      return (
+        /** @type {EmailProviderName} */
+        normalized
+      );
+    }
+    return "none";
+  }
+  function parseMode(value) {
+    const normalized = String(value ?? "disabled").trim().toLowerCase();
+    if (SUPPORTED_EMAIL_MODES.includes(normalized)) {
+      return (
+        /** @type {EmailProviderMode} */
+        normalized
+      );
+    }
+    return "disabled";
+  }
+  function getEmailProviderConfig(env) {
+    const source = env ?? (typeof process !== "undefined" && process.env ? process.env : (
+      /** @type {Record<string, string | undefined>} */
+      {}
+    ));
+    const provider = parseProvider(source.EMAIL_PROVIDER);
+    const mode = parseMode(source.EMAIL_MODE);
+    const fromEmail = String(source.EMAIL_FROM_ADDRESS ?? "").trim() || null;
+    const replyToEmail = String(source.EMAIL_REPLY_TO_ADDRESS ?? "").trim() || null;
+    const rateLimitPerRun = parsePositiveIntEnv(
+      source.EMAIL_RATE_LIMIT_PER_RUN,
+      DEFAULT_EMAIL_RATE_LIMIT_PER_RUN
+    );
+    const explicitlyEnabled = parseBooleanEnv(source.EMAIL_PROVIDER_ENABLED);
+    const enabled = explicitlyEnabled && provider !== "none" && mode !== "disabled";
+    if (source.EMAIL_PROVIDER === void 0 && source.EMAIL_MODE === void 0 && source.EMAIL_PROVIDER_ENABLED === void 0 && source.EMAIL_FROM_ADDRESS === void 0 && source.EMAIL_REPLY_TO_ADDRESS === void 0 && source.EMAIL_RATE_LIMIT_PER_RUN === void 0) {
+      return {
+        provider: "none",
+        mode: "disabled",
+        fromEmail: null,
+        replyToEmail: null,
+        rateLimitPerRun: DEFAULT_EMAIL_RATE_LIMIT_PER_RUN,
+        enabled: false
+      };
+    }
+    return {
+      provider,
+      mode,
+      fromEmail,
+      replyToEmail,
+      rateLimitPerRun,
+      enabled
+    };
+  }
+
+  // js/app/automation/delivery-log-persistence-service.js
+  function resolveErrorMessage(error) {
+    if (error instanceof Error) {
+      return error.message;
+    }
+    return String(error);
+  }
+  async function persistDeliveryLogPayloads({ db, payloads }) {
+    const inputPayloads = Array.isArray(payloads) ? payloads : [];
+    if (!db || typeof db.createReminderDeliveryLog !== "function") {
+      throw new Error(
+        "persistDeliveryLogPayloads requires db with createReminderDeliveryLog."
+      );
+    }
+    const results = [];
+    let persisted = 0;
+    let failed = 0;
+    for (const payload of inputPayloads) {
+      try {
+        const result = await db.createReminderDeliveryLog(payload);
+        if (result.ok) {
+          results.push({
+            ok: true,
+            payload,
+            log: result.log
+          });
+          persisted += 1;
+          continue;
+        }
+        results.push({
+          ok: false,
+          payload,
+          error: result.error
+        });
+        failed += 1;
+      } catch (error) {
+        results.push({
+          ok: false,
+          payload,
+          error: resolveErrorMessage(error)
+        });
+        failed += 1;
+      }
+    }
+    return {
+      results,
+      summary: {
+        total: inputPayloads.length,
+        persisted,
+        failed
+      }
+    };
+  }
+
+  // js/app/automation/reminder-delivery-state-machine.js
+  var DELIVERY_STATUSES = [
+    "queued",
+    "prepared",
+    "sending",
+    "delivered",
+    "failed",
+    "cancelled"
+  ];
+  var VALID_TRANSITIONS = {
+    queued: ["prepared", "cancelled"],
+    prepared: ["sending", "cancelled", "failed"],
+    sending: ["delivered", "failed"],
+    delivered: [],
+    failed: ["queued", "cancelled"],
+    cancelled: []
+  };
+  function isValidReminderDeliveryTransition(currentStatus, nextStatus) {
+    const allowed = VALID_TRANSITIONS[currentStatus];
+    if (!allowed) {
+      return false;
+    }
+    return allowed.includes(nextStatus);
+  }
+  function resolveTransitionTimestamp(at) {
+    const resolvedAt = String(at ?? "").trim();
+    if (resolvedAt) {
+      return resolvedAt;
+    }
+    return (/* @__PURE__ */ new Date()).toISOString();
+  }
+  function applyStatusTimestampFields(record, nextStatus, at, reason) {
+    const resolvedReason = reason != null && String(reason).trim() ? String(reason).trim() : null;
+    if (nextStatus === "prepared") {
+      return {
+        ...record,
+        preparedAt: record.preparedAt ?? at
+      };
+    }
+    if (nextStatus === "sending") {
+      return {
+        ...record,
+        sentAt: record.sentAt ?? at
+      };
+    }
+    if (nextStatus === "delivered") {
+      return {
+        ...record,
+        deliveredAt: at
+      };
+    }
+    if (nextStatus === "failed") {
+      return {
+        ...record,
+        failedAt: at,
+        failureReason: resolvedReason
+      };
+    }
+    if (nextStatus === "cancelled") {
+      return {
+        ...record,
+        cancelledAt: at,
+        cancellationReason: resolvedReason
+      };
+    }
+    return record;
+  }
+  function transitionReminderDeliveryRecord({
+    record,
+    nextStatus,
+    reason,
+    at
+  }) {
+    if (!record || typeof record !== "object") {
+      throw new Error("transitionReminderDeliveryRecord requires a record object.");
+    }
+    const currentStatus = record.deliveryStatus;
+    if (!DELIVERY_STATUSES.includes(currentStatus)) {
+      throw new Error(
+        `Invalid current delivery status "${String(currentStatus)}".`
+      );
+    }
+    if (!DELIVERY_STATUSES.includes(nextStatus)) {
+      throw new Error(`Invalid next delivery status "${String(nextStatus)}".`);
+    }
+    if (!isValidReminderDeliveryTransition(currentStatus, nextStatus)) {
+      throw new Error(
+        `Invalid delivery status transition from "${currentStatus}" to "${nextStatus}".`
+      );
+    }
+    const transitionAt = resolveTransitionTimestamp(at);
+    const priorHistory = Array.isArray(record.statusHistory) ? [...record.statusHistory] : [];
+    const withStatus = {
+      ...record,
+      deliveryStatus: nextStatus,
+      statusHistory: [
+        ...priorHistory,
+        {
+          from: currentStatus,
+          to: nextStatus,
+          at: transitionAt,
+          reason: reason != null && String(reason).trim() ? String(reason).trim() : null
+        }
+      ]
+    };
+    return applyStatusTimestampFields(withStatus, nextStatus, transitionAt, reason);
+  }
+
+  // js/app/automation/delivery-worker.js
+  var MISSING_RECIPIENT_EMAIL_REASON = "missing_recipient_email";
+  function isMissingRecipientEmailFailure(record) {
+    return record.deliveryStatus === "failed" && record.failureReason === MISSING_RECIPIENT_EMAIL_REASON;
+  }
+  function isSkippedRecord(record) {
+    return record.deliveryStatus === "delivered" || record.deliveryStatus === "cancelled" || isMissingRecipientEmailFailure(record);
+  }
+  async function executeReminderDeliveries({
+    records,
+    provider,
+    transitionRecord = transitionReminderDeliveryRecord,
+    now
+  }) {
+    const inputRecords = Array.isArray(records) ? records : [];
+    if (!provider || typeof provider.sendReminder !== "function") {
+      throw new Error("executeReminderDeliveries requires a provider with sendReminder.");
+    }
+    if (typeof transitionRecord !== "function") {
+      throw new Error("executeReminderDeliveries requires transitionRecord.");
+    }
+    const updatedRecords = [];
+    let attempted = 0;
+    let delivered = 0;
+    let failed = 0;
+    let skipped = 0;
+    for (const record of inputRecords) {
+      if (isSkippedRecord(record) || record.deliveryStatus !== "prepared") {
+        updatedRecords.push(record);
+        skipped += 1;
+        continue;
+      }
+      attempted += 1;
+      let current = transitionRecord({
+        record,
+        nextStatus: "sending",
+        at: now
+      });
+      const result = await provider.sendReminder({
+        to: String(current.recipientEmail ?? ""),
+        subject: current.subject,
+        bodyText: current.bodyText,
+        metadata: current.metadata
+      });
+      if (result.status === "delivered") {
+        current = transitionRecord({
+          record: current,
+          nextStatus: "delivered",
+          at: result.deliveredAt ?? now
+        });
+        delivered += 1;
+      } else {
+        current = transitionRecord({
+          record: current,
+          nextStatus: "failed",
+          reason: result.failureReason,
+          at: now
+        });
+        failed += 1;
+      }
+      updatedRecords.push(current);
+    }
+    return {
+      records: updatedRecords,
+      summary: {
+        total: inputRecords.length,
+        attempted,
+        delivered,
+        failed,
+        skipped
+      }
+    };
+  }
+
+  // js/app/automation/delivery-worker-persistence.js
+  var PRESERVED_METADATA_KEYS = [
+    "providerMessageId",
+    "provider",
+    "failureType",
+    "reminderWindow",
+    "complianceType",
+    "expiryDate",
+    "source",
+    "emailMissing"
+  ];
+  function resolveOptionalId(value) {
+    if (value == null) {
+      return null;
+    }
+    const trimmed = String(value).trim();
+    return trimmed || null;
+  }
+  function resolveOptionalText(value) {
+    if (value == null) {
+      return null;
+    }
+    const trimmed = String(value).trim();
+    return trimmed || null;
+  }
+  function resolveOrganisationId(organisationId, recordOrganisationId) {
+    const resolved = resolveOptionalId(organisationId) ?? resolveOptionalId(recordOrganisationId);
+    if (!resolved) {
+      throw new Error("buildDeliveryLogPayloads requires organisationId.");
+    }
+    return resolved;
+  }
+  function buildDeliveryLogMetadata(record) {
+    const base = record.metadata && typeof record.metadata === "object" && !Array.isArray(record.metadata) ? record.metadata : {};
+    const metadata = {};
+    for (const key of PRESERVED_METADATA_KEYS) {
+      if (Object.prototype.hasOwnProperty.call(base, key)) {
+        metadata[key] = base[key];
+      }
+    }
+    const statusHistory = Array.isArray(record.statusHistory) ? record.statusHistory : Array.isArray(base.statusHistory) ? base.statusHistory : null;
+    if (statusHistory && statusHistory.length > 0) {
+      metadata.statusHistory = statusHistory.map(
+        (entry) => entry && typeof entry === "object" ? { ...entry } : entry
+      );
+    }
+    return metadata;
+  }
+  function buildDeliveryLogPayload(record, organisationId, automationRunId) {
+    const resolvedAutomationRunId = automationRunId ?? resolveOptionalId(record.automationRunId);
+    return {
+      p_organisation_id: organisationId,
+      p_automation_run_id: resolvedAutomationRunId,
+      p_queue_item_id: String(record.queueItemId ?? "").trim(),
+      p_compliance_record_id: resolveOptionalId(record.complianceRecordId),
+      p_person_id: resolveOptionalId(record.personId),
+      p_recipient_email: resolveOptionalText(record.recipientEmail),
+      p_subject: String(record.subject ?? "").trim(),
+      p_body_text: String(record.bodyText ?? "").trim(),
+      p_delivery_status: String(record.deliveryStatus ?? "").trim(),
+      p_prepared_at: resolveOptionalText(record.preparedAt),
+      p_sent_at: resolveOptionalText(record.sentAt),
+      p_delivered_at: resolveOptionalText(record.deliveredAt),
+      p_failed_at: resolveOptionalText(record.failedAt),
+      p_failure_reason: resolveOptionalText(record.failureReason),
+      p_metadata: buildDeliveryLogMetadata(record)
+    };
+  }
+  function buildDeliveryLogPayloads({ records, organisationId, automationRunId }) {
+    const inputRecords = Array.isArray(records) ? records : [];
+    const resolvedOrganisationId = resolveOrganisationId(organisationId, null);
+    const resolvedAutomationRunId = resolveOptionalId(automationRunId);
+    return inputRecords.map(
+      (record) => buildDeliveryLogPayload(
+        record,
+        resolvedOrganisationId,
+        resolvedAutomationRunId ?? resolveOptionalId(record.automationRunId)
+      )
+    );
+  }
+
+  // js/app/automation/delivery-pipeline-service.js
+  function resolveOrganisationId2(organisationId) {
+    const resolved = String(organisationId ?? "").trim();
+    if (!resolved) {
+      throw new Error("runDeliveryPipeline requires organisationId.");
+    }
+    return resolved;
+  }
+  async function runDeliveryPipeline({
+    records,
+    provider,
+    db,
+    organisationId,
+    automationRunId,
+    now
+  }) {
+    const resolvedOrganisationId = resolveOrganisationId2(organisationId);
+    if (!provider || typeof provider.sendReminder !== "function") {
+      throw new Error("runDeliveryPipeline requires provider with sendReminder.");
+    }
+    if (!db || typeof db.createReminderDeliveryLog !== "function") {
+      throw new Error("runDeliveryPipeline requires db with createReminderDeliveryLog.");
+    }
+    const executed = await executeReminderDeliveries({
+      records,
+      provider,
+      now
+    });
+    const payloads = buildDeliveryLogPayloads({
+      records: executed.records,
+      organisationId: resolvedOrganisationId,
+      automationRunId
+    });
+    const persisted = await persistDeliveryLogPayloads({
+      db,
+      payloads
+    });
+    return {
+      records: executed.records,
+      executionSummary: executed.summary,
+      persistenceSummary: persisted.summary,
+      persistenceResults: persisted.results
+    };
+  }
+
+  // js/app/automation/reminder-template-builder.js
+  function getReminderWindowCopy2(reminderWindow, reminderType) {
+    if (reminderWindow === "expired" || reminderType === REMINDER_UI_LABELS.expired) {
+      return {
+        subjectLead: "Expired compliance",
+        windowLine: "This compliance item has expired and requires renewal.",
+        actionLine: "Please renew this compliance record urgently and update the register once renewal is complete."
+      };
+    }
+    if (reminderWindow === "30-day" || reminderType === REMINDER_UI_LABELS[30]) {
+      return {
+        subjectLead: "30-day reminder",
+        windowLine: "This compliance item expires within 30 days.",
+        actionLine: "Please review this record and arrange renewal or follow-up before the expiry date."
+      };
+    }
+    if (reminderWindow === "14-day" || reminderType === REMINDER_UI_LABELS[14]) {
+      return {
+        subjectLead: "14-day reminder",
+        windowLine: "This compliance item expires within 14 days.",
+        actionLine: "Please review this record and arrange renewal or follow-up before the expiry date."
+      };
+    }
+    if (reminderWindow === "7-day" || reminderType === REMINDER_UI_LABELS[7]) {
+      return {
+        subjectLead: "7-day reminder",
+        windowLine: "This compliance item expires within 7 days.",
+        actionLine: "Please review this record and arrange renewal or follow-up before the expiry date."
+      };
+    }
+    return {
+      subjectLead: "Compliance reminder",
+      windowLine: "This compliance item needs your attention.",
+      actionLine: "Please review this record and arrange renewal or follow-up as required."
+    };
+  }
+  function buildReminderEmailTemplate({ queueItem, organisationName, contactName }) {
+    if (!queueItem || typeof queueItem !== "object") {
+      throw new Error("queueItem is required.");
+    }
+    const recordName = String(queueItem.personName ?? "").trim();
+    const salutationName = String(contactName ?? recordName).trim();
+    const complianceType = String(queueItem.complianceType ?? "").trim();
+    const expiryDate = String(queueItem.expiryDate ?? "").trim();
+    const reminderWindow = String(queueItem.reminderWindow ?? "").trim();
+    const reminderType = String(queueItem.reminderType ?? "").trim();
+    const source = String(queueItem.source ?? "").trim();
+    const resolvedOrganisation = String(organisationName ?? "").trim() || DEFAULT_ORGANISATION_NAME;
+    if (!recordName || !complianceType || !expiryDate) {
+      throw new Error("queueItem must include personName, complianceType, and expiryDate.");
+    }
+    if (!salutationName) {
+      throw new Error("contactName or queueItem.personName is required for the greeting.");
+    }
+    const formattedExpiry = formatReminderExpiryDate(expiryDate);
+    const { subjectLead, windowLine, actionLine } = getReminderWindowCopy2(
+      reminderWindow,
+      reminderType
+    );
+    const subject = `${subjectLead}: ${complianceType} \u2014 ${recordName}`;
+    const bodyLines = [
+      `Dear ${salutationName},`,
+      "",
+      windowLine,
+      "",
+      `Compliance type: ${complianceType}`,
+      `Expiry date: ${formattedExpiry}`,
+      `Reminder window: ${reminderWindow || reminderType}`,
+      "",
+      actionLine,
+      "",
+      "If you have already renewed this item, please ensure the compliance register is up to date.",
+      "",
+      resolvedOrganisation,
+      "",
+      "This is a reminder queue template preview. No email has been sent."
+    ];
+    const emailMissing = queueItem.emailMissing === true || queueItem.email == null;
+    return {
+      subject,
+      bodyText: bodyLines.join("\n"),
+      metadata: {
+        source,
+        reminderWindow: reminderWindow || reminderType,
+        complianceType,
+        expiryDate
+      },
+      emailMissing
+    };
+  }
+
+  // js/app/automation/reminder-delivery-record-builder.js
+  var MISSING_RECIPIENT_EMAIL_REASON2 = "missing_recipient_email";
+  function createDeliveryRecordId() {
+    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+      return crypto.randomUUID();
+    }
+    throw new Error("crypto.randomUUID is not available.");
+  }
+  function deriveQueueItemId(queueItem) {
+    const existingId = queueItem?.id;
+    if (existingId != null && String(existingId).trim()) {
+      return String(existingId).trim();
+    }
+    return [
+      queueItem.personName,
+      queueItem.complianceType,
+      queueItem.expiryDate,
+      queueItem.reminderWindow,
+      queueItem.asOfDate
+    ].map((value) => String(value ?? "").trim()).join("|");
+  }
+  function resolveRecordTimestamp(asOfDate) {
+    const resolvedAsOfDate = String(asOfDate ?? "").trim();
+    if (resolvedAsOfDate) {
+      return `${resolvedAsOfDate}T12:00:00.000Z`;
+    }
+    return (/* @__PURE__ */ new Date()).toISOString();
+  }
+  function buildReminderDeliveryRecords({
+    queueItems,
+    organisationId,
+    automationRunId,
+    organisationName,
+    asOfDate
+  }) {
+    const inputItems = Array.isArray(queueItems) ? queueItems : [];
+    const resolvedOrganisationId = String(organisationId ?? "").trim();
+    const resolvedAutomationRunId = String(automationRunId ?? "").trim();
+    const recordTimestamp = resolveRecordTimestamp(asOfDate);
+    return inputItems.map((queueItem) => {
+      const template = buildReminderEmailTemplate({
+        queueItem,
+        organisationName
+      });
+      const queueItemId = deriveQueueItemId(queueItem);
+      const emailMissing = template.emailMissing;
+      const metadata = {
+        reminderWindow: template.metadata.reminderWindow,
+        complianceType: template.metadata.complianceType,
+        expiryDate: template.metadata.expiryDate,
+        source: template.metadata.source,
+        emailMissing
+      };
+      if (emailMissing) {
+        return {
+          id: createDeliveryRecordId(),
+          organisationId: resolvedOrganisationId,
+          automationRunId: resolvedAutomationRunId,
+          queueItemId,
+          recipientEmail: null,
+          subject: template.subject,
+          bodyText: template.bodyText,
+          deliveryStatus: "failed",
+          preparedAt: null,
+          sentAt: null,
+          deliveredAt: null,
+          failedAt: recordTimestamp,
+          failureReason: MISSING_RECIPIENT_EMAIL_REASON2,
+          metadata
+        };
+      }
+      return {
+        id: createDeliveryRecordId(),
+        organisationId: resolvedOrganisationId,
+        automationRunId: resolvedAutomationRunId,
+        queueItemId,
+        recipientEmail: String(queueItem.email ?? "").trim(),
+        subject: template.subject,
+        bodyText: template.bodyText,
+        deliveryStatus: "prepared",
+        preparedAt: recordTimestamp,
+        sentAt: null,
+        deliveredAt: null,
+        failedAt: null,
+        failureReason: null,
+        metadata
+      };
+    });
+  }
+
+  // js/app/automation/manual-delivery-runner.js
+  function resolveOrganisationId3(organisationId) {
+    const resolved = String(organisationId ?? "").trim();
+    if (!resolved) {
+      throw new Error("runManualDeliveryPipeline requires organisationId.");
+    }
+    return resolved;
+  }
+  function resolveAutomationRunId(automationRunId) {
+    const resolved = String(automationRunId ?? "").trim();
+    if (!resolved) {
+      throw new Error("runManualDeliveryPipeline requires automationRunId.");
+    }
+    return resolved;
+  }
+  async function runManualDeliveryPipeline({
+    queueItems,
+    provider,
+    db,
+    organisationId,
+    automationRunId,
+    organisationName,
+    asOfDate,
+    now
+  }) {
+    const resolvedOrganisationId = resolveOrganisationId3(organisationId);
+    const resolvedAutomationRunId = resolveAutomationRunId(automationRunId);
+    if (!provider || typeof provider.sendReminder !== "function") {
+      throw new Error("runManualDeliveryPipeline requires provider with sendReminder.");
+    }
+    if (!db || typeof db.createReminderDeliveryLog !== "function") {
+      throw new Error("runManualDeliveryPipeline requires db with createReminderDeliveryLog.");
+    }
+    const deliveryRecords = buildReminderDeliveryRecords({
+      queueItems,
+      organisationId: resolvedOrganisationId,
+      automationRunId: resolvedAutomationRunId,
+      organisationName,
+      asOfDate
+    });
+    const pipelineResult = await runDeliveryPipeline({
+      records: deliveryRecords,
+      provider,
+      db,
+      organisationId: resolvedOrganisationId,
+      automationRunId: resolvedAutomationRunId,
+      now
+    });
+    return {
+      deliveryRecords: pipelineResult.records,
+      executionSummary: pipelineResult.executionSummary,
+      persistenceSummary: pipelineResult.persistenceSummary,
+      persistenceResults: pipelineResult.persistenceResults
+    };
+  }
+
+  // js/data/email-provider-env.js
+  var EMAIL_PROVIDER_RUNTIME = {
+    EMAIL_PROVIDER: void 0,
+    EMAIL_MODE: void 0,
+    EMAIL_PROVIDER_ENABLED: void 0,
+    EMAIL_FROM_ADDRESS: void 0,
+    EMAIL_REPLY_TO_ADDRESS: void 0,
+    EMAIL_RATE_LIMIT_PER_RUN: void 0,
+    EMAIL_TEST_REDIRECT_TO: void 0,
+    RESEND_API_KEY: void 0
+  };
+
+  // js/app/automation/manual-delivery-execution.js
+  var MANUAL_DELIVERY_RUN_TYPE = "manual_delivery_test";
+  var MANUAL_DELIVERY_RUN_SOURCE = "admin_manual_delivery_ui";
+  function buildProviderAdapterConfig() {
+    const base = getEmailProviderConfig(EMAIL_PROVIDER_RUNTIME);
+    if (!base.enabled || base.provider !== "resend") {
+      return { ...base };
+    }
+    return {
+      ...base,
+      apiKey: String(EMAIL_PROVIDER_RUNTIME.RESEND_API_KEY ?? "").trim(),
+      testRedirectTo: String(EMAIL_PROVIDER_RUNTIME.EMAIL_TEST_REDIRECT_TO ?? "").trim()
+    };
+  }
+  function createManualDeliveryEmailProvider() {
+    const config = buildProviderAdapterConfig();
+    if (!config.enabled) {
+      return createEmailProviderAdapter({ config });
+    }
+    if (config.provider === "resend") {
+      const fetchImpl = typeof fetch === "function" ? fetch.bind(globalThis) : void 0;
+      return createResendEmailProvider({ config, fetchImpl });
+    }
+    return createEmailProviderAdapter({ config });
+  }
+  async function executeManualDeliveryTest({
+    queueItems,
+    db,
+    organisationId,
+    organisationName,
+    asOfDate,
+    now
+  }) {
+    if (!db || typeof db.createAutomationRun !== "function") {
+      throw new Error("Manual delivery test requires an automation store with createAutomationRun.");
+    }
+    if (!db || typeof db.createReminderDeliveryLog !== "function") {
+      throw new Error("Manual delivery test requires an automation store with createReminderDeliveryLog.");
+    }
+    const providerConfig = buildProviderAdapterConfig();
+    if (!providerConfig.enabled) {
+      throw new Error("Email provider is not enabled for manual delivery tests.");
+    }
+    const runResult = await db.createAutomationRun({
+      status: "completed",
+      summary: {
+        runType: MANUAL_DELIVERY_RUN_TYPE,
+        source: MANUAL_DELIVERY_RUN_SOURCE,
+        organisationId,
+        queueItemCount: Array.isArray(queueItems) ? queueItems.length : 0,
+        providerMode: providerConfig.mode
+      }
+    });
+    if (!runResult.ok || !runResult.run?.id) {
+      throw new Error(runResult.error ?? "Could not create automation run for manual delivery test.");
+    }
+    const provider = createManualDeliveryEmailProvider();
+    return runManualDeliveryPipeline({
+      queueItems,
+      provider,
+      db,
+      organisationId,
+      automationRunId: runResult.run.id,
+      organisationName,
+      asOfDate,
+      now
+    });
+  }
+
+  // js/app/automation/manual-delivery-ui.js
+  var MANUAL_DELIVERY_TEST_SAFETY_NOTE = "Manual test execution only. No scheduling is enabled.";
+  var MANUAL_DELIVERY_RUN_BUTTON_LABEL = "Run Delivery Test";
+  var MANUAL_DELIVERY_CONFIRMATION_MESSAGE = [
+    "Run a manual delivery test using the current reminder preview queue?",
+    "",
+    "\u2022 Emails may be sent through the configured provider.",
+    "\u2022 In test mode, recipients are redirected to the staging inbox.",
+    "\u2022 Delivery log rows will be written; reminders will not be marked sent.",
+    "\u2022 This action cannot be undone."
+  ].join("\n");
+  function formatManualDeliveryModeLabel(mode) {
+    if (mode === "test" || mode === "production") {
+      return mode;
+    }
+    return "disabled";
+  }
+  function computeManualDeliveryQueueSummary(queueItems) {
+    const items = Array.isArray(queueItems) ? queueItems : [];
+    let missingEmail = 0;
+    for (const item of items) {
+      if (item?.emailMissing === true || item?.email == null || String(item.email).trim() === "") {
+        missingEmail += 1;
+      }
+    }
+    return {
+      totalQueued: items.length,
+      missingEmail
+    };
+  }
+  function getManualDeliveryProviderConfig() {
+    return getEmailProviderConfig(EMAIL_PROVIDER_RUNTIME);
+  }
+  function buildManualDeliveryResultSummary(executionSummary, persistenceSummary) {
+    return {
+      attempted: Number(executionSummary?.attempted ?? 0),
+      delivered: Number(executionSummary?.delivered ?? 0),
+      failed: Number(executionSummary?.failed ?? 0),
+      persisted: Number(persistenceSummary?.persisted ?? 0)
+    };
+  }
+
   // js/app/automation/automation-dry-run.js
   var AUTOMATION_REMINDER_TYPE_BUCKETS = {
     "30-day": REMINDER_UI_LABELS[30],
@@ -26522,97 +27598,6 @@ ${suffix}`;
       (row) => REMINDER_QUEUE_EXPORT_COLUMNS.map((column) => escapeCsvValue(row[column.key] ?? "")).join(",")
     );
     return [headerRow, ...dataRows].join("\n");
-  }
-
-  // js/app/automation/reminder-template-builder.js
-  function getReminderWindowCopy2(reminderWindow, reminderType) {
-    if (reminderWindow === "expired" || reminderType === REMINDER_UI_LABELS.expired) {
-      return {
-        subjectLead: "Expired compliance",
-        windowLine: "This compliance item has expired and requires renewal.",
-        actionLine: "Please renew this compliance record urgently and update the register once renewal is complete."
-      };
-    }
-    if (reminderWindow === "30-day" || reminderType === REMINDER_UI_LABELS[30]) {
-      return {
-        subjectLead: "30-day reminder",
-        windowLine: "This compliance item expires within 30 days.",
-        actionLine: "Please review this record and arrange renewal or follow-up before the expiry date."
-      };
-    }
-    if (reminderWindow === "14-day" || reminderType === REMINDER_UI_LABELS[14]) {
-      return {
-        subjectLead: "14-day reminder",
-        windowLine: "This compliance item expires within 14 days.",
-        actionLine: "Please review this record and arrange renewal or follow-up before the expiry date."
-      };
-    }
-    if (reminderWindow === "7-day" || reminderType === REMINDER_UI_LABELS[7]) {
-      return {
-        subjectLead: "7-day reminder",
-        windowLine: "This compliance item expires within 7 days.",
-        actionLine: "Please review this record and arrange renewal or follow-up before the expiry date."
-      };
-    }
-    return {
-      subjectLead: "Compliance reminder",
-      windowLine: "This compliance item needs your attention.",
-      actionLine: "Please review this record and arrange renewal or follow-up as required."
-    };
-  }
-  function buildReminderEmailTemplate({ queueItem, organisationName, contactName }) {
-    if (!queueItem || typeof queueItem !== "object") {
-      throw new Error("queueItem is required.");
-    }
-    const recordName = String(queueItem.personName ?? "").trim();
-    const salutationName = String(contactName ?? recordName).trim();
-    const complianceType = String(queueItem.complianceType ?? "").trim();
-    const expiryDate = String(queueItem.expiryDate ?? "").trim();
-    const reminderWindow = String(queueItem.reminderWindow ?? "").trim();
-    const reminderType = String(queueItem.reminderType ?? "").trim();
-    const source = String(queueItem.source ?? "").trim();
-    const resolvedOrganisation = String(organisationName ?? "").trim() || DEFAULT_ORGANISATION_NAME;
-    if (!recordName || !complianceType || !expiryDate) {
-      throw new Error("queueItem must include personName, complianceType, and expiryDate.");
-    }
-    if (!salutationName) {
-      throw new Error("contactName or queueItem.personName is required for the greeting.");
-    }
-    const formattedExpiry = formatReminderExpiryDate(expiryDate);
-    const { subjectLead, windowLine, actionLine } = getReminderWindowCopy2(
-      reminderWindow,
-      reminderType
-    );
-    const subject = `${subjectLead}: ${complianceType} \u2014 ${recordName}`;
-    const bodyLines = [
-      `Dear ${salutationName},`,
-      "",
-      windowLine,
-      "",
-      `Compliance type: ${complianceType}`,
-      `Expiry date: ${formattedExpiry}`,
-      `Reminder window: ${reminderWindow || reminderType}`,
-      "",
-      actionLine,
-      "",
-      "If you have already renewed this item, please ensure the compliance register is up to date.",
-      "",
-      resolvedOrganisation,
-      "",
-      "This is a reminder queue template preview. No email has been sent."
-    ];
-    const emailMissing = queueItem.emailMissing === true || queueItem.email == null;
-    return {
-      subject,
-      bodyText: bodyLines.join("\n"),
-      metadata: {
-        source,
-        reminderWindow: reminderWindow || reminderType,
-        complianceType,
-        expiryDate
-      },
-      emailMissing
-    };
   }
 
   // js/app/automation/reminder-digest-builder.js
@@ -27063,6 +28048,28 @@ ${template.bodyText}`;
   );
   var deliveryOperationsLogTableHead = document.getElementById("delivery-operations-log-table-head");
   var deliveryOperationsLogTableBody = document.getElementById("delivery-operations-log-table-body");
+  var manualDeliveryTestSection = document.getElementById("manual-delivery-test-section");
+  var manualDeliveryTestSafetyNote = document.getElementById("manual-delivery-test-safety-note");
+  var manualDeliveryTestTotalCount = document.getElementById("manual-delivery-test-total-count");
+  var manualDeliveryTestMissingEmailCount = document.getElementById(
+    "manual-delivery-test-missing-email-count"
+  );
+  var manualDeliveryTestModeValue = document.getElementById("manual-delivery-test-mode-value");
+  var manualDeliveryTestProviderHint = document.getElementById("manual-delivery-test-provider-hint");
+  var manualDeliveryTestLoading = document.getElementById("manual-delivery-test-loading");
+  var manualDeliveryTestError = document.getElementById("manual-delivery-test-error");
+  var manualDeliveryTestResult = document.getElementById("manual-delivery-test-result");
+  var manualDeliveryTestResultAttempted = document.getElementById(
+    "manual-delivery-test-result-attempted"
+  );
+  var manualDeliveryTestResultDelivered = document.getElementById(
+    "manual-delivery-test-result-delivered"
+  );
+  var manualDeliveryTestResultFailed = document.getElementById("manual-delivery-test-result-failed");
+  var manualDeliveryTestResultPersisted = document.getElementById(
+    "manual-delivery-test-result-persisted"
+  );
+  var manualDeliveryTestRunBtn = document.getElementById("manual-delivery-test-run-btn");
   var insightStaleEvidence = document.getElementById("insight-stale-evidence");
   var renewModalContext = null;
   var evidenceModalContext = null;
@@ -27073,6 +28080,8 @@ ${template.bodyText}`;
   var automationRunAuditLoadError = "";
   var deliveryOperationsLogLoadState = "idle";
   var deliveryOperationsLogLoadError = "";
+  var manualDeliveryTestExecutionState = "idle";
+  var manualDeliveryTestErrorMessage = "";
   var expandedDeliveryLogIds = /* @__PURE__ */ new Set();
   var expandedAutomationRunIds = /* @__PURE__ */ new Set();
   var expandedReminderQueueTemplatePreviewKeys = /* @__PURE__ */ new Set();
@@ -31285,6 +32294,7 @@ This cannot be undone.`
         populateReminderQueueTemplatePreviewDetail(detailRow, queueItem);
       }
     });
+    renderManualDeliveryTest();
   }
   function exportReminderQueueCsv() {
     const queue = buildReminderQueuePreviewData();
@@ -31771,6 +32781,95 @@ This cannot be undone.`
       getDeliveryOperationsLogExportFilename(),
       "text/csv;charset=utf-8"
     );
+  }
+  function renderManualDeliveryTest() {
+    if (!manualDeliveryTestSection || !manualDeliveryTestSafetyNote || !manualDeliveryTestTotalCount || !manualDeliveryTestMissingEmailCount || !manualDeliveryTestModeValue || !manualDeliveryTestProviderHint || !manualDeliveryTestLoading || !manualDeliveryTestError || !manualDeliveryTestResult || !manualDeliveryTestResultAttempted || !manualDeliveryTestResultDelivered || !manualDeliveryTestResultFailed || !manualDeliveryTestResultPersisted || !manualDeliveryTestRunBtn) {
+      return;
+    }
+    const visible = canRunManualDeliveryTest();
+    manualDeliveryTestSection.classList.toggle("hidden", !visible);
+    if (!visible) {
+      return;
+    }
+    manualDeliveryTestSafetyNote.textContent = MANUAL_DELIVERY_TEST_SAFETY_NOTE;
+    manualDeliveryTestRunBtn.textContent = MANUAL_DELIVERY_RUN_BUTTON_LABEL;
+    const queue = buildReminderQueuePreviewData();
+    const queueSummary = computeManualDeliveryQueueSummary(queue.items);
+    const providerConfig = getManualDeliveryProviderConfig();
+    manualDeliveryTestTotalCount.textContent = String(queueSummary.totalQueued);
+    manualDeliveryTestMissingEmailCount.textContent = String(queueSummary.missingEmail);
+    manualDeliveryTestModeValue.textContent = formatManualDeliveryModeLabel(providerConfig.mode);
+    const isRunning = manualDeliveryTestExecutionState === "running";
+    manualDeliveryTestLoading.classList.toggle("hidden", !isRunning);
+    manualDeliveryTestRunBtn.disabled = isRunning || !providerConfig.enabled;
+    manualDeliveryTestProviderHint.classList.toggle("hidden", providerConfig.enabled);
+    if (manualDeliveryTestErrorMessage) {
+      manualDeliveryTestError.textContent = manualDeliveryTestErrorMessage;
+      manualDeliveryTestError.classList.remove("hidden");
+    } else {
+      manualDeliveryTestError.textContent = "";
+      manualDeliveryTestError.classList.add("hidden");
+    }
+  }
+  async function handleManualDeliveryTestRun() {
+    if (!canRunManualDeliveryTest() || manualDeliveryTestExecutionState === "running") {
+      return;
+    }
+    const providerConfig = getManualDeliveryProviderConfig();
+    if (!providerConfig.enabled) {
+      manualDeliveryTestErrorMessage = "Email provider is not enabled. Configure provider settings before running a delivery test.";
+      renderManualDeliveryTest();
+      return;
+    }
+    const confirmed = confirm(MANUAL_DELIVERY_CONFIRMATION_MESSAGE);
+    if (!confirmed) {
+      return;
+    }
+    if (!automationRepository) {
+      manualDeliveryTestErrorMessage = "Manual delivery tests are available in cloud mode only.";
+      renderManualDeliveryTest();
+      return;
+    }
+    const organisationId = getOrganisationId();
+    if (!organisationId) {
+      manualDeliveryTestErrorMessage = "Organisation context is missing. Sign in again and retry.";
+      renderManualDeliveryTest();
+      return;
+    }
+    manualDeliveryTestExecutionState = "running";
+    manualDeliveryTestErrorMessage = "";
+    renderManualDeliveryTest();
+    try {
+      const queue = buildReminderQueuePreviewData();
+      const result = await executeManualDeliveryTest({
+        queueItems: queue.items,
+        db: automationRepository,
+        organisationId,
+        organisationName: DEFAULT_ORGANISATION_NAME,
+        asOfDate: queue.asOfDate
+      });
+      const summary = buildManualDeliveryResultSummary(
+        result.executionSummary,
+        result.persistenceSummary
+      );
+      manualDeliveryTestResultAttempted.textContent = String(summary.attempted);
+      manualDeliveryTestResultDelivered.textContent = String(summary.delivered);
+      manualDeliveryTestResultFailed.textContent = String(summary.failed);
+      manualDeliveryTestResultPersisted.textContent = String(summary.persisted);
+      manualDeliveryTestResult.classList.remove("hidden");
+      await loadDeliveryOperationsLog();
+    } catch (error) {
+      console.error("Manual delivery test failed.", error);
+      manualDeliveryTestErrorMessage = error instanceof Error ? error.message : "Manual delivery test failed. Check provider configuration and try again.";
+    } finally {
+      manualDeliveryTestExecutionState = "idle";
+      renderManualDeliveryTest();
+    }
+  }
+  function setupManualDeliveryTestListeners() {
+    manualDeliveryTestRunBtn?.addEventListener("click", () => {
+      void handleManualDeliveryTestRun();
+    });
   }
   function setupDeliveryOperationsLogListeners() {
     deliveryOperationsLogTableBody?.addEventListener("click", handleDeliveryOperationsLogTableClick);
@@ -34926,6 +36025,7 @@ Your current data will be overwritten. Continue?`
   }
   function applyReadOnlyMode() {
     if (!isCloudMode()) {
+      renderManualDeliveryTest();
       return;
     }
     updateAuthChromeForCloud();
@@ -35148,6 +36248,7 @@ Your current data will be overwritten. Continue?`
         saveNotesBtn.classList.remove("read-only-disabled");
       }
     }
+    renderManualDeliveryTest();
   }
   async function finishAppBoot() {
     const bootOk = await bootData();
@@ -35175,6 +36276,7 @@ Your current data will be overwritten. Continue?`
     }
     applyReadOnlyMode();
     renderTable();
+    renderManualDeliveryTest();
     await loadAutomationRunAudit();
     await loadDeliveryOperationsLog();
     document.documentElement.dataset.appReady = "true";
@@ -35196,6 +36298,7 @@ Your current data will be overwritten. Continue?`
     setupReminderQueuePreviewListeners();
     setupAutomationRunAuditListeners();
     setupDeliveryOperationsLogListeners();
+    setupManualDeliveryTestListeners();
     setupRecordWorkspaceListeners();
     setupReportListeners();
   }

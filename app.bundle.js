@@ -26241,6 +26241,17 @@ ${suffix}`;
 
   // js/app/automation/edge-delivery-invoke.js
   var SEND_REMINDER_DELIVERIES_FUNCTION = "send-reminder-deliveries";
+  async function resolveInvokeAccessToken(supabase) {
+    const { data, error } = await supabase.auth.getSession();
+    if (error) {
+      throw new Error(error.message || "Could not read Supabase session for Edge Function invoke.");
+    }
+    const accessToken = String(data?.session?.access_token ?? "").trim();
+    if (!accessToken) {
+      throw new Error("Active Supabase session access_token is required for Edge Function delivery invoke.");
+    }
+    return accessToken;
+  }
   function mapDeliveryRecordsForEdgeInvoke(records) {
     return (Array.isArray(records) ? records : []).map((record) => ({
       queueItemId: record.queueItemId,
@@ -26267,7 +26278,11 @@ ${suffix}`;
     if (!resolvedAutomationRunId) {
       throw new Error("automationRunId is required for Edge Function delivery invoke.");
     }
+    const accessToken = await resolveInvokeAccessToken(supabase);
     const { data, error } = await supabase.functions.invoke(SEND_REMINDER_DELIVERIES_FUNCTION, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`
+      },
       body: {
         organisationId: resolvedOrganisationId,
         automationRunId: resolvedAutomationRunId,

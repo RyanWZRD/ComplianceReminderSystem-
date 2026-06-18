@@ -289,6 +289,14 @@ const db = {
 };
 
 const mockSupabase = {
+  auth: {
+    async getSession() {
+      return {
+        data: { session: { access_token: "test-access-token" } },
+        error: null,
+      };
+    },
+  },
   functions: {
     async invoke(_functionName, { body }) {
       const records = Array.isArray(body?.deliveryRecords) ? body.deliveryRecords : [];

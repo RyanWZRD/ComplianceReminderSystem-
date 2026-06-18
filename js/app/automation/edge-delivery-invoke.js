@@ -1,9 +1,29 @@
 /**
- * V6 Phase 39: Browser invoke client for send-reminder-deliveries Edge Function.
+ * V6 Phase 39/41: Browser invoke client for send-reminder-deliveries Edge Function.
  * Authenticated Edge Function invoke only — no Resend API key or direct Resend HTTP fetch.
  */
 
 export const SEND_REMINDER_DELIVERIES_FUNCTION = "send-reminder-deliveries";
+
+/**
+ * @param {import("@supabase/supabase-js").SupabaseClient} supabase
+ * @returns {Promise<string>}
+ */
+async function resolveInvokeAccessToken(supabase) {
+  const { data, error } = await supabase.auth.getSession();
+
+  if (error) {
+    throw new Error(error.message || "Could not read Supabase session for Edge Function invoke.");
+  }
+
+  const accessToken = String(data?.session?.access_token ?? "").trim();
+
+  if (!accessToken) {
+    throw new Error("Active Supabase session access_token is required for Edge Function delivery invoke.");
+  }
+
+  return accessToken;
+}
 
 /**
  * @param {import("./reminder-delivery-record-builder.js").ReminderDeliveryRecord[]} records
@@ -65,7 +85,12 @@ export async function invokeSendReminderDeliveries({
     throw new Error("automationRunId is required for Edge Function delivery invoke.");
   }
 
+  const accessToken = await resolveInvokeAccessToken(supabase);
+
   const { data, error } = await supabase.functions.invoke(SEND_REMINDER_DELIVERIES_FUNCTION, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
     body: {
       organisationId: resolvedOrganisationId,
       automationRunId: resolvedAutomationRunId,

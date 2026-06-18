@@ -93,7 +93,7 @@ function readResendApiKeyLiteral(source) {
 }
 
 console.log(
-  "V6 Phase 39 browser Edge Function invoke verification (verify-edge-delivery-browser-invoke)\n",
+  "V6 Phase 39/41 browser Edge Function invoke verification (verify-edge-delivery-browser-invoke)\n",
 );
 
 assert(existsSync(manualDeliveryExecutionPath), "manual-delivery-execution.js exists");
@@ -149,6 +149,50 @@ assertContains(
   "deliveryRecords",
   "edge-delivery-invoke.js passes deliveryRecords",
 );
+
+console.log("--- Phase 41 Authorization header (required) ---");
+
+assertContains(
+  edgeDeliveryInvokeJs,
+  "getSession",
+  "edge-delivery-invoke.js reads Supabase session before invoke",
+);
+assertContains(
+  edgeDeliveryInvokeJs,
+  "access_token",
+  "edge-delivery-invoke.js requires session access_token",
+);
+assertContains(
+  edgeDeliveryInvokeJs,
+  "Authorization",
+  "edge-delivery-invoke.js sets Authorization header on invoke",
+);
+assertContains(
+  edgeDeliveryInvokeJs,
+  "Bearer",
+  "edge-delivery-invoke.js sends Bearer JWT on invoke",
+);
+assertNotContains(
+  edgeDeliveryInvokeJs,
+  "SERVICE_ROLE",
+  "edge-delivery-invoke.js must not reference service role key",
+);
+assertNotContains(
+  manualDeliveryExecutionJs,
+  "SERVICE_ROLE",
+  "manual-delivery-execution.js must not reference service role key",
+);
+assertNotContains(
+  edgeDeliveryInvokeJs,
+  "service_role",
+  "edge-delivery-invoke.js must not reference service_role",
+);
+assertNotContains(
+  manualDeliveryExecutionJs,
+  "service_role",
+  "manual-delivery-execution.js must not reference service_role",
+);
+
 assertContains(
   manualDeliveryExecutionJs,
   "getSupabaseClient",
@@ -360,6 +404,7 @@ if (failures.length > 0) {
 }
 
 console.log("\nverify-edge-delivery-browser-invoke: all checks OK");
-console.log("  browser: manual delivery invokes send-reminder-deliveries via Supabase JWT");
+console.log("  browser: manual delivery invokes send-reminder-deliveries with Authorization Bearer JWT");
+console.log("  browser: session access_token required; no service role key in execution path");
 console.log("  browser: no createResendEmailProvider, RESEND_API_KEY, or api.resend.com in execution path");
 console.log("  server: resend-provider.js retained as deprecated scaffold only");

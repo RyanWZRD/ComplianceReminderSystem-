@@ -3,7 +3,7 @@
 **Theme:** Move from *knowing* what needs attention (V4 Compliance Insights) to *acting on it automatically* — scheduled reminders, orchestrated actions, escalations, and auditable operations.
 
 **Target:** v5.0.0 (major release)  
-**Current alpha:** v6.0.0-alpha.1 — V6 Delivery Foundation (see release-readiness note below)  
+**Current alpha:** v6.0.0-alpha.2 — V6 Provider Foundation (see release-readiness note below)  
 **Prior alpha:** v5.0.0-alpha.5 — V5-2 Template & Digest Foundation; v5.0.0-alpha.4 — V5-1 Reminder Queue Foundation; v5.0.0-alpha.3 — V5-0 Automation Platform Foundation; v5.0.0-alpha.2 — V5-1A + V5-1B (see [`docs/v5-0-0-alpha-2-release-notes.md`](v5-0-0-alpha-2-release-notes.md))  
 **Prerequisites:** v4.0.1 GA, v3.1.0 cloud follow-on (evidence Storage, restore/bulk ops, production cloud-writes policy)  
 **Date:** Planned — post v4.0.1 sign-off (June 2026+)
@@ -380,7 +380,116 @@ The Reminder Queue Preview section includes a **Digest preview** area wired to `
 
 **Constraints:** Template generation, preview, and digest generation only; no email delivery, mark-as-sent, compliance/action mutation, or history writes.
 
-**Next slice:** V6 Phase 10 — real email provider integration — see [`docs/v6-delivery-architecture.md`](v6-delivery-architecture.md).
+**Next slice:** V6 Phase 14 — real provider implementation — see [`docs/v6-delivery-architecture.md`](v6-delivery-architecture.md) · [`docs/v6-email-provider-configuration.md`](v6-email-provider-configuration.md).
+
+---
+
+## V6 — Reminder delivery · Phase 13 complete
+
+**Goal:** Confirm the provider configuration + adapter foundation is safe to tag as **v6.0.0-alpha.2** before any real provider implementation.
+
+**Status:** Provider foundation release readiness complete — application version **v6.0.0-alpha.2**. V6 Phases 1–13 complete.
+
+**Release-readiness note (v6.0.0-alpha.2):**
+
+- Delivery foundation complete (phases 1–9; see [`docs/v6-delivery-architecture.md`](v6-delivery-architecture.md))
+- Provider configuration complete (`getEmailProviderConfig`)
+- Provider adapter complete (`createEmailProviderAdapter`)
+- Provider foundation verification orchestrator complete (`npm run verify-email-provider-foundation`)
+- **Disabled-by-default provider mode**
+- **Mock provider only**
+- **No real provider implementation**
+- **No production sending**
+- **No mark-as-sent automation**
+- **No compliance/action/history mutation**
+
+| Phase | Deliverable | Status |
+|-------|-------------|--------|
+| 13 | Provider foundation release readiness (`v6.0.0-alpha.2`) | **Complete** |
+| 14 | Real provider implementation | Planned |
+
+**Release candidate:** **v6.0.0-alpha.2**
+
+**Release verification (required before tag):**
+
+- `npm run build` — rebuild `app.bundle.js` after version bump
+- `npm run verify-email-provider-foundation` — phases 10–12 orchestrator (no live execution)
+
+**Next slice:** V6 Phase 14 — real provider implementation.
+
+---
+
+## V6 — Reminder delivery · Phase 12 complete
+
+**Goal:** Create one verification command for the provider configuration and adapter foundation before any real provider is implemented.
+
+**Status:** Provider foundation verification orchestrator complete.
+
+**Deliverables:**
+
+- `scripts/verify-email-provider-foundation.mjs` — runs `verify-email-provider-config`, `verify-email-provider-adapter`, and `verify-delivery-foundation` in order
+- `npm run verify-email-provider-foundation` — master gate for provider foundation
+
+| Phase | Deliverable | Status |
+|-------|-------------|--------|
+| 12 | Provider foundation verification orchestrator (`verify-email-provider-foundation`) | **Complete** |
+| 13 | Real provider implementation | Planned |
+
+**Verification:** `npm run verify-email-provider-foundation`
+
+**Constraints:** Verification orchestration only. No app behaviour changes. No real provider, network calls, production sending, mark-as-sent automation, or compliance/action/history mutation.
+
+**Next slice:** V6 Phase 14 — real provider implementation.
+
+---
+
+## V6 — Reminder delivery · Phase 11 complete
+
+**Goal:** Define a provider adapter contract and factory shape so real providers can be added later behind a safe interface — without implementing real delivery or wiring the application.
+
+**Status:** Provider adapter interface complete. Full detail: [`docs/v6-email-provider-configuration.md`](v6-email-provider-configuration.md#provider-adapter-factory) · [`docs/v6-delivery-architecture.md`](v6-delivery-architecture.md).
+
+**Deliverables:**
+
+- `js/app/automation/email-provider-adapter.js` — `createEmailProviderAdapter({ config, mockProvider })` with disabled, mock, and not-implemented placeholder behaviour
+- `npm run verify-email-provider-adapter` — adapter factory verification gate
+
+| Phase | Deliverable | Status |
+|-------|-------------|--------|
+| 11 | Provider adapter interface (`createEmailProviderAdapter`) | **Complete** |
+| 12 | Real provider implementation | Planned |
+
+**Verification:** `npm run verify-email-provider-adapter` · `npm run verify-email-provider-config` · `npm run verify-delivery-foundation`
+
+**Constraints:** Interface/factory only. Not imported in `app.js`. No real provider, no network calls, no sending, no mark-as-sent automation, no compliance/action/history mutation.
+
+**Next slice:** V6 Phase 14 — real provider implementation.
+
+---
+
+## V6 — Reminder delivery · Phase 10 complete
+
+**Goal:** Define how a real email provider will be configured safely — without implementing a provider, sending email, or wiring the application.
+
+**Status:** Provider configuration architecture complete. Full detail: [`docs/v6-email-provider-configuration.md`](v6-email-provider-configuration.md).
+
+**Deliverables:**
+
+- `docs/v6-email-provider-configuration.md` — Resend/SendGrid/SMTP options, env vars, sender/reply-to rules, test vs production mode, rate limits, health checks, secrets, audit, GDPR
+- `js/app/automation/email-provider-config.js` — `getEmailProviderConfig(env)` with safe defaults (`enabled: false`, `mode: disabled`, `provider: none`)
+- `npm run verify-email-provider-config` — documentation, config module, and no-app-wiring gate
+
+| Phase | Deliverable | Status |
+|-------|-------------|--------|
+| 10 | Provider configuration architecture (`getEmailProviderConfig`) | **Complete** |
+| 11 | Provider adapter interface (`createEmailProviderAdapter`) | **Complete** |
+| 12 | Real provider implementation | Planned |
+
+**Verification:** `npm run verify-email-provider-config` · `npm run verify-delivery-foundation`
+
+**Constraints:** Configuration/design only. Not imported in `app.js`. No real provider, no sending, no mark-as-sent automation, no compliance/action/history mutation.
+
+**Next slice:** V6 Phase 14 — real provider implementation.
 
 ---
 
@@ -417,7 +526,8 @@ The Reminder Queue Preview section includes a **Digest preview** area wired to `
 | 7 | Mock delivery executor (`executeMockReminderDelivery`) | **Complete** |
 | 8 | Delivery foundation verification orchestrator (`verify-delivery-foundation`) | **Complete** |
 | 9 | Release readiness / alpha tag prep (`v6.0.0-alpha.1`) | **Complete** |
-| 10 | Real email provider integration | Planned |
+| 10 | Provider configuration architecture (`getEmailProviderConfig`) | **Complete** |
+| 11 | Real email provider adapter | Planned |
 
 **Release candidate:** **v6.0.0-alpha.1**
 
@@ -434,7 +544,7 @@ The Reminder Queue Preview section includes a **Digest preview** area wired to `
 
 **Constraints:** Mock provider only. No real email provider, no production delivery, no mark-as-sent automation, no app wiring, no compliance/action/history mutation.
 
-**Next slice:** V6 Phase 10 — real email provider integration.
+**Next slice:** V6 Phase 14 — real provider implementation.
 
 ### V6 Phase 2 — Delivery record builder
 
@@ -651,6 +761,9 @@ Extend the existing pattern from V3/V4:
 | `npm run verify-mock-email-provider` | V6 Phase 6 — mock provider adapter, success/failure modes, no external network |
 | `npm run verify-mock-delivery-executor` | V6 Phase 7 — mock delivery executor, lifecycle transitions, skip rules, summary counts |
 | `npm run verify-delivery-foundation` | V6 Phase 8 — orchestrator; runs phases 1–7 in order, stop on first failure |
+| `npm run verify-email-provider-config` | V6 Phase 10 — provider config documentation, config module, safe defaults, no app wiring |
+| `npm run verify-email-provider-adapter` | V6 Phase 11 — adapter factory, disabled/mock/placeholder behaviour, no app wiring |
+| `npm run verify-email-provider-foundation` | V6 Phase 12 — orchestrator; runs phases 10–11 + delivery foundation in order, stop on first failure |
 | `npm run verify-automation-schema` | V5-0 migrations + RPC |
 | `npm run verify-automation-reminders` | V5-1 queue + mark sent |
 | `npm run verify-automation-actions` | V5-2 policy apply |
@@ -751,7 +864,7 @@ Secrets (SMTP API keys) live in Supabase Edge Function secrets only — never in
 | V5-0 | **COMPLETE** | Automation platform foundation — schema, RPCs, dry-run scan + audit logging + audit UI; **v5.0.0-alpha.3** |
 | V5-1 (foundation) | **COMPLETE** | Reminder queue foundation — queue, preview UI, CSV export, orchestrator; **v5.0.0-alpha.4** |
 | V5-2 | **COMPLETE** | Reminder email template builder — template builder, preview UI, copy template, digest builder, digest preview UI, foundation orchestrator; **v5.0.0-alpha.5**; no delivery |
-| V6-1 | **COMPLETE** | Delivery foundation — domain model, record builder, schema, RPCs, state machine, mock provider, mock executor, foundation orchestrator; **v6.0.0-alpha.1**; mock provider only, no production sending |
+| V6-1 | **COMPLETE** | Delivery + provider foundation — domain model through provider foundation orchestrator; **v6.0.0-alpha.2**; mock provider only, disabled-by-default, no production sending |
 | V5-2A | **PLANNED** | Automated action orchestration |
 | V5-3 | **PLANNED** | Escalation & operational closure |
 | V5-4 | **PLANNED** | Policy engine GA & operations pack |

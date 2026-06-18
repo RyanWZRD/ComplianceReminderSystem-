@@ -3,8 +3,8 @@
 **Theme:** Define how reminder emails would be sent and audited — lifecycle, records, duplicate prevention, retries, and provider abstraction — **without** implementing delivery.
 
 **Target:** v6.0.0 (major release)  
-**Current phase:** V6 Phase 9 — Delivery Foundation Release Readiness  
-**Release candidate:** v6.0.0-alpha.1  
+**Current phase:** V6 Phase 13 — Provider Foundation Release Readiness  
+**Release candidate:** v6.0.0-alpha.2  
 **Prerequisites:** v5.0.0-alpha.5 (V5-2 template & digest foundation)  
 **Date:** Planned — June 2026+
 
@@ -394,6 +394,9 @@ interface HealthCheckResult {
 | `npm run verify-mock-email-provider` | Phase 6 — mock provider adapter, success/failure modes, no external network |
 | `npm run verify-mock-delivery-executor` | Phase 7 — mock delivery executor, lifecycle transitions, skip rules, summary counts |
 | `npm run verify-delivery-foundation` | Phase 8 — orchestrator; runs phases 1–7 in order, stop on first failure |
+| `npm run verify-email-provider-config` | Phase 10 — provider config documentation, config module, safe defaults, no app wiring |
+| `npm run verify-email-provider-adapter` | Phase 11 — adapter factory, disabled/mock/placeholder behaviour, no app wiring |
+| `npm run verify-email-provider-foundation` | Phase 12 — orchestrator; runs phases 10–11 + delivery foundation in order, stop on first failure |
 
 **Phase 1 gate:** `npm run verify-delivery-architecture` must pass. No Supabase or browser required.
 
@@ -412,6 +415,14 @@ interface HealthCheckResult {
 **Phase 8 gate:** `npm run verify-delivery-foundation` must pass. Orchestrates phases 1–7 verification scripts in order. Verification-only — no real email provider, production delivery, mark-as-sent automation, or compliance/action/history mutation.
 
 **Phase 9 gate:** `npm run build` and `npm run verify-delivery-foundation` must pass. Documentation and version bump only — no application logic changes. Mock provider only — no real email provider, production sending, mark-as-sent automation, or compliance/action/history mutation.
+
+**Phase 10 gate:** `npm run verify-email-provider-config` must pass. Configuration/design only — no real provider implementation, outbound delivery, mark-as-sent automation, or `app.js` wiring.
+
+**Phase 11 gate:** `npm run verify-email-provider-adapter` must pass. Interface/factory only — no real provider implementation, network calls, outbound delivery, mark-as-sent automation, or `app.js` wiring.
+
+**Phase 12 gate:** `npm run verify-email-provider-foundation` must pass. Verification orchestration only — no real provider implementation, network calls, production sending, mark-as-sent automation, or app behaviour changes.
+
+**Phase 13 gate:** `npm run build` and `npm run verify-email-provider-foundation` must pass. Documentation and version bump only — no application logic changes. Mock provider only — no real provider implementation, production sending, mark-as-sent automation, or compliance/action/history mutation.
 
 ---
 
@@ -765,6 +776,113 @@ Stops on first failure. Prints section headings for each step. Verification-only
 
 ---
 
+## Phase 10 — Provider configuration architecture
+
+**Documentation:** `docs/v6-email-provider-configuration.md`
+
+**Module:** `js/app/automation/email-provider-config.js`
+
+**Function:** `getEmailProviderConfig(env?)`
+
+Defines how a real email provider will be configured safely — supported future providers (Resend, SendGrid, SMTP), required environment variables, sender/reply-to rules, test vs production mode, rate limits, health checks, secret handling, audit requirements, and GDPR notes. Returns operational config shape only; API keys are not included in the return value.
+
+### Return shape
+
+| Field | Type | Default |
+|-------|------|---------|
+| `provider` | `string` | `"none"` |
+| `mode` | `string` | `"disabled"` |
+| `fromEmail` | `string \| null` | `null` |
+| `replyToEmail` | `string \| null` | `null` |
+| `rateLimitPerRun` | `number` | `50` |
+| `enabled` | `boolean` | `false` |
+
+### Phase 10 constraints
+
+- Configuration/design only — no real provider implementation, no sending, no mark-as-sent automation
+- Not imported in `app.js` or wired to delivery execution
+- No `fetch`, SMTP, or external network calls in the config module
+- No compliance/action/history mutation
+
+---
+
+## Phase 11 — Provider adapter interface
+
+**Module:** `js/app/automation/email-provider-adapter.js`
+
+**Function:** `createEmailProviderAdapter({ config, mockProvider })`
+
+Factory that resolves email provider configuration into a provider surface (`healthCheck`, `sendReminder`). Composes Phase 10 config with Phase 6 mock provider and safe placeholders for unimplemented real providers.
+
+### Resolution behaviour
+
+| Condition | Result |
+|-----------|--------|
+| `config.enabled === false` | Disabled provider — `healthCheck()` → `{ status: "disabled", provider: "none" }`; `sendReminder()` throws `Email provider is disabled` |
+| `config.provider === "mock"` (enabled) | Returns injected `mockProvider` or `createMockEmailProvider({ mode: "success" })` |
+| `config.provider` ∈ `{ resend, sendgrid, smtp }` (enabled) | Placeholder — `healthCheck()` → `{ status: "not_implemented", provider: <name> }`; `sendReminder()` throws `Provider <name> is not implemented yet` |
+
+### Phase 11 constraints
+
+- Interface/factory only — no real provider SDKs, no sending, no mark-as-sent automation
+- Not imported in `app.js` or wired to delivery execution
+- No `fetch`, SMTP, external SDKs, or network calls
+- No compliance/action/history mutation
+
+---
+
+## Phase 12 — Provider foundation verification orchestrator
+
+**Script:** `scripts/verify-email-provider-foundation.mjs`
+
+`npm run verify-email-provider-foundation` runs provider and delivery foundation verification scripts in order:
+
+1. `verify-email-provider-config`
+2. `verify-email-provider-adapter`
+3. `verify-delivery-foundation`
+
+Stops on first failure. Prints section headings for each step. Verification-only — no real email provider, network calls, production sending, mark-as-sent automation, or app behaviour changes.
+
+### Phase 12 constraints
+
+- Orchestration only — no app behaviour changes
+- No real email provider, production delivery, or mark-as-sent automation
+- No compliance/action/history mutation
+
+---
+
+## Phase 13 — Provider foundation release readiness
+
+**Scope:** Documentation, version bump (`v6.0.0-alpha.2`), and release-readiness gate for the provider foundation slice. No application logic changes.
+
+**Release-readiness note (v6.0.0-alpha.2):**
+
+- V6 Phases 1–13 complete (delivery foundation phases 1–9 + provider foundation phases 10–13)
+- Provider configuration complete (`getEmailProviderConfig`)
+- Provider adapter complete (`createEmailProviderAdapter`)
+- Provider foundation verification orchestrator complete (`npm run verify-email-provider-foundation`)
+- **Disabled-by-default provider mode** (`enabled: false`, `mode: disabled`, `provider: none`)
+- **Mock provider only**
+- **No real provider implementation**
+- **No production sending**
+- **No mark-as-sent automation**
+- **No compliance/action/history mutation**
+
+**Release verification (required before tag):**
+
+- `npm run build` — rebuild `app.bundle.js` after version bump
+- `npm run verify-email-provider-foundation` — phases 10–12 orchestrator (no live execution)
+
+**Release candidate:** **v6.0.0-alpha.2**
+
+### Phase 13 constraints
+
+- Documentation and version display only — no app behaviour changes
+- Mock provider only — no real provider implementation, production delivery, or mark-as-sent automation
+- No compliance/action/history mutation
+
+---
+
 ## Phase roadmap (v6)
 
 | Phase | Deliverable | Status |
@@ -778,13 +896,17 @@ Stops on first failure. Prints section headings for each step. Verification-only
 | 7 | Mock delivery executor (`executeMockReminderDelivery`) | **Complete** |
 | 8 | Delivery foundation verification orchestrator (`verify-delivery-foundation`) | **Complete** |
 | 9 | Delivery foundation release readiness (`v6.0.0-alpha.1`) | **Complete** |
-| 10 | Real email provider integration (e.g. Resend) | Planned |
-| 11 | Operations Log delivery UI + export | Planned |
-| 12 | Mark-as-sent on confirmed delivery (policy-gated) | Planned |
+| 10 | Provider configuration architecture (`getEmailProviderConfig`) | **Complete** |
+| 11 | Provider adapter interface (`createEmailProviderAdapter`) | **Complete** |
+| 12 | Provider foundation verification orchestrator (`verify-email-provider-foundation`) | **Complete** |
+| 13 | Provider foundation release readiness (`v6.0.0-alpha.2`) | **Complete** |
+| 14 | Real provider implementation (e.g. Resend) | Planned |
+| 15 | Operations Log delivery UI + export | Planned |
+| 16 | Mark-as-sent on confirmed delivery (policy-gated) | Planned |
 
-**Constraints (Phase 9):** Documentation and version bump only. Mock provider only. No real email provider, no production delivery, no mark-as-sent automation, no app wiring.
+**Constraints (Phase 13):** Documentation and version bump only. Mock provider only. No real provider implementation, no production delivery, no mark-as-sent automation, no app wiring.
 
-**Next slice after Phase 9:** V6 Phase 10 — real email provider integration.
+**Next slice after Phase 13:** V6 Phase 14 — real provider implementation.
 
 ---
 
@@ -793,5 +915,6 @@ Stops on first failure. Prints section headings for each step. Verification-only
 | Document | When |
 |----------|------|
 | `docs/v6-delivery-architecture.md` | V6 Phase 1 — this document |
+| `docs/v6-email-provider-configuration.md` | V6 Phase 10 — provider configuration architecture |
 | `docs/v6-delivery-schema.md` | V6 Phase 3+ — migrations and RPC reference (planned) |
 | `docs/v6-release-notes.md` | v6.0.0 GA (planned) |

@@ -6,6 +6,34 @@ A local-first safeguarding compliance tracker. Runs in the browser with localSto
 
 # Current Release
 
+## v6.0.0-alpha.2 — V6 Provider Foundation
+
+**Date:** June 2026
+
+### Summary
+
+Second v6 alpha checkpoint: **V6** provider foundation (configuration architecture, adapter interface, provider foundation verification orchestrator) on top of **v6.0.0-alpha.1** delivery foundation. Provider configuration complete (`getEmailProviderConfig`), provider adapter complete (`createEmailProviderAdapter`), disabled-by-default provider mode, mock provider only — no real provider implementation, no production sending, no mark-as-sent automation, compliance/action/history mutation, or cloud mutation default changes.
+
+**Documentation:**
+
+- [`docs/v6-email-provider-configuration.md`](docs/v6-email-provider-configuration.md) — V6 phases 10–13 detail and release-readiness note
+- [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md) — V6 phases 1–9 delivery foundation
+- [`docs/v5-automated-compliance-operations.md`](docs/v5-automated-compliance-operations.md#v6--reminder-delivery--phase-13-complete) — V6 provider foundation summary
+
+**Release verification (required before tag):**
+
+- `npm run build` — rebuild `app.bundle.js` after version bump
+- `npm run verify-email-provider-foundation` — V6 phases 10–12 orchestrator (no live execution)
+
+Application version: **v6.0.0-alpha.2**
+
+**Next slice:** V6 Phase 14 — real provider implementation — see [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md) · [`docs/v6-email-provider-configuration.md`](docs/v6-email-provider-configuration.md)
+
+Status: Release candidate (V6 Phase 13)  
+Tag: **v6.0.0-alpha.2** — not created unless explicitly requested
+
+---
+
 ## v6.0.0-alpha.1 — V6 Delivery Foundation
 
 **Date:** June 2026
@@ -24,9 +52,9 @@ First v6 alpha checkpoint: **V6** delivery foundation (domain model, in-memory d
 - `npm run build` — rebuild `app.bundle.js` after version bump
 - `npm run verify-delivery-foundation` — V6 phases 1–8 orchestrator (no live execution)
 
-Application version: **v6.0.0-alpha.1**
+Application version: **v6.0.0-alpha.1** (superseded by v6.0.0-alpha.2)
 
-**Next slice:** V6 Phase 10 — real email provider integration — see [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md)
+**Next slice:** V6 Phase 10 — provider configuration architecture — see [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md)
 
 Status: Release candidate (V6 Phase 9)  
 Tag: **v6.0.0-alpha.1** — not created unless explicitly requested
@@ -286,6 +314,70 @@ Tag: v3.0.0
 
 # Next Planned Release
 
+## V6.0.0 Phase 13 — Provider Foundation Release Readiness · Complete
+
+**Date:** June 2026
+
+Documentation and verification checkpoint for **v6.0.0-alpha.2**. Version bump, release-readiness docs, `verify-email-provider-foundation` gate. No application logic changes. Provider configuration complete, provider adapter complete, disabled-by-default provider mode, mock provider only — no real provider implementation, no production sending, no mark-as-sent automation, or compliance/action/history mutation.
+
+**Documentation:** [`docs/v6-email-provider-configuration.md`](docs/v6-email-provider-configuration.md) · [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md) · [`docs/v5-automated-compliance-operations.md`](docs/v5-automated-compliance-operations.md#v6--reminder-delivery--phase-13-complete)
+
+**Verification:** `npm run build` · `npm run verify-email-provider-foundation`
+
+**Release candidate:** **v6.0.0-alpha.2**
+
+**Next slice:** V6 Phase 14 — real provider implementation
+
+---
+
+## V6.0.0 Phase 12 — Provider Foundation Verification Orchestrator · Complete
+
+**Date:** June 2026
+
+One verification command for the provider configuration and adapter foundation before any real provider is implemented. Adds `npm run verify-email-provider-foundation` to run `verify-email-provider-config`, `verify-email-provider-adapter`, and `verify-delivery-foundation` in order, stop on first failure, and print a single success gate.
+
+**Documentation:** [`docs/v6-email-provider-configuration.md`](docs/v6-email-provider-configuration.md) · [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md)
+
+**Verification:** `npm run verify-email-provider-foundation`
+
+**Constraints:** Verification orchestration only. No app behaviour changes. No real email provider, network calls, production sending, mark-as-sent automation, or compliance/action/history mutation.
+
+**Next slice:** V6 Phase 14 — real provider implementation
+
+---
+
+## V6.0.0 Phase 11 — Provider Adapter Interface · Complete
+
+**Date:** June 2026
+
+Interface/factory checkpoint for email provider resolution. Adds `createEmailProviderAdapter({ config, mockProvider })` — disabled provider when `config.enabled` is false, mock delegation when `provider === "mock"`, and not-implemented placeholders for Resend/SendGrid/SMTP. No real provider SDKs, network calls, sending, or app wiring.
+
+**Documentation:** [`docs/v6-email-provider-configuration.md`](docs/v6-email-provider-configuration.md) · [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md)
+
+**Verification:** `npm run verify-email-provider-adapter` · `npm run verify-email-provider-config` · `npm run verify-delivery-foundation`
+
+**Constraints:** Interface/factory only. Not imported in `app.js`. No real provider implementation, no mark-as-sent automation or compliance/action/history mutation.
+
+**Next slice:** V6 Phase 14 — real provider implementation
+
+---
+
+## V6.0.0 Phase 10 — Provider Configuration Architecture · Complete
+
+**Date:** June 2026
+
+Documentation and config-shape checkpoint for safe future email provider integration. Defines Resend/SendGrid/SMTP options, environment variables, sender/reply-to rules, test vs production mode, rate limits, health checks, secret handling, audit, and GDPR notes. Adds `getEmailProviderConfig(env)` with safe disabled defaults. No real provider, no sending, no app wiring.
+
+**Documentation:** [`docs/v6-email-provider-configuration.md`](docs/v6-email-provider-configuration.md) · [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md)
+
+**Verification:** `npm run verify-email-provider-config` · `npm run verify-delivery-foundation`
+
+**Constraints:** Configuration/design only. `enabled: false`, `mode: disabled`, `provider: none` by default. Not imported in `app.js`. No mark-as-sent automation or compliance/action/history mutation.
+
+**Next slice:** V6 Phase 14 — real provider implementation
+
+---
+
 ## V6.0.0 Phase 9 — Delivery Foundation Release Readiness · Complete
 
 **Date:** June 2026
@@ -298,7 +390,7 @@ Documentation and verification checkpoint for **v6.0.0-alpha.1**. Version bump, 
 
 **Release candidate:** **v6.0.0-alpha.1**
 
-**Next slice:** V6 Phase 10 — real email provider integration
+**Next slice:** V6 Phase 14 — real provider implementation
 
 ---
 
@@ -321,13 +413,17 @@ Builds on **v6.0.0 Phase 7** (mock delivery executor). Adds `npm run verify-deli
 | 7 | Mock delivery executor (`executeMockReminderDelivery`) | **Complete** |
 | 8 | Delivery foundation verification orchestrator (`verify-delivery-foundation`) | **Complete** |
 | 9 | Release readiness / alpha tag prep (`v6.0.0-alpha.1`) | **Complete** |
-| 10 | Real email provider integration | Planned |
+| 10 | Provider configuration architecture (`getEmailProviderConfig`) | **Complete** |
+| 11 | Provider adapter interface (`createEmailProviderAdapter`) | **Complete** |
+| 12 | Provider foundation verification orchestrator (`verify-email-provider-foundation`) | **Complete** |
+| 13 | Provider foundation release readiness (`v6.0.0-alpha.2`) | **Complete** |
+| 14 | Real provider implementation | Planned |
 
 **Verification:** `npm run verify-delivery-foundation` (master gate); individual phase scripts remain available for targeted checks
 
 **Constraints:** Verification orchestration only. No real email provider, no production delivery, no mark-as-sent automation, no app wiring, no compliance/action/history mutation.
 
-**Next slice:** V6 Phase 10 — real email provider integration
+**Next slice:** V6 Phase 14 — real provider implementation
 
 ---
 
@@ -608,7 +704,7 @@ Scheduled compliance operations: reminder delivery, action orchestration, escala
 
 Read-only compliance insights on the dashboard: health score, risk summary, renewal forecast, and rule-based recommendations. See [`docs/compliance-insights.md`](docs/compliance-insights.md) and [Version Roadmap — v4](#v4--compliance-insights-release-candidate).
 
-Application version: **v6.0.0-alpha.1** in source (V6 delivery foundation alpha); v4 GA target **v4.0.1**.
+Application version: **v6.0.0-alpha.2** in source (V6 provider foundation alpha); v4 GA target **v4.0.1**.
 
 **RC hardening summary (June 2026):**
 

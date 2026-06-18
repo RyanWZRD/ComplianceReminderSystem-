@@ -3,7 +3,7 @@
 **Theme:** Move from *knowing* what needs attention (V4 Compliance Insights) to *acting on it automatically* — scheduled reminders, orchestrated actions, escalations, and auditable operations.
 
 **Target:** v5.0.0 (major release)  
-**Current alpha:** v6.0.0-alpha.2 — V6 Provider Foundation (see release-readiness note below)  
+**Current alpha:** v6.0.0-alpha.3 — V6 Provider Skeleton Foundation (see release-readiness note below)  
 **Prior alpha:** v5.0.0-alpha.5 — V5-2 Template & Digest Foundation; v5.0.0-alpha.4 — V5-1 Reminder Queue Foundation; v5.0.0-alpha.3 — V5-0 Automation Platform Foundation; v5.0.0-alpha.2 — V5-1A + V5-1B (see [`docs/v5-0-0-alpha-2-release-notes.md`](v5-0-0-alpha-2-release-notes.md))  
 **Prerequisites:** v4.0.1 GA, v3.1.0 cloud follow-on (evidence Storage, restore/bulk ops, production cloud-writes policy)  
 **Date:** Planned — post v4.0.1 sign-off (June 2026+)
@@ -380,7 +380,96 @@ The Reminder Queue Preview section includes a **Digest preview** area wired to `
 
 **Constraints:** Template generation, preview, and digest generation only; no email delivery, mark-as-sent, compliance/action mutation, or history writes.
 
-**Next slice:** V6 Phase 14 — real provider implementation — see [`docs/v6-delivery-architecture.md`](v6-delivery-architecture.md) · [`docs/v6-email-provider-configuration.md`](v6-email-provider-configuration.md).
+**Next slice:** V6 Phase 17 — real provider network implementation — see [`docs/v6-delivery-architecture.md`](v6-delivery-architecture.md) · [`docs/v6-email-provider-configuration.md`](v6-email-provider-configuration.md).
+
+---
+
+## V6 — Reminder delivery · Phase 16 complete
+
+**Goal:** Confirm provider config, adapter, skeleton modules, and delivery foundation are safe to tag as **v6.0.0-alpha.3** before any real provider network implementation.
+
+**Status:** Provider skeleton release readiness complete — application version **v6.0.0-alpha.3**. V6 Phases 1–16 complete.
+
+**Release-readiness note (v6.0.0-alpha.3):**
+
+- Delivery foundation complete (phases 1–9; see [`docs/v6-delivery-architecture.md`](v6-delivery-architecture.md))
+- Provider configuration complete (`getEmailProviderConfig`)
+- Provider adapter complete (`createEmailProviderAdapter`)
+- Provider skeleton modules complete (Resend, SendGrid, SMTP)
+- Provider skeleton foundation verification orchestrator complete (`npm run verify-email-provider-skeleton-foundation`)
+- **Disabled-by-default provider mode**
+- **Mock provider only**
+- **No real provider implementation**
+- **No network calls**
+- **No production sending**
+- **No mark-as-sent automation**
+- **No compliance/action/history mutation**
+
+| Phase | Deliverable | Status |
+|-------|-------------|--------|
+| 16 | Provider skeleton release readiness (`v6.0.0-alpha.3`) | **Complete** |
+| 17 | Real provider network implementation | Planned |
+
+**Release candidate:** **v6.0.0-alpha.3**
+
+**Release verification (required before tag):**
+
+- `npm run build` — rebuild `app.bundle.js` after version bump
+- `npm run verify-email-provider-skeleton-foundation` — phases 12 + 14–15 orchestrator (no live execution)
+
+**Next slice:** V6 Phase 17 — real provider network implementation.
+
+---
+
+## V6 — Reminder delivery · Phase 15 complete
+
+**Goal:** Create one verification command proving provider config, adapter, skeleton modules, and delivery foundation all remain safe before real provider implementation.
+
+**Status:** Provider skeleton foundation verification orchestrator complete.
+
+**Deliverables:**
+
+- `scripts/verify-email-provider-skeleton-foundation.mjs` — runs `verify-email-provider-foundation` and `verify-email-provider-skeletons` in order
+- `npm run verify-email-provider-skeleton-foundation` — master gate for provider skeleton foundation
+
+| Phase | Deliverable | Status |
+|-------|-------------|--------|
+| 15 | Provider skeleton foundation verification orchestrator (`verify-email-provider-skeleton-foundation`) | **Complete** |
+| 16 | Real provider network implementation | Planned |
+
+**Verification:** `npm run verify-email-provider-skeleton-foundation`
+
+**Constraints:** Verification orchestration only. No app behaviour changes. No real provider, network calls, production sending, mark-as-sent automation, or compliance/action/history mutation.
+
+**Next slice:** V6 Phase 17 — real provider network implementation.
+
+---
+
+## V6 — Reminder delivery · Phase 14 complete
+
+**Goal:** Add placeholder provider modules for future Resend, SendGrid, and SMTP integration without network calls, credentials, or real sending.
+
+**Status:** Real provider skeleton modules complete. Adapter routes `resend`, `sendgrid`, and `smtp` to skeleton factories. Mock provider unchanged.
+
+**Deliverables:**
+
+- `js/app/automation/providers/resend-provider.js` — `createResendEmailProvider({ config })`
+- `js/app/automation/providers/sendgrid-provider.js` — `createSendgridEmailProvider({ config })`
+- `js/app/automation/providers/smtp-provider.js` — `createSmtpEmailProvider({ config })`
+- `js/app/automation/email-provider-adapter.js` — routes enabled real providers to skeleton modules
+- `npm run verify-email-provider-skeletons` — skeleton module and adapter routing verification gate
+
+| Phase | Deliverable | Status |
+|-------|-------------|--------|
+| 14 | Real provider skeleton modules (Resend, SendGrid, SMTP) | **Complete** |
+| 15 | Provider skeleton foundation verification orchestrator | **Complete** |
+| 16 | Real provider network implementation | Planned |
+
+**Verification:** `npm run verify-email-provider-skeletons` · `npm run verify-email-provider-foundation`
+
+**Constraints:** Skeleton only. No fetch, API keys, SDKs, SMTP transport, real sending, mark-as-sent automation, or `app.js` wiring.
+
+**Next slice:** V6 Phase 17 — real provider network implementation.
 
 ---
 
@@ -415,7 +504,7 @@ The Reminder Queue Preview section includes a **Digest preview** area wired to `
 - `npm run build` — rebuild `app.bundle.js` after version bump
 - `npm run verify-email-provider-foundation` — phases 10–12 orchestrator (no live execution)
 
-**Next slice:** V6 Phase 14 — real provider implementation.
+**Next slice:** V6 Phase 17 — real provider network implementation.
 
 ---
 
@@ -439,7 +528,7 @@ The Reminder Queue Preview section includes a **Digest preview** area wired to `
 
 **Constraints:** Verification orchestration only. No app behaviour changes. No real provider, network calls, production sending, mark-as-sent automation, or compliance/action/history mutation.
 
-**Next slice:** V6 Phase 14 — real provider implementation.
+**Next slice:** V6 Phase 17 — real provider network implementation.
 
 ---
 
@@ -463,7 +552,7 @@ The Reminder Queue Preview section includes a **Digest preview** area wired to `
 
 **Constraints:** Interface/factory only. Not imported in `app.js`. No real provider, no network calls, no sending, no mark-as-sent automation, no compliance/action/history mutation.
 
-**Next slice:** V6 Phase 14 — real provider implementation.
+**Next slice:** V6 Phase 17 — real provider network implementation.
 
 ---
 
@@ -489,7 +578,7 @@ The Reminder Queue Preview section includes a **Digest preview** area wired to `
 
 **Constraints:** Configuration/design only. Not imported in `app.js`. No real provider, no sending, no mark-as-sent automation, no compliance/action/history mutation.
 
-**Next slice:** V6 Phase 14 — real provider implementation.
+**Next slice:** V6 Phase 17 — real provider network implementation.
 
 ---
 
@@ -544,7 +633,7 @@ The Reminder Queue Preview section includes a **Digest preview** area wired to `
 
 **Constraints:** Mock provider only. No real email provider, no production delivery, no mark-as-sent automation, no app wiring, no compliance/action/history mutation.
 
-**Next slice:** V6 Phase 14 — real provider implementation.
+**Next slice:** V6 Phase 17 — real provider network implementation.
 
 ### V6 Phase 2 — Delivery record builder
 
@@ -764,6 +853,8 @@ Extend the existing pattern from V3/V4:
 | `npm run verify-email-provider-config` | V6 Phase 10 — provider config documentation, config module, safe defaults, no app wiring |
 | `npm run verify-email-provider-adapter` | V6 Phase 11 — adapter factory, disabled/mock/placeholder behaviour, no app wiring |
 | `npm run verify-email-provider-foundation` | V6 Phase 12 — orchestrator; runs phases 10–11 + delivery foundation in order, stop on first failure |
+| `npm run verify-email-provider-skeletons` | V6 Phase 14 — skeleton provider modules, adapter routing, no network/SDK hooks, no app wiring |
+| `npm run verify-email-provider-skeleton-foundation` | V6 Phase 15 — orchestrator; runs phases 12 + 14 in order, stop on first failure |
 | `npm run verify-automation-schema` | V5-0 migrations + RPC |
 | `npm run verify-automation-reminders` | V5-1 queue + mark sent |
 | `npm run verify-automation-actions` | V5-2 policy apply |
@@ -864,7 +955,7 @@ Secrets (SMTP API keys) live in Supabase Edge Function secrets only — never in
 | V5-0 | **COMPLETE** | Automation platform foundation — schema, RPCs, dry-run scan + audit logging + audit UI; **v5.0.0-alpha.3** |
 | V5-1 (foundation) | **COMPLETE** | Reminder queue foundation — queue, preview UI, CSV export, orchestrator; **v5.0.0-alpha.4** |
 | V5-2 | **COMPLETE** | Reminder email template builder — template builder, preview UI, copy template, digest builder, digest preview UI, foundation orchestrator; **v5.0.0-alpha.5**; no delivery |
-| V6-1 | **COMPLETE** | Delivery + provider foundation — domain model through provider foundation orchestrator; **v6.0.0-alpha.2**; mock provider only, disabled-by-default, no production sending |
+| V6-1 | **COMPLETE** | Delivery + provider skeleton foundation — domain model through skeleton foundation orchestrator; **v6.0.0-alpha.3**; skeleton modules only, disabled-by-default, no network calls, no production sending |
 | V5-2A | **PLANNED** | Automated action orchestration |
 | V5-3 | **PLANNED** | Escalation & operational closure |
 | V5-4 | **PLANNED** | Policy engine GA & operations pack |

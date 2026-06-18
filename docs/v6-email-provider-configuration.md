@@ -3,9 +3,9 @@
 **Theme:** Define how a real email provider will be configured safely — without implementing a provider, sending email, or wiring the application.
 
 **Target:** v6.0.0 (major release)  
-**Current phase:** V6 Phase 13 — Provider Foundation Release Readiness  
-**Release candidate:** v6.0.0-alpha.2  
-**Prerequisites:** v6.0.0-alpha.1 (V6 Phase 9 — delivery foundation release readiness)  
+**Current phase:** V6 Phase 16 — Provider Skeleton Release Readiness  
+**Release candidate:** v6.0.0-alpha.3  
+**Prerequisites:** v6.0.0-alpha.2 (V6 Phase 13 — provider foundation release readiness)  
 **Date:** Planned — June 2026+
 
 ---
@@ -282,7 +282,7 @@ Resolves `getEmailProviderConfig()` output (or an explicit config object) into a
 |-----------|------------------|-----------------|------------------|
 | `config.enabled === false` | Disabled provider | `{ status: "disabled", provider: "none" }` | Throws `Email provider is disabled` |
 | `config.provider === "mock"` (enabled) | Injected `mockProvider` or `createMockEmailProvider({ mode: "success" })` | Mock provider result | Mock provider result |
-| `config.provider` ∈ `{ resend, sendgrid, smtp }` (enabled) | Placeholder provider | `{ status: "not_implemented", provider: <name> }` | Throws `Provider <name> is not implemented yet` |
+| `config.provider` ∈ `{ resend, sendgrid, smtp }` (enabled) | Skeleton provider module | `{ status: "not_implemented", provider: <name> }` | Throws `Provider <name> is not implemented yet` |
 | Other (e.g. `none` while enabled) | Disabled provider | `{ status: "disabled", provider: "none" }` | Throws `Email provider is disabled` |
 
 The `mock` provider identifier is for tests and verification only — not set via production `EMAIL_PROVIDER` env in Phase 11.
@@ -303,6 +303,8 @@ The `mock` provider identifier is for tests and verification only — not set vi
 | `npm run verify-email-provider-config` | Phase 10 — documentation, config module, safe defaults, no app wiring |
 | `npm run verify-email-provider-adapter` | Phase 11 — adapter factory, disabled/mock/placeholder behaviour, no app wiring |
 | `npm run verify-email-provider-foundation` | Phase 12 — orchestrator; runs phases 10–11 + delivery foundation in order, stop on first failure |
+| `npm run verify-email-provider-skeletons` | Phase 14 — skeleton provider modules, adapter routing, no network/SDK hooks, no app wiring |
+| `npm run verify-email-provider-skeleton-foundation` | Phase 15 — orchestrator; runs phases 12 + 14 in order, stop on first failure |
 | `npm run verify-delivery-foundation` | Phases 1–8 — delivery foundation orchestrator (included in Phase 12 gate) |
 
 **Phase 10 gate:** `npm run verify-email-provider-config` must pass. No Supabase, browser, real email provider, or outbound delivery.
@@ -312,6 +314,59 @@ The `mock` provider identifier is for tests and verification only — not set vi
 **Phase 12 gate:** `npm run verify-email-provider-foundation` must pass. Verification orchestration only — no real provider implementation, network calls, production sending, mark-as-sent automation, or app behaviour changes.
 
 **Phase 13 gate:** `npm run build` and `npm run verify-email-provider-foundation` must pass. Documentation and version bump only — no application logic changes.
+
+**Phase 14 gate:** `npm run verify-email-provider-skeletons` must pass. Skeleton modules only — no fetch, API keys, SDKs, SMTP transport, real sending, mark-as-sent automation, or `app.js` wiring.
+
+**Phase 15 gate:** `npm run verify-email-provider-skeleton-foundation` must pass. Verification orchestration only — no real provider implementation, network calls, production sending, mark-as-sent automation, or app behaviour changes.
+
+**Phase 16 gate:** `npm run build` and `npm run verify-email-provider-skeleton-foundation` must pass. Documentation and version bump only — no application logic changes.
+
+---
+
+## Real provider skeleton modules
+
+**Phase 14** adds placeholder provider modules for future Resend, SendGrid, and SMTP integration. Each module exports a factory and exposes `healthCheck()` and `sendReminder()` with not-implemented behaviour. The adapter routes enabled `resend`, `sendgrid`, and `smtp` config to these modules.
+
+| Provider | Module | Factory |
+|----------|--------|---------|
+| Resend | `js/app/automation/providers/resend-provider.js` | `createResendEmailProvider({ config })` |
+| SendGrid | `js/app/automation/providers/sendgrid-provider.js` | `createSendgridEmailProvider({ config })` |
+| SMTP | `js/app/automation/providers/smtp-provider.js` | `createSmtpEmailProvider({ config })` |
+
+### Skeleton behaviour
+
+| Method | Result |
+|--------|--------|
+| `healthCheck()` | `{ status: "not_implemented", provider: "<provider>" }` |
+| `sendReminder()` | Throws `Provider <provider> is not implemented yet` |
+
+### Phase 14 constraints
+
+- Skeleton modules only — no fetch, API keys, external SDKs, SMTP transport, or real sending
+- Not imported in `app.js` or wired to delivery execution
+- No mark-as-sent automation or compliance/action/history mutation
+- Mock provider (`createMockEmailProvider`) unchanged
+
+---
+
+## Provider skeleton foundation verification orchestrator
+
+**Phase 15** adds one verification command proving provider config, adapter, skeleton modules, and delivery foundation all remain safe before real provider implementation.
+
+**Script:** `scripts/verify-email-provider-skeleton-foundation.mjs`
+
+`npm run verify-email-provider-skeleton-foundation` runs verification scripts in order:
+
+1. `verify-email-provider-foundation` (phases 10–12 + delivery foundation)
+2. `verify-email-provider-skeletons` (phase 14 skeleton modules)
+
+Stops on first failure. Prints section headings for each step. Verification-only — no app behaviour changes.
+
+### Phase 15 constraints
+
+- Orchestration only — no app behaviour changes
+- No real email provider, production delivery, or mark-as-sent automation
+- No network calls or compliance/action/history mutation
 
 ---
 
@@ -323,27 +378,32 @@ The `mock` provider identifier is for tests and verification only — not set vi
 | 11 | Provider adapter interface (`createEmailProviderAdapter`) | **Complete** |
 | 12 | Provider foundation verification orchestrator (`verify-email-provider-foundation`) | **Complete** |
 | 13 | Provider foundation release readiness (`v6.0.0-alpha.2`) | **Complete** |
-| 14 | Real provider implementation (e.g. Resend) | Planned |
-| 15 | Operations Log delivery UI + export | Planned |
-| 16 | Mark-as-sent on confirmed delivery (policy-gated) | Planned |
+| 14 | Real provider skeleton modules (Resend, SendGrid, SMTP) | **Complete** |
+| 15 | Provider skeleton foundation verification orchestrator (`verify-email-provider-skeleton-foundation`) | **Complete** |
+| 16 | Provider skeleton release readiness (`v6.0.0-alpha.3`) | **Complete** |
+| 17 | Real provider network implementation (e.g. Resend API) | Planned |
+| 18 | Operations Log delivery UI + export | Planned |
+| 19 | Mark-as-sent on confirmed delivery (policy-gated) | Planned |
 
-**Release candidate:** **v6.0.0-alpha.2**
+**Release candidate:** **v6.0.0-alpha.3**
 
-**Release-readiness note (v6.0.0-alpha.2):**
+**Release-readiness note (v6.0.0-alpha.3):**
 
-- V6 Phases 1–13 complete
+- V6 Phases 1–16 complete
 - Provider configuration complete (`getEmailProviderConfig`)
 - Provider adapter complete (`createEmailProviderAdapter`)
-- Provider foundation verification orchestrator complete (`npm run verify-email-provider-foundation`)
+- Provider skeleton modules complete (Resend, SendGrid, SMTP)
+- Provider skeleton foundation verification orchestrator complete (`npm run verify-email-provider-skeleton-foundation`)
 - Disabled-by-default provider mode
 - Mock provider only
 - No real provider implementation
+- No network calls
 - No production sending
 - No mark-as-sent automation
 
 **Release verification (required before tag):**
 
 - `npm run build` — rebuild `app.bundle.js` after version bump
-- `npm run verify-email-provider-foundation` — phases 10–12 orchestrator (no live execution)
+- `npm run verify-email-provider-skeleton-foundation` — phases 12 + 14–15 orchestrator (no live execution)
 
-**Next slice after Phase 13:** V6 Phase 14 — real provider implementation.
+**Next slice after Phase 16:** V6 Phase 17 — real provider network implementation.

@@ -3,8 +3,8 @@
 **Theme:** Define how reminder emails would be sent and audited — lifecycle, records, duplicate prevention, retries, and provider abstraction — **without** implementing delivery.
 
 **Target:** v6.0.0 (major release)  
-**Current phase:** V6 Phase 13 — Provider Foundation Release Readiness  
-**Release candidate:** v6.0.0-alpha.2  
+**Current phase:** V6 Phase 16 — Provider Skeleton Release Readiness  
+**Release candidate:** v6.0.0-alpha.3  
 **Prerequisites:** v5.0.0-alpha.5 (V5-2 template & digest foundation)  
 **Date:** Planned — June 2026+
 
@@ -397,6 +397,8 @@ interface HealthCheckResult {
 | `npm run verify-email-provider-config` | Phase 10 — provider config documentation, config module, safe defaults, no app wiring |
 | `npm run verify-email-provider-adapter` | Phase 11 — adapter factory, disabled/mock/placeholder behaviour, no app wiring |
 | `npm run verify-email-provider-foundation` | Phase 12 — orchestrator; runs phases 10–11 + delivery foundation in order, stop on first failure |
+| `npm run verify-email-provider-skeletons` | Phase 14 — skeleton provider modules, adapter routing, no network/SDK hooks, no app wiring |
+| `npm run verify-email-provider-skeleton-foundation` | Phase 15 — orchestrator; runs phases 12 + 14 in order, stop on first failure |
 
 **Phase 1 gate:** `npm run verify-delivery-architecture` must pass. No Supabase or browser required.
 
@@ -820,7 +822,7 @@ Factory that resolves email provider configuration into a provider surface (`hea
 |-----------|--------|
 | `config.enabled === false` | Disabled provider — `healthCheck()` → `{ status: "disabled", provider: "none" }`; `sendReminder()` throws `Email provider is disabled` |
 | `config.provider === "mock"` (enabled) | Returns injected `mockProvider` or `createMockEmailProvider({ mode: "success" })` |
-| `config.provider` ∈ `{ resend, sendgrid, smtp }` (enabled) | Placeholder — `healthCheck()` → `{ status: "not_implemented", provider: <name> }`; `sendReminder()` throws `Provider <name> is not implemented yet` |
+| `config.provider` ∈ `{ resend, sendgrid, smtp }` (enabled) | Skeleton provider module — `healthCheck()` → `{ status: "not_implemented", provider: <name> }`; `sendReminder()` throws `Provider <name> is not implemented yet` |
 
 ### Phase 11 constraints
 
@@ -883,7 +885,82 @@ Stops on first failure. Prints section headings for each step. Verification-only
 
 ---
 
-## Phase roadmap (v6)
+## Phase 14 — Real provider skeleton modules
+
+**Scope:** Placeholder provider modules for future Resend, SendGrid, and SMTP integration. Skeleton behaviour only — no fetch, API keys, external SDKs, SMTP transport, real sending, mark-as-sent automation, or `app.js` wiring.
+
+| Provider | Module | Factory |
+|----------|--------|---------|
+| Resend | `js/app/automation/providers/resend-provider.js` | `createResendEmailProvider({ config })` |
+| SendGrid | `js/app/automation/providers/sendgrid-provider.js` | `createSendgridEmailProvider({ config })` |
+| SMTP | `js/app/automation/providers/smtp-provider.js` | `createSmtpEmailProvider({ config })` |
+
+`createEmailProviderAdapter` routes enabled `resend`, `sendgrid`, and `smtp` config to the corresponding skeleton factory. Mock provider unchanged.
+
+**Script:** `scripts/verify-email-provider-skeletons.mjs`
+
+`npm run verify-email-provider-skeletons` verifies skeleton module exports, not-implemented behaviour, adapter routing, absence of network/SDK hooks, and no `app.js` wiring.
+
+### Phase 14 constraints
+
+- Skeleton modules only — no real provider network calls, credentials, or outbound delivery
+- Not imported in `app.js` or wired to delivery execution
+- No mark-as-sent automation or compliance/action/history mutation
+
+---
+
+## Phase 15 — Provider skeleton foundation verification orchestrator
+
+**Script:** `scripts/verify-email-provider-skeleton-foundation.mjs`
+
+`npm run verify-email-provider-skeleton-foundation` runs provider and skeleton foundation verification in order:
+
+1. `verify-email-provider-foundation` (phases 10–12 + delivery foundation)
+2. `verify-email-provider-skeletons` (phase 14 skeleton modules)
+
+Stops on first failure. Prints section headings for each step. Verification-only — no real email provider, network calls, production sending, mark-as-sent automation, or app behaviour changes.
+
+### Phase 15 constraints
+
+- Orchestration only — no app behaviour changes
+- No real email provider, production delivery, or mark-as-sent automation
+- No network calls or compliance/action/history mutation
+
+---
+
+## Phase 16 — Provider skeleton release readiness
+
+**Scope:** Documentation, version bump (`v6.0.0-alpha.3`), and release-readiness gate for the provider skeleton foundation slice. No application logic changes.
+
+**Release-readiness note (v6.0.0-alpha.3):**
+
+- V6 Phases 1–16 complete (delivery foundation phases 1–9 + provider foundation phases 10–13 + skeleton phases 14–16)
+- Provider configuration complete (`getEmailProviderConfig`)
+- Provider adapter complete (`createEmailProviderAdapter`)
+- Provider skeleton modules complete (Resend, SendGrid, SMTP)
+- Provider skeleton foundation verification orchestrator complete (`npm run verify-email-provider-skeleton-foundation`)
+- **Disabled-by-default provider mode** (`enabled: false`, `mode: disabled`, `provider: none`)
+- **Mock provider only**
+- **No real provider implementation**
+- **No network calls**
+- **No production sending**
+- **No mark-as-sent automation**
+- **No compliance/action/history mutation**
+
+**Release verification (required before tag):**
+
+- `npm run build` — rebuild `app.bundle.js` after version bump
+- `npm run verify-email-provider-skeleton-foundation` — phases 12 + 14–15 orchestrator (no live execution)
+
+**Release candidate:** **v6.0.0-alpha.3**
+
+### Phase 16 constraints
+
+- Documentation and version display only — no app behaviour changes
+- Skeleton modules only — no real provider network calls, production delivery, or mark-as-sent automation
+- No compliance/action/history mutation
+
+---
 
 | Phase | Deliverable | Status |
 |-------|-------------|--------|
@@ -900,13 +977,16 @@ Stops on first failure. Prints section headings for each step. Verification-only
 | 11 | Provider adapter interface (`createEmailProviderAdapter`) | **Complete** |
 | 12 | Provider foundation verification orchestrator (`verify-email-provider-foundation`) | **Complete** |
 | 13 | Provider foundation release readiness (`v6.0.0-alpha.2`) | **Complete** |
-| 14 | Real provider implementation (e.g. Resend) | Planned |
-| 15 | Operations Log delivery UI + export | Planned |
-| 16 | Mark-as-sent on confirmed delivery (policy-gated) | Planned |
+| 14 | Real provider skeleton modules (Resend, SendGrid, SMTP) | **Complete** |
+| 15 | Provider skeleton foundation verification orchestrator (`verify-email-provider-skeleton-foundation`) | **Complete** |
+| 16 | Provider skeleton release readiness (`v6.0.0-alpha.3`) | **Complete** |
+| 17 | Real provider network implementation (e.g. Resend API) | Planned |
+| 18 | Operations Log delivery UI + export | Planned |
+| 19 | Mark-as-sent on confirmed delivery (policy-gated) | Planned |
 
-**Constraints (Phase 13):** Documentation and version bump only. Mock provider only. No real provider implementation, no production delivery, no mark-as-sent automation, no app wiring.
+**Constraints (Phase 16):** Documentation and version bump only. Skeleton modules only. No real provider implementation, no network calls, no production delivery, no mark-as-sent automation, no app wiring.
 
-**Next slice after Phase 13:** V6 Phase 14 — real provider implementation.
+**Next slice after Phase 16:** V6 Phase 17 — real provider network implementation.
 
 ---
 

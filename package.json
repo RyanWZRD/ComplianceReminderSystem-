@@ -76,6 +76,8 @@
     "verify-email-provider-config": "node scripts/verify-email-provider-config.mjs",
     "verify-email-provider-adapter": "node scripts/verify-email-provider-adapter.mjs",
     "verify-email-provider-foundation": "node scripts/verify-email-provider-foundation.mjs",
+    "verify-email-provider-skeletons": "node scripts/verify-email-provider-skeletons.mjs",
+    "verify-email-provider-skeleton-foundation": "node scripts/verify-email-provider-skeleton-foundation.mjs",
     "verify:phase2": "node scripts/verify-phase2.mjs"
   },
   "dependencies": {

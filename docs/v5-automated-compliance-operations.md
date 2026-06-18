@@ -3,7 +3,7 @@
 **Theme:** Move from *knowing* what needs attention (V4 Compliance Insights) to *acting on it automatically* — scheduled reminders, orchestrated actions, escalations, and auditable operations.
 
 **Target:** v5.0.0 (major release)  
-**Current alpha:** v6.0.0-alpha.3 — V6 Provider Skeleton Foundation (see release-readiness note below)  
+**Current alpha:** v6.0.0-alpha.4 — V6 Resend Plan Release Readiness (see release-readiness note below)  
 **Prior alpha:** v5.0.0-alpha.5 — V5-2 Template & Digest Foundation; v5.0.0-alpha.4 — V5-1 Reminder Queue Foundation; v5.0.0-alpha.3 — V5-0 Automation Platform Foundation; v5.0.0-alpha.2 — V5-1A + V5-1B (see [`docs/v5-0-0-alpha-2-release-notes.md`](v5-0-0-alpha-2-release-notes.md))  
 **Prerequisites:** v4.0.1 GA, v3.1.0 cloud follow-on (evidence Storage, restore/bulk ops, production cloud-writes policy)  
 **Date:** Planned — post v4.0.1 sign-off (June 2026+)
@@ -380,7 +380,65 @@ The Reminder Queue Preview section includes a **Digest preview** area wired to `
 
 **Constraints:** Template generation, preview, and digest generation only; no email delivery, mark-as-sent, compliance/action mutation, or history writes.
 
-**Next slice:** V6 Phase 17 — real provider network implementation — see [`docs/v6-delivery-architecture.md`](v6-delivery-architecture.md) · [`docs/v6-email-provider-configuration.md`](v6-email-provider-configuration.md).
+**Next slice:** V6 Phase 19 — Resend network implementation — see [`docs/v6-delivery-architecture.md`](v6-delivery-architecture.md) · [`docs/v6-email-provider-configuration.md`](v6-email-provider-configuration.md).
+
+---
+
+## V6 — Reminder delivery · Phase 18 complete
+
+**Goal:** Confirm the Resend implementation plan is safe to tag as **v6.0.0-alpha.4** before any real network code is added.
+
+**Status:** Resend plan release readiness complete — application version **v6.0.0-alpha.4**. V6 Phases 1–18 complete.
+
+**Release-readiness note (v6.0.0-alpha.4):**
+
+- Delivery foundation complete (phases 1–9; see [`docs/v6-delivery-architecture.md`](v6-delivery-architecture.md))
+- Resend implementation plan complete (Phase 17; env vars, validation, test/production gates, failure mapping, rate limits, audit, rollback)
+- Resend plan verification complete (`npm run verify-resend-provider-plan`)
+- Provider configuration complete (`getEmailProviderConfig`)
+- Provider adapter complete (`createEmailProviderAdapter`)
+- Provider skeleton modules complete (Resend, SendGrid, SMTP) — `resend-provider.js` still skeleton
+- Provider skeleton foundation verification orchestrator complete (`npm run verify-email-provider-skeleton-foundation`)
+- **Disabled-by-default provider mode**
+- **Mock provider only**
+- **No Resend network implementation**
+- **No API key usage**
+- **No network calls**
+- **No production sending**
+- **No mark-as-sent automation**
+- **No compliance/action/history mutation**
+
+| Phase | Deliverable | Status |
+|-------|-------------|--------|
+| 18 | Resend plan release readiness (`v6.0.0-alpha.4`) | **Complete** |
+| 19 | Resend network implementation (`createResendEmailProvider`) | Planned |
+
+**Release candidate:** **v6.0.0-alpha.4**
+
+**Release verification (required before tag):**
+
+- `npm run build` — rebuild `app.bundle.js` after version bump
+- `npm run verify-email-provider-skeleton-foundation` — phases 12 + 14–15 orchestrator (no live execution)
+- `npm run verify-resend-provider-plan` — Resend plan documentation; skeleton-only provider module
+
+**Next slice:** V6 Phase 19 — Resend network implementation.
+
+---
+
+## V6 — Reminder delivery · Phase 17 complete
+
+**Goal:** Document the exact Resend implementation contract before writing network code.
+
+**Status:** Resend implementation plan complete. Adds `npm run verify-resend-provider-plan`. Planning only — `resend-provider.js` remains skeleton.
+
+| Phase | Deliverable | Status |
+|-------|-------------|--------|
+| 17 | Resend implementation plan (documentation + verification) | **Complete** |
+| 18 | Resend plan release readiness (`v6.0.0-alpha.4`) | **Complete** |
+
+**Verification:** `npm run verify-resend-provider-plan`
+
+**Next slice:** V6 Phase 19 — Resend network implementation.
 
 ---
 
@@ -955,7 +1013,7 @@ Secrets (SMTP API keys) live in Supabase Edge Function secrets only — never in
 | V5-0 | **COMPLETE** | Automation platform foundation — schema, RPCs, dry-run scan + audit logging + audit UI; **v5.0.0-alpha.3** |
 | V5-1 (foundation) | **COMPLETE** | Reminder queue foundation — queue, preview UI, CSV export, orchestrator; **v5.0.0-alpha.4** |
 | V5-2 | **COMPLETE** | Reminder email template builder — template builder, preview UI, copy template, digest builder, digest preview UI, foundation orchestrator; **v5.0.0-alpha.5**; no delivery |
-| V6-1 | **COMPLETE** | Delivery + provider skeleton foundation — domain model through skeleton foundation orchestrator; **v6.0.0-alpha.3**; skeleton modules only, disabled-by-default, no network calls, no production sending |
+| V6-1 | **COMPLETE** | Delivery + Resend plan foundation — domain model through Resend plan release readiness; **v6.0.0-alpha.4**; Resend plan complete, skeleton modules only, disabled-by-default, no network calls, no API key usage, no production sending |
 | V5-2A | **PLANNED** | Automated action orchestration |
 | V5-3 | **PLANNED** | Escalation & operational closure |
 | V5-4 | **PLANNED** | Policy engine GA & operations pack |

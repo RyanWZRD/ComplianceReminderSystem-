@@ -3,8 +3,8 @@
 **Theme:** Define how reminder emails would be sent and audited — lifecycle, records, duplicate prevention, retries, and provider abstraction — **without** implementing delivery.
 
 **Target:** v6.0.0 (major release)  
-**Current phase:** V6 Phase 16 — Provider Skeleton Release Readiness  
-**Release candidate:** v6.0.0-alpha.3  
+**Current phase:** V6 Phase 18 — Resend Plan Release Readiness  
+**Release candidate:** v6.0.0-alpha.4  
 **Prerequisites:** v5.0.0-alpha.5 (V5-2 template & digest foundation)  
 **Date:** Planned — June 2026+
 
@@ -399,6 +399,7 @@ interface HealthCheckResult {
 | `npm run verify-email-provider-foundation` | Phase 12 — orchestrator; runs phases 10–11 + delivery foundation in order, stop on first failure |
 | `npm run verify-email-provider-skeletons` | Phase 14 — skeleton provider modules, adapter routing, no network/SDK hooks, no app wiring |
 | `npm run verify-email-provider-skeleton-foundation` | Phase 15 — orchestrator; runs phases 12 + 14 in order, stop on first failure |
+| `npm run verify-resend-provider-plan` | Phase 17 — Resend implementation plan documentation; no network or provider code |
 
 **Phase 1 gate:** `npm run verify-delivery-architecture` must pass. No Supabase or browser required.
 
@@ -425,6 +426,10 @@ interface HealthCheckResult {
 **Phase 12 gate:** `npm run verify-email-provider-foundation` must pass. Verification orchestration only — no real provider implementation, network calls, production sending, mark-as-sent automation, or app behaviour changes.
 
 **Phase 13 gate:** `npm run build` and `npm run verify-email-provider-foundation` must pass. Documentation and version bump only — no application logic changes. Mock provider only — no real provider implementation, production sending, mark-as-sent automation, or compliance/action/history mutation.
+
+**Phase 17 gate:** `npm run verify-resend-provider-plan` must pass. Planning documentation only — no real provider implementation, `fetch`, SDK, SMTP, production sending, or `app.js` wiring.
+
+**Phase 18 gate:** `npm run build`, `npm run verify-email-provider-skeleton-foundation`, and `npm run verify-resend-provider-plan` must pass. Documentation and version bump only — no application logic changes. Resend plan complete; no network implementation, API key usage, production sending, or mark-as-sent automation.
 
 ---
 
@@ -962,6 +967,82 @@ Stops on first failure. Prints section headings for each step. Verification-only
 
 ---
 
+## Phase 17 — Resend implementation plan
+
+**Scope:** Document the exact contract for the first real email provider (Resend) before writing network code in `createResendEmailProvider`. **Planning only** — no `fetch`, SDK, SMTP, production sending, or `app.js` wiring.
+
+**Documentation:** [`docs/v6-email-provider-configuration.md`](v6-email-provider-configuration.md#phase-17--resend-implementation-plan) — full Resend plan (env vars, validation, test/production gates, failure mapping, rate limits, audit, rollback).
+
+**Script:** `scripts/verify-resend-provider-plan.mjs`
+
+`npm run verify-resend-provider-plan` verifies:
+
+1. Resend implementation plan section exists in provider configuration doc
+2. Required env vars, test/production gates, failure mapping, and rollback plan are documented
+3. `resend-provider.js` remains skeleton — no `fetch`, SDK hooks, or live API calls
+
+### Phase 17 deliverables
+
+| Item | Location |
+|------|----------|
+| Resend implementation plan | `docs/v6-email-provider-configuration.md` § Phase 17 |
+| Plan verification | `scripts/verify-resend-provider-plan.mjs` |
+| Architecture cross-reference | This document § Phase 17 |
+
+### Resend adapter contract (planned — Phase 19)
+
+The Resend module will implement the existing `EmailProvider` interface from Phase 1:
+
+| Method | Planned behaviour |
+|--------|-------------------|
+| `healthCheck()` | `GET /domains` — validate API key; confirm `EMAIL_FROM_ADDRESS` domain is verified |
+| `sendReminder(input)` | `POST /emails` — map input to Resend payload; apply test-mode redirect; return structured result for executor retry logic |
+
+Worker flow unchanged from Phase 1 contract: `prepared` → `sending` → `delivered` / `failed` with audit on every transition.
+
+### Phase 17 constraints
+
+- Planning documentation and verification only — no app behaviour changes
+- `resend-provider.js` skeleton unchanged (`not_implemented` / throws)
+- No network calls, production delivery, mark-as-sent automation, or compliance/action/history mutation
+
+---
+
+## Phase 18 — Resend plan release readiness
+
+**Scope:** Documentation, version bump (`v6.0.0-alpha.4`), and release-readiness gate for the Resend implementation plan slice. No application logic changes.
+
+**Release-readiness note (v6.0.0-alpha.4):**
+
+- V6 Phases 1–18 complete (delivery foundation phases 1–9 + provider foundation phases 10–13 + skeleton phases 14–16 + Resend plan phases 17–18)
+- Resend implementation plan complete (env vars, validation, test/production gates, failure mapping, rate limits, audit, rollback)
+- Resend plan verification complete (`npm run verify-resend-provider-plan`)
+- Provider skeleton modules unchanged — `resend-provider.js` still `not_implemented`
+- **Disabled-by-default provider mode** (`enabled: false`, `mode: disabled`, `provider: none`)
+- **Mock provider only**
+- **No Resend network implementation**
+- **No API key usage**
+- **No network calls**
+- **No production sending**
+- **No mark-as-sent automation**
+- **No compliance/action/history mutation**
+
+**Release verification (required before tag):**
+
+- `npm run build` — rebuild `app.bundle.js` after version bump
+- `npm run verify-email-provider-skeleton-foundation` — phases 12 + 14–15 orchestrator (no live execution)
+- `npm run verify-resend-provider-plan` — Resend plan documentation; skeleton-only provider module
+
+**Release candidate:** **v6.0.0-alpha.4**
+
+### Phase 18 constraints
+
+- Documentation and version display only — no app behaviour changes
+- No Resend network implementation, API key usage, production delivery, or mark-as-sent automation
+- No compliance/action/history mutation
+
+---
+
 | Phase | Deliverable | Status |
 |-------|-------------|--------|
 | 1 | Delivery domain model (this document) | **Complete** |
@@ -980,13 +1061,15 @@ Stops on first failure. Prints section headings for each step. Verification-only
 | 14 | Real provider skeleton modules (Resend, SendGrid, SMTP) | **Complete** |
 | 15 | Provider skeleton foundation verification orchestrator (`verify-email-provider-skeleton-foundation`) | **Complete** |
 | 16 | Provider skeleton release readiness (`v6.0.0-alpha.3`) | **Complete** |
-| 17 | Real provider network implementation (e.g. Resend API) | Planned |
-| 18 | Operations Log delivery UI + export | Planned |
-| 19 | Mark-as-sent on confirmed delivery (policy-gated) | Planned |
+| 17 | Resend implementation plan (documentation + verification) | **Complete** |
+| 18 | Resend plan release readiness (`v6.0.0-alpha.4`) | **Complete** |
+| 19 | Resend network implementation (`createResendEmailProvider`) | Planned |
+| 20 | Operations Log delivery UI + export | Planned |
+| 21 | Mark-as-sent on confirmed delivery (policy-gated) | Planned |
 
-**Constraints (Phase 16):** Documentation and version bump only. Skeleton modules only. No real provider implementation, no network calls, no production delivery, no mark-as-sent automation, no app wiring.
+**Constraints (Phase 18):** Documentation and version bump only. Resend plan complete. No network implementation, API key usage, production delivery, mark-as-sent automation, or app wiring.
 
-**Next slice after Phase 16:** V6 Phase 17 — real provider network implementation.
+**Next slice after Phase 18:** V6 Phase 19 — Resend network implementation in `createResendEmailProvider`.
 
 ---
 

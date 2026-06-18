@@ -3,8 +3,8 @@
 **Theme:** Define how a real email provider will be configured safely — without implementing a provider, sending email, or wiring the application.
 
 **Target:** v6.0.0 (major release)  
-**Current phase:** V6 Phase 16 — Provider Skeleton Release Readiness  
-**Release candidate:** v6.0.0-alpha.3  
+**Current phase:** V6 Phase 18 — Resend Plan Release Readiness  
+**Release candidate:** v6.0.0-alpha.4  
 **Prerequisites:** v6.0.0-alpha.2 (V6 Phase 13 — provider foundation release readiness)  
 **Date:** Planned — June 2026+
 
@@ -305,6 +305,7 @@ The `mock` provider identifier is for tests and verification only — not set vi
 | `npm run verify-email-provider-foundation` | Phase 12 — orchestrator; runs phases 10–11 + delivery foundation in order, stop on first failure |
 | `npm run verify-email-provider-skeletons` | Phase 14 — skeleton provider modules, adapter routing, no network/SDK hooks, no app wiring |
 | `npm run verify-email-provider-skeleton-foundation` | Phase 15 — orchestrator; runs phases 12 + 14 in order, stop on first failure |
+| `npm run verify-resend-provider-plan` | Phase 17 — Resend implementation plan documentation; no network or provider code |
 | `npm run verify-delivery-foundation` | Phases 1–8 — delivery foundation orchestrator (included in Phase 12 gate) |
 
 **Phase 10 gate:** `npm run verify-email-provider-config` must pass. No Supabase, browser, real email provider, or outbound delivery.
@@ -320,6 +321,10 @@ The `mock` provider identifier is for tests and verification only — not set vi
 **Phase 15 gate:** `npm run verify-email-provider-skeleton-foundation` must pass. Verification orchestration only — no real provider implementation, network calls, production sending, mark-as-sent automation, or app behaviour changes.
 
 **Phase 16 gate:** `npm run build` and `npm run verify-email-provider-skeleton-foundation` must pass. Documentation and version bump only — no application logic changes.
+
+**Phase 17 gate:** `npm run verify-resend-provider-plan` must pass. Planning documentation only — no real provider implementation, `fetch`, SDK, SMTP, production sending, or `app.js` wiring.
+
+**Phase 18 gate:** `npm run build`, `npm run verify-email-provider-skeleton-foundation`, and `npm run verify-resend-provider-plan` must pass. Documentation and version bump only — no application logic changes. Resend plan complete; no network implementation, API key usage, production sending, or mark-as-sent automation.
 
 ---
 
@@ -381,22 +386,27 @@ Stops on first failure. Prints section headings for each step. Verification-only
 | 14 | Real provider skeleton modules (Resend, SendGrid, SMTP) | **Complete** |
 | 15 | Provider skeleton foundation verification orchestrator (`verify-email-provider-skeleton-foundation`) | **Complete** |
 | 16 | Provider skeleton release readiness (`v6.0.0-alpha.3`) | **Complete** |
-| 17 | Real provider network implementation (e.g. Resend API) | Planned |
-| 18 | Operations Log delivery UI + export | Planned |
-| 19 | Mark-as-sent on confirmed delivery (policy-gated) | Planned |
+| 17 | Resend implementation plan (documentation + verification) | **Complete** |
+| 18 | Resend plan release readiness (`v6.0.0-alpha.4`) | **Complete** |
+| 19 | Resend network implementation (`createResendEmailProvider`) | Planned |
+| 20 | Operations Log delivery UI + export | Planned |
+| 21 | Mark-as-sent on confirmed delivery (policy-gated) | Planned |
 
-**Release candidate:** **v6.0.0-alpha.3**
+**Release candidate:** **v6.0.0-alpha.4**
 
-**Release-readiness note (v6.0.0-alpha.3):**
+**Release-readiness note (v6.0.0-alpha.4):**
 
-- V6 Phases 1–16 complete
+- V6 Phases 1–18 complete
+- Resend implementation plan complete (env vars, validation, test/production gates, failure mapping, rate limits, audit, rollback)
+- Resend plan verification complete (`npm run verify-resend-provider-plan`)
 - Provider configuration complete (`getEmailProviderConfig`)
 - Provider adapter complete (`createEmailProviderAdapter`)
 - Provider skeleton modules complete (Resend, SendGrid, SMTP)
 - Provider skeleton foundation verification orchestrator complete (`npm run verify-email-provider-skeleton-foundation`)
 - Disabled-by-default provider mode
 - Mock provider only
-- No real provider implementation
+- No Resend network implementation
+- No API key usage
 - No network calls
 - No production sending
 - No mark-as-sent automation
@@ -405,5 +415,237 @@ Stops on first failure. Prints section headings for each step. Verification-only
 
 - `npm run build` — rebuild `app.bundle.js` after version bump
 - `npm run verify-email-provider-skeleton-foundation` — phases 12 + 14–15 orchestrator (no live execution)
+- `npm run verify-resend-provider-plan` — Resend plan documentation; skeleton-only provider module
 
-**Next slice after Phase 16:** V6 Phase 17 — real provider network implementation.
+**Next slice after Phase 18:** V6 Phase 19 — Resend network implementation in `createResendEmailProvider`.
+
+---
+
+## Phase 17 — Resend implementation plan
+
+**Scope:** Document the exact implementation contract for the first real email provider (Resend) before writing network code. **Planning only** — no `fetch`, SDK, SMTP transport, production sending, or `app.js` wiring in this phase.
+
+**Target module:** `js/app/automation/providers/resend-provider.js` (`createResendEmailProvider`)
+
+**API reference:** [Resend Emails API](https://resend.com/docs/api-reference/emails/send-email) · [Resend Domains API](https://resend.com/docs/api-reference/domains/list-domains)
+
+**Non-goals for Phase 17:** Implementing `healthCheck()` / `sendReminder()`, adding dependencies, worker wiring, delivery executor changes, mark-as-sent automation, or compliance/action/history mutation.
+
+### Why Resend first
+
+| Factor | Rationale |
+|--------|-----------|
+| **HTTPS API** | Single `POST /emails` endpoint — no SMTP connection pooling or TLS relay complexity |
+| **Health without send** | `GET /domains` validates API key and domain readiness without delivering mail |
+| **Transactional focus** | Fits compliance reminder use case; no marketing-campaign surface area |
+| **Skeleton exists** | Phase 14 placeholder module and adapter routing already in place |
+
+SendGrid and SMTP remain documented for future phases; only Resend is planned in detail here.
+
+### Required environment variables
+
+Resend integration reads **core settings** from `getEmailProviderConfig()` (Phase 10) plus **worker-only secrets** validated at adapter startup — secrets are never returned by the config module or exposed to the browser.
+
+| Variable | Required when | Default | Description |
+|----------|---------------|---------|-------------|
+| `EMAIL_PROVIDER` | Resend active | `none` | Must be `resend` |
+| `EMAIL_MODE` | Resend active | `disabled` | `test` or `production` (see gates below) |
+| `EMAIL_PROVIDER_ENABLED` | Sending allowed | *(unset → false)* | Must be `true` |
+| `EMAIL_FROM_ADDRESS` | `enabled=true` | — | Verified sender on a Resend domain (From header) |
+| `EMAIL_REPLY_TO_ADDRESS` | Optional | — | Reply-To header when set |
+| `EMAIL_RATE_LIMIT_PER_RUN` | Optional | `50` | Per-run cap (executor enforces) |
+| `RESEND_API_KEY` | `provider=resend` + enabled | — | Worker secret; send-scoped API key |
+| `EMAIL_TEST_REDIRECT_TO` | Recommended in `test` mode | — | Staging inbox; replaces all `recipientEmail` values before API call |
+
+**Startup validation (Phase 19 implementation):**
+
+1. When `config.provider === "resend"` and `config.enabled === true`, worker must read `RESEND_API_KEY` from env/secrets.
+2. Missing or empty `RESEND_API_KEY` → startup failure with sanitised error (no key material in logs).
+3. `RESEND_API_KEY` must not appear in `getEmailProviderConfig()` return value, client bundle, or audit payloads.
+
+### From and Reply-To validation
+
+Validation runs at **worker startup** (config + secrets) and **per send** (defence in depth). Uses the same RFC 5322 addr-spec rules as Phase 10.
+
+| Field | Startup rules | Per-send rules |
+|-------|---------------|----------------|
+| **From (`EMAIL_FROM_ADDRESS`)** | Required when enabled; trim whitespace; lowercase domain part; reject malformed addr-spec | Must match startup-validated value from config (no runtime override) |
+| **From domain** | Domain part must appear in Resend `GET /domains` response with `status: "verified"` (health check) | Reject send if domain verification lost since startup (re-run health or fail permanent) |
+| **Display name** | Optional future: `"Org Name Compliance" <reminders@org>` from org settings — Phase 19 may send addr-spec only | N/A |
+| **Reply-To (`EMAIL_REPLY_TO_ADDRESS`)** | Optional; if set, valid addr-spec; trim and normalise domain | Include `reply_to` in API payload only when set; omit field when null |
+| **Distinct addresses** | Recommended: From = automated service; Reply-To = staffed safeguarding inbox | Log warning (not block) if From === Reply-To |
+
+**Rejected at startup (permanent — do not attempt sends):**
+
+- Empty or malformed `EMAIL_FROM_ADDRESS` when `enabled=true`
+- From domain not verified in Resend account (health check failure)
+- `EMAIL_FROM_ADDRESS` using a personal freemail domain (e.g. `@gmail.com`) — document in runbook; optional strict reject
+
+**Test mode exception:** When `EMAIL_MODE=test`, From may use Resend onboarding domain `onboarding@resend.dev` only if explicitly documented in staging runbook and `EMAIL_TEST_REDIRECT_TO` is set — production From rules still apply when `EMAIL_MODE=production`.
+
+### Test mode behaviour
+
+When `EMAIL_MODE=test` and all enablement gates pass, the Resend adapter **may** call the Resend API but **must not** deliver to real data-subject inboxes.
+
+| Rule | Behaviour |
+|------|-----------|
+| **Recipient override** | Replace `recipientEmail` with `EMAIL_TEST_REDIRECT_TO` before `POST /emails` |
+| **Missing redirect** | If `EMAIL_TEST_REDIRECT_TO` unset → treat as misconfiguration; `healthCheck()` fails or send throws permanent error |
+| **Subject prefix** | Prepend `[TEST]` to subject line for visual filtering in staging inbox |
+| **Metadata flag** | Set `metadata.testMode: true` on delivery record and in Resend `tags` / custom headers where supported |
+| **API key** | Use staging Resend API key (separate from production key) |
+| **Audit** | Full delivery lifecycle written to `reminder_delivery_logs`; Operations Log shows test badge |
+| **No mark-as-sent** | Test sends do not trigger mark-as-sent automation (Phase 20) |
+
+### Production mode gates
+
+All gates must pass before the worker transitions any record to `sending` with the Resend adapter:
+
+| # | Gate | Check |
+|---|------|-------|
+| 1 | Provider selection | `EMAIL_PROVIDER=resend` |
+| 2 | Explicit enablement | `EMAIL_PROVIDER_ENABLED=true` |
+| 3 | Mode | `EMAIL_MODE=production` |
+| 4 | From address | Valid `EMAIL_FROM_ADDRESS` on verified Resend domain |
+| 5 | API key | `RESEND_API_KEY` present in worker secrets |
+| 6 | Automation | `AUTOMATION_ENABLED=true` (cloud worker only per V5/V6 architecture) |
+| 7 | Health | `healthCheck().ok === true` within timeout (e.g. 5s) before batch |
+| 8 | Rate limit | Under `EMAIL_RATE_LIMIT_PER_RUN` and per-org daily cap (future) |
+
+**Fail-closed:** If any gate fails at startup → worker logs error and refuses to send. If gate fails mid-run (e.g. health check) → abort batch; leave records in `prepared`; emit `provider.health_check` audit event.
+
+**Production sends** use real `recipientEmail` from prepared delivery records — no redirect override.
+
+### Failure mapping
+
+Map Resend HTTP responses and client errors to `SendReminderResult` for the delivery executor retry logic (see [`v6-delivery-architecture.md`](v6-delivery-architecture.md) retry section).
+
+| Resend condition | HTTP | `errorCode` | `transient` | Executor action |
+|------------------|------|-------------|-------------|-----------------|
+| Success | `200` / `201` | — | — | `delivered`; store `providerMessageId` from response `id` |
+| Rate limited | `429` | `resend_rate_limited` | `true` | Backoff + retry; respect `Retry-After` when present |
+| Server error | `500`–`599` | `resend_server_error` | `true` | Backoff + retry |
+| Timeout / network | — | `resend_network_error` | `true` | Backoff + retry |
+| Invalid API key | `401` | `resend_auth_failed` | `false` | `failed` immediately; alert ops |
+| Forbidden / scope | `403` | `resend_forbidden` | `false` | `failed` immediately |
+| Validation (bad payload) | `422` | `resend_validation_error` | `false` | `failed`; include sanitised Resend message in `failureReason` |
+| Invalid recipient | `422` (email field) | `resend_invalid_recipient` | `false` | `failed` immediately |
+| Domain not verified | `403` / domain error body | `resend_domain_not_verified` | `false` | `failed`; re-run health check |
+| Unknown | other | `resend_unknown_error` | `false` | `failed`; log response status for ops |
+
+**`healthCheck()` mapping:**
+
+| Condition | `ok` | `errorMessage` |
+|-----------|------|----------------|
+| `GET /domains` succeeds, From domain verified | `true` | — |
+| `401` / missing key | `false` | `Resend API key invalid or missing` |
+| From domain not in verified list | `false` | `From domain not verified in Resend` |
+| Timeout | `false` | `Resend health check timed out` |
+
+Never log full API key or `Authorization` header. Sanitise Resend error bodies before persisting to `failureReason`.
+
+### Rate limits
+
+Resend enforces account-level quotas; the adapter and executor apply **application-level** caps first.
+
+| Layer | Limit | Enforcement |
+|-------|-------|-------------|
+| **Per-run** | `EMAIL_RATE_LIMIT_PER_RUN` (default `50`) | Executor stops new sends; records stay `prepared`; audit `delivery.rate_limited` |
+| **Per-org daily** | `500` (planned) | Worker counter; skip with audit event |
+| **Resend account** | Provider quota (plan-dependent) | `429` → transient failure mapping above |
+| **Health check** | 1 request per startup / pre-batch | Does not count toward send quota |
+| **Backoff** | `initialBackoffMs` 60s, `maxBackoffMs` 15m, `maxAttempts` 3 | Executor retry strategy |
+
+When Resend returns `429`, prefer `Retry-After` header for backoff duration; fall back to exponential backoff from delivery architecture defaults.
+
+### Audit logging
+
+Every Resend interaction must produce auditable records per V6 delivery architecture. No fire-and-forget sends.
+
+| Event | When | Payload (redacted) |
+|-------|------|-------------------|
+| `provider.config_loaded` | Worker startup | `provider: "resend"`, `mode`, `enabled`, `fromEmail`, `rateLimitPerRun` — **no** `RESEND_API_KEY` |
+| `provider.health_check` | Startup / pre-batch | `ok`, `latencyMs`, `errorMessage` |
+| `delivery.sending` | Before `POST /emails` | `deliveryId`, `recipientEmail` (or redirect in test mode), `subject` hash optional |
+| `delivery.delivered` | Resend `200`/`201` | `providerMessageId`, `deliveredAt` |
+| `delivery.failed` | Permanent or exhausted retries | `failureReason`, `errorCode`, attempt count |
+| `delivery.rate_limited` | Cap reached | Run id, limit, skipped count |
+
+**Resend API payload audit:** Store `providerMessageId` (Resend email `id`) on the delivery record. Do not store full request/response bodies in metadata — subject/body already on `reminder_delivery_logs`.
+
+**Test mode:** Include `metadata.testMode: true` and `metadata.originalRecipient` (production gate only — omit in production sends for data minimisation unless ops require).
+
+### Rollback plan
+
+If Resend integration causes incidents in staging or production, operators can revert without code deploy in most cases.
+
+| Step | Action | Effect |
+|------|--------|--------|
+| 1 | Set `EMAIL_PROVIDER_ENABLED=false` | Immediate stop — adapter disabled; `sendReminder` throws / worker skips sends |
+| 2 | Set `EMAIL_MODE=disabled` | Config layer treats sending as off |
+| 3 | Set `EMAIL_PROVIDER=none` | Adapter resolves to disabled provider |
+| 4 | Remove / rotate `RESEND_API_KEY` | Health check fails; pre-batch abort |
+| 5 | Redeploy previous worker image | Reverts to skeleton `not_implemented` if Phase 19 code deployed |
+| 6 | Records in `sending` | Worker must transition to `failed` with `failureReason: "provider_disabled_rollback"` or allow timeout/retry policy — document runbook |
+
+**Verification after rollback:**
+
+- `npm run verify-email-provider-skeleton-foundation` passes
+- Operations Log shows no new `delivered` records after disable timestamp
+- Mock provider tests remain green for in-memory delivery flow
+
+**Phase 17:** Rollback is documented only. No runtime rollback automation.
+
+### Phase 19 implementation checklist (future)
+
+Use this ordered checklist when implementing network code in the next phase:
+
+1. Add `RESEND_API_KEY` validation in `createResendEmailProvider` constructor (throw at factory time if missing when enabled)
+2. Implement `healthCheck()` via `GET https://api.resend.com/domains` with `Authorization: Bearer <key>`
+3. Implement `sendReminder()` via `POST https://api.resend.com/emails` with `from`, `to`, `subject`, `text`, optional `reply_to`
+4. Apply test-mode recipient override and `[TEST]` subject prefix
+5. Map HTTP status codes per failure mapping table above
+6. Return `{ success, providerMessageId, errorCode, errorMessage, transient }` shape aligned with mock provider contract
+7. Extend `verify-email-provider-skeletons` or add `verify-resend-provider` with mocked `fetch` — no live API calls in CI
+8. Do not wire to `app.js` until delivery worker phase
+
+### Phase 17 constraints
+
+- Planning documentation and verification script only
+- `resend-provider.js` remains skeleton (`not_implemented` / throws)
+- No `fetch`, Resend SDK, API keys in repo, SMTP, production sending, or `app.js` wiring
+- No mark-as-sent automation or compliance/action/history mutation
+
+---
+
+## Phase 18 — Resend plan release readiness
+
+**Scope:** Documentation, version bump (`v6.0.0-alpha.4`), and release-readiness gate for the Resend implementation plan slice. No application logic changes.
+
+**Release-readiness note (v6.0.0-alpha.4):**
+
+- V6 Phases 1–18 complete
+- Resend implementation plan complete (Phase 17)
+- Resend plan verification complete (`npm run verify-resend-provider-plan`)
+- Provider skeleton modules unchanged — `resend-provider.js` still `not_implemented`
+- Disabled-by-default provider mode
+- Mock provider only
+- No Resend network implementation
+- No API key usage
+- No network calls
+- No production sending
+- No mark-as-sent automation
+
+**Release verification (required before tag):**
+
+- `npm run build` — rebuild `app.bundle.js` after version bump
+- `npm run verify-email-provider-skeleton-foundation` — phases 12 + 14–15 orchestrator (no live execution)
+- `npm run verify-resend-provider-plan` — Resend plan documentation; skeleton-only provider module
+
+**Release candidate:** **v6.0.0-alpha.4**
+
+### Phase 18 constraints
+
+- Documentation and version display only — no app behaviour changes
+- No Resend network implementation, API key usage, production delivery, or mark-as-sent automation
+- No compliance/action/history mutation

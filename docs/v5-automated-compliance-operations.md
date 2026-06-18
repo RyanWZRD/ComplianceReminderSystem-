@@ -3,7 +3,7 @@
 **Theme:** Move from *knowing* what needs attention (V4 Compliance Insights) to *acting on it automatically* — scheduled reminders, orchestrated actions, escalations, and auditable operations.
 
 **Target:** v5.0.0 (major release)  
-**Current alpha:** v6.0.0-alpha.5 — V6 Resend Provider Release Readiness (see release-readiness note below)  
+**Current alpha:** v6.0.0-alpha.6 — V6 Delivery Operations Log Release Readiness (see release-readiness note below)  
 **Prior alpha:** v5.0.0-alpha.5 — V5-2 Template & Digest Foundation; v5.0.0-alpha.4 — V5-1 Reminder Queue Foundation; v5.0.0-alpha.3 — V5-0 Automation Platform Foundation; v5.0.0-alpha.2 — V5-1A + V5-1B (see [`docs/v5-0-0-alpha-2-release-notes.md`](v5-0-0-alpha-2-release-notes.md))  
 **Prerequisites:** v4.0.1 GA, v3.1.0 cloud follow-on (evidence Storage, restore/bulk ops, production cloud-writes policy)  
 **Date:** Planned — post v4.0.1 sign-off (June 2026+)
@@ -381,6 +381,67 @@ The Reminder Queue Preview section includes a **Digest preview** area wired to `
 **Constraints:** Template generation, preview, and digest generation only; no email delivery, mark-as-sent, compliance/action mutation, or history writes.
 
 **Next slice:** V6 Phase 22 — Operations Log delivery UI + export — see [`docs/v6-delivery-architecture.md`](v6-delivery-architecture.md) · [`docs/v6-email-provider-configuration.md`](v6-email-provider-configuration.md).
+
+---
+
+## V6 — Reminder delivery · Phase 22 complete
+
+**Goal:** Read-only Delivery Operations Log UI with summary counts, detail panel, and CSV export — audit delivery outcomes before any app send controls exist.
+
+**Status:** Delivery Operations Log UI complete. V6 Phase 22 complete.
+
+**Phase 22 deliverables:**
+
+- **Delivery Operations Log** section in `index.html`
+- `loadReminderDeliveryLogs()` via `get_reminder_delivery_logs` RPC
+- Summary counts: total, delivered, failed, prepared/sending/cancelled
+- Expandable detail panel (body text, metadata JSON, lifecycle timestamps via `textContent`)
+- CSV export
+- `npm run verify-delivery-operations-log-ui`
+
+| Phase | Deliverable | Status |
+|-------|-------------|--------|
+| 22 | Delivery Operations Log UI + export | **Complete** |
+| 23 | Worker delivery execution wiring | Planned |
+
+**Verification:** `npm run verify-delivery-operations-log-ui` · `npm run verify-resend-provider-foundation`
+
+**Constraints:** Read-only audit UI. No send button, delivery execution, mark-as-sent automation, or provider `sendReminder` calls.
+
+**Next slice:** V6 Phase 23 — Delivery Operations Log release readiness.
+
+---
+
+## V6 — Reminder delivery · Phase 23 complete
+
+**Goal:** Confirm the read-only Delivery Operations Log UI/export is safe to tag as **v6.0.0-alpha.6** before any delivery execution is wired into the app.
+
+**Status:** Delivery Operations Log release readiness complete — application version **v6.0.0-alpha.6**. V6 Phases 1–23 complete.
+
+**Release-readiness note (v6.0.0-alpha.6):**
+
+- Delivery Operations Log UI complete (read-only audit view, summary counts, expandable detail panel)
+- CSV export complete
+- Loads via `get_reminder_delivery_logs` RPC (read-only)
+- **No send/retry/execute controls**
+- **No mark-as-sent automation**
+- **No automatic delivery execution**
+- **No compliance/action/history mutation**
+
+| Phase | Deliverable | Status |
+|-------|-------------|--------|
+| 23 | Delivery Operations Log release readiness (`v6.0.0-alpha.6`) | **Complete** |
+| 24 | Worker delivery execution wiring | Planned |
+
+**Release candidate:** **v6.0.0-alpha.6**
+
+**Release verification (required before tag):**
+
+- `npm run build` — rebuild `app.bundle.js` after version bump
+- `npm run verify-resend-provider-foundation` — Resend provider foundation still safe
+- `npm run verify-delivery-operations-log-ui` — read-only audit UI and CSV export; no execution hooks
+
+**Next slice:** V6 Phase 24 — Worker delivery execution wiring.
 
 ---
 
@@ -1003,6 +1064,7 @@ Extend the existing pattern from V3/V4:
 | `npm run verify-resend-provider-plan` | V6 Phase 17 — Resend implementation plan documentation |
 | `npm run verify-resend-provider` | V6 Phase 19 — Resend provider network implementation (mocked `fetchImpl`; no app wiring) |
 | `npm run verify-resend-provider-foundation` | V6 Phase 20 — orchestrator; runs skeleton foundation + Resend plan + Resend provider in order, stop on first failure |
+| `npm run verify-delivery-operations-log-ui` | V6 Phase 22 — Delivery Operations Log UI, CSV export, no execution hooks |
 | `npm run verify-automation-schema` | V5-0 migrations + RPC |
 | `npm run verify-automation-reminders` | V5-1 queue + mark sent |
 | `npm run verify-automation-actions` | V5-2 policy apply |
@@ -1103,7 +1165,7 @@ Secrets (SMTP API keys) live in Supabase Edge Function secrets only — never in
 | V5-0 | **COMPLETE** | Automation platform foundation — schema, RPCs, dry-run scan + audit logging + audit UI; **v5.0.0-alpha.3** |
 | V5-1 (foundation) | **COMPLETE** | Reminder queue foundation — queue, preview UI, CSV export, orchestrator; **v5.0.0-alpha.4** |
 | V5-2 | **COMPLETE** | Reminder email template builder — template builder, preview UI, copy template, digest builder, digest preview UI, foundation orchestrator; **v5.0.0-alpha.5**; no delivery |
-| V6-1 | **COMPLETE** | Delivery + isolated Resend provider foundation — domain model through Resend provider release readiness; **v6.0.0-alpha.5**; isolated Resend provider complete, injected `fetchImpl` only, disabled-by-default, no `app.js` wiring, no UI send button, no automatic delivery execution, no production sending |
+| V6-1 | **COMPLETE** | Delivery + isolated Resend provider + Delivery Operations Log UI — domain model through Delivery Operations Log release readiness; **v6.0.0-alpha.6**; read-only audit UI, CSV export, no send/retry/execute controls, no automatic delivery execution |
 | V5-2A | **PLANNED** | Automated action orchestration |
 | V5-3 | **PLANNED** | Escalation & operational closure |
 | V5-4 | **PLANNED** | Policy engine GA & operations pack |

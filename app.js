@@ -121,6 +121,16 @@ import {
   AUTOMATION_RUN_AUDIT_COLUMNS,
   mapAutomationRunsToAuditRows,
 } from "./js/app/automation/automation-run-audit-ui.js";
+import {
+  DELIVERY_OPERATIONS_LOG_COLUMNS,
+  DELIVERY_OPERATIONS_LOG_EMPTY_MESSAGE,
+  computeDeliveryOperationsLogSummary,
+  mapDeliveryLogsToOperationsRows,
+} from "./js/app/automation/delivery-operations-log-ui.js";
+import {
+  buildDeliveryOperationsLogExportCsv,
+  getDeliveryOperationsLogExportFilename,
+} from "./js/app/automation/delivery-operations-log-export.js";
 import { computeAutomationDryRun } from "./js/app/automation/automation-dry-run.js";
 import { buildReminderQueueFromDryRun } from "./js/app/automation/reminder-queue.js";
 import {
@@ -400,6 +410,25 @@ const automationRunAuditEmpty = document.getElementById("automation-run-audit-em
 const automationRunAuditTableWrapper = document.getElementById("automation-run-audit-table-wrapper");
 const automationRunAuditTableHead = document.getElementById("automation-run-audit-table-head");
 const automationRunAuditTableBody = document.getElementById("automation-run-audit-table-body");
+const deliveryOperationsLogSection = document.getElementById("delivery-operations-log-section");
+const exportDeliveryOperationsLogCsvBtn = document.getElementById(
+  "export-delivery-operations-log-csv-btn"
+);
+const deliveryOperationsLogLocalHint = document.getElementById("delivery-operations-log-local-hint");
+const deliveryOperationsLogError = document.getElementById("delivery-operations-log-error");
+const deliveryOperationsLogEmpty = document.getElementById("delivery-operations-log-empty");
+const deliveryOperationsLogSummary = document.getElementById("delivery-operations-log-summary");
+const deliveryOperationsLogTotalCount = document.getElementById("delivery-operations-log-total-count");
+const deliveryOperationsLogDeliveredCount = document.getElementById(
+  "delivery-operations-log-delivered-count"
+);
+const deliveryOperationsLogFailedCount = document.getElementById("delivery-operations-log-failed-count");
+const deliveryOperationsLogOtherCount = document.getElementById("delivery-operations-log-other-count");
+const deliveryOperationsLogTableWrapper = document.getElementById(
+  "delivery-operations-log-table-wrapper"
+);
+const deliveryOperationsLogTableHead = document.getElementById("delivery-operations-log-table-head");
+const deliveryOperationsLogTableBody = document.getElementById("delivery-operations-log-table-body");
 const insightStaleEvidence = document.getElementById("insight-stale-evidence");
 
 let renewModalContext = null;
@@ -410,6 +439,9 @@ let currentReminderPreviewDashboard = null;
 /** @type {"idle" | "loading" | "loaded" | "error" | "local"} */
 let automationRunAuditLoadState = "idle";
 let automationRunAuditLoadError = "";
+let deliveryOperationsLogLoadState = "idle";
+let deliveryOperationsLogLoadError = "";
+const expandedDeliveryLogIds = new Set();
 const expandedAutomationRunIds = new Set();
 const expandedReminderQueueTemplatePreviewKeys = new Set();
 
@@ -6359,6 +6391,241 @@ async function loadAutomationRunAudit() {
   renderAutomationRunAudit();
 }
 
+function toggleDeliveryOperationsLogDetails(logId) {
+  if (!logId) {
+    return;
+  }
+
+  if (expandedDeliveryLogIds.has(logId)) {
+    expandedDeliveryLogIds.delete(logId);
+  } else {
+    expandedDeliveryLogIds.add(logId);
+  }
+
+  renderDeliveryOperationsLog();
+}
+
+function handleDeliveryOperationsLogTableClick(event) {
+  const detailsButton = event.target.closest(".delivery-operations-log-view-details-btn");
+
+  if (!detailsButton) {
+    return;
+  }
+
+  toggleDeliveryOperationsLogDetails(detailsButton.dataset.logId);
+}
+
+function renderDeliveryOperationsLog() {
+  if (
+    !deliveryOperationsLogSection ||
+    !deliveryOperationsLogLocalHint ||
+    !deliveryOperationsLogError ||
+    !deliveryOperationsLogEmpty ||
+    !deliveryOperationsLogSummary ||
+    !deliveryOperationsLogTotalCount ||
+    !deliveryOperationsLogDeliveredCount ||
+    !deliveryOperationsLogFailedCount ||
+    !deliveryOperationsLogOtherCount ||
+    !deliveryOperationsLogTableWrapper ||
+    !deliveryOperationsLogTableHead ||
+    !deliveryOperationsLogTableBody
+  ) {
+    return;
+  }
+
+  deliveryOperationsLogLocalHint.classList.add("hidden");
+  deliveryOperationsLogError.classList.add("hidden");
+  deliveryOperationsLogEmpty.classList.add("hidden");
+  deliveryOperationsLogSummary.classList.add("hidden");
+  deliveryOperationsLogTableWrapper.classList.add("hidden");
+
+  if (exportDeliveryOperationsLogCsvBtn) {
+    exportDeliveryOperationsLogCsvBtn.disabled = true;
+  }
+
+  if (deliveryOperationsLogLoadState === "local") {
+    deliveryOperationsLogLocalHint.classList.remove("hidden");
+    deliveryOperationsLogTableHead.innerHTML = "";
+    deliveryOperationsLogTableBody.innerHTML = "";
+    return;
+  }
+
+  if (deliveryOperationsLogLoadState === "loading") {
+    deliveryOperationsLogTableHead.innerHTML = "";
+    deliveryOperationsLogTableBody.innerHTML = "";
+    return;
+  }
+
+  if (deliveryOperationsLogLoadState === "error") {
+    deliveryOperationsLogError.textContent =
+      deliveryOperationsLogLoadError ||
+      "Could not load delivery logs. Check your connection and try signing in again.";
+    deliveryOperationsLogError.classList.remove("hidden");
+    deliveryOperationsLogTableHead.innerHTML = "";
+    deliveryOperationsLogTableBody.innerHTML = "";
+    return;
+  }
+
+  const logs = automationRepository ? automationRepository.getReminderDeliveryLogs() : [];
+  const summary = computeDeliveryOperationsLogSummary(logs);
+  const operationsRows = mapDeliveryLogsToOperationsRows(logs);
+
+  if (operationsRows.length === 0) {
+    deliveryOperationsLogEmpty.textContent = DELIVERY_OPERATIONS_LOG_EMPTY_MESSAGE;
+    deliveryOperationsLogEmpty.classList.remove("hidden");
+    deliveryOperationsLogTableHead.innerHTML = "";
+    deliveryOperationsLogTableBody.innerHTML = "";
+    return;
+  }
+
+  if (exportDeliveryOperationsLogCsvBtn) {
+    exportDeliveryOperationsLogCsvBtn.disabled = false;
+  }
+
+  deliveryOperationsLogSummary.classList.remove("hidden");
+  deliveryOperationsLogTotalCount.textContent = String(summary.total);
+  deliveryOperationsLogDeliveredCount.textContent = String(summary.delivered);
+  deliveryOperationsLogFailedCount.textContent = String(summary.failed);
+  deliveryOperationsLogOtherCount.textContent = String(summary.preparedSendingCancelled);
+
+  deliveryOperationsLogTableWrapper.classList.remove("hidden");
+  deliveryOperationsLogTableHead.innerHTML = `<tr>${DELIVERY_OPERATIONS_LOG_COLUMNS.map(
+    (column) => `<th scope="col">${escapeHtml(column.label)}</th>`
+  ).join("")}</tr>`;
+
+  deliveryOperationsLogTableBody.innerHTML = operationsRows
+    .map((row) => {
+      const isExpanded = expandedDeliveryLogIds.has(row.id);
+      const detailsLabel = isExpanded ? "Hide details" : "View details";
+
+      return `
+          <tr class="delivery-operations-log-row" data-log-id="${escapeHtml(row.id)}">
+            <td>${escapeHtml(row.createdAt)}</td>
+            <td>${escapeHtml(row.deliveryStatus)}</td>
+            <td>${escapeHtml(row.recipientEmail)}</td>
+            <td>${escapeHtml(row.subject)}</td>
+            <td>${escapeHtml(row.failureReason)}</td>
+            <td>${escapeHtml(row.providerMessageId)}</td>
+            <td>${escapeHtml(row.automationRunId)}</td>
+            <td class="delivery-operations-log-row-actions">
+              <button
+                type="button"
+                class="quick-action-btn delivery-operations-log-view-details-btn"
+                data-log-id="${escapeHtml(row.id)}"
+                aria-expanded="${isExpanded ? "true" : "false"}"
+              >${escapeHtml(detailsLabel)}</button>
+            </td>
+          </tr>
+          ${
+            isExpanded
+              ? `<tr class="delivery-operations-log-detail-row" data-log-id="${escapeHtml(row.id)}">
+            <td colspan="${DELIVERY_OPERATIONS_LOG_COLUMNS.length}">
+              <div class="delivery-operations-log-detail-panel">
+                <div>
+                  <h4>Body text</h4>
+                  <pre class="delivery-operations-log-detail-body" data-log-body-for="${escapeHtml(row.id)}"></pre>
+                </div>
+                <div>
+                  <h4>Metadata</h4>
+                  <pre class="delivery-operations-log-detail-metadata" data-log-metadata-for="${escapeHtml(row.id)}"></pre>
+                </div>
+                <div>
+                  <h4>Lifecycle timestamps</h4>
+                  <pre class="delivery-operations-log-detail-timestamps" data-log-timestamps-for="${escapeHtml(row.id)}"></pre>
+                </div>
+              </div>
+            </td>
+          </tr>`
+              : ""
+          }`;
+    })
+    .join("");
+
+  operationsRows.forEach((row) => {
+    if (!expandedDeliveryLogIds.has(row.id)) {
+      return;
+    }
+
+    const bodyElement = deliveryOperationsLogTableBody.querySelector(
+      `[data-log-body-for="${row.id}"]`
+    );
+    const metadataElement = deliveryOperationsLogTableBody.querySelector(
+      `[data-log-metadata-for="${row.id}"]`
+    );
+    const timestampsElement = deliveryOperationsLogTableBody.querySelector(
+      `[data-log-timestamps-for="${row.id}"]`
+    );
+
+    if (bodyElement) {
+      bodyElement.textContent = row.bodyText;
+    }
+
+    if (metadataElement) {
+      metadataElement.textContent = row.metadataJson;
+    }
+
+    if (timestampsElement) {
+      timestampsElement.textContent = [
+        `Prepared: ${row.preparedAt}`,
+        `Sent: ${row.sentAt}`,
+        `Delivered: ${row.deliveredAt}`,
+        `Failed: ${row.failedAt}`,
+      ].join("\n");
+    }
+  });
+}
+
+async function loadDeliveryOperationsLog() {
+  if (!deliveryOperationsLogSection) {
+    return;
+  }
+
+  if (!automationRepository) {
+    deliveryOperationsLogLoadState = "local";
+    deliveryOperationsLogLoadError = "";
+    renderDeliveryOperationsLog();
+    return;
+  }
+
+  deliveryOperationsLogLoadState = "loading";
+  renderDeliveryOperationsLog();
+
+  const result = await automationRepository.loadReminderDeliveryLogs();
+
+  if (!result.ok) {
+    deliveryOperationsLogLoadState = "error";
+    deliveryOperationsLogLoadError =
+      result.error instanceof Error ? result.error.message : String(result.error ?? "");
+    renderDeliveryOperationsLog();
+    return;
+  }
+
+  deliveryOperationsLogLoadState = "loaded";
+  deliveryOperationsLogLoadError = "";
+  renderDeliveryOperationsLog();
+}
+
+function exportDeliveryOperationsLogCsv() {
+  const logs = automationRepository ? automationRepository.getReminderDeliveryLogs() : [];
+
+  if (!Array.isArray(logs) || logs.length === 0) {
+    return;
+  }
+
+  const csvContent = buildDeliveryOperationsLogExportCsv(logs);
+
+  downloadFile(
+    csvContent,
+    getDeliveryOperationsLogExportFilename(),
+    "text/csv;charset=utf-8"
+  );
+}
+
+function setupDeliveryOperationsLogListeners() {
+  deliveryOperationsLogTableBody?.addEventListener("click", handleDeliveryOperationsLogTableClick);
+  exportDeliveryOperationsLogCsvBtn?.addEventListener("click", exportDeliveryOperationsLogCsv);
+}
+
 function setupAutomationRunAuditListeners() {
   automationRunAuditTableBody?.addEventListener("click", handleAutomationRunAuditTableClick);
 }
@@ -10740,6 +11007,7 @@ async function finishAppBoot() {
   applyReadOnlyMode();
   renderTable();
   await loadAutomationRunAudit();
+  await loadDeliveryOperationsLog();
   document.documentElement.dataset.appReady = "true";
   return true;
 }
@@ -10759,6 +11027,7 @@ function runBootSetup() {
   setupReminderPreviewDashboardListeners();
   setupReminderQueuePreviewListeners();
   setupAutomationRunAuditListeners();
+  setupDeliveryOperationsLogListeners();
   setupRecordWorkspaceListeners();
   setupReportListeners();
 }

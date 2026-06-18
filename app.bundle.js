@@ -21321,7 +21321,7 @@ ${suffix}`;
     return null;
   }
   var AUTOMATION_ENABLED = readAutomationFromLocation() ?? (typeof process !== "undefined" && process.env?.AUTOMATION_ENABLED === "true");
-  var APP_VERSION = "v6.0.0-alpha.5";
+  var APP_VERSION = "v6.0.0-alpha.6";
 
   // js/app/permissions.js
   function isCloudMode() {
@@ -21585,11 +21585,37 @@ ${suffix}`;
     };
   }
 
+  // js/data/reminder-delivery-logs.js
+  function mapReminderDeliveryLogFromRpc(row) {
+    return {
+      id: row.id,
+      organisationId: row.organisation_id,
+      automationRunId: row.automation_run_id ?? null,
+      queueItemId: row.queue_item_id,
+      complianceRecordId: row.compliance_record_id ?? null,
+      personId: row.person_id ?? null,
+      recipientEmail: row.recipient_email ?? null,
+      subject: row.subject,
+      bodyText: row.body_text,
+      deliveryStatus: row.delivery_status,
+      preparedAt: row.prepared_at ?? null,
+      sentAt: row.sent_at ?? null,
+      deliveredAt: row.delivered_at ?? null,
+      failedAt: row.failed_at ?? null,
+      failureReason: row.failure_reason ?? null,
+      metadata: row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata) ? row.metadata : {},
+      createdBy: row.created_by ?? null,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at
+    };
+  }
+
   // js/data/cloud-automation-store.js
   var CloudAutomationStore = class {
     constructor() {
       this.policies = [];
       this.runs = [];
+      this.deliveryLogs = [];
     }
     get backend() {
       return "cloud";
@@ -21605,6 +21631,12 @@ ${suffix}`;
      */
     getAutomationRuns() {
       return this.runs;
+    }
+    /**
+     * @returns {ReminderDeliveryLogView[]}
+     */
+    getReminderDeliveryLogs() {
+      return this.deliveryLogs;
     }
     /**
      * @returns {Promise<AutomationPoliciesLoadResult>}
@@ -21722,6 +21754,50 @@ ${suffix}`;
         }
         const rows = Array.isArray(data.runs) ? data.runs : [];
         this.runs = rows.map((row) => mapAutomationRunFromRpc(row));
+        return { ok: true };
+      } catch (error) {
+        const loadError = error instanceof Error ? error : new Error(String(error));
+        return { ok: false, error: loadError };
+      }
+    }
+    /**
+     * @returns {Promise<ReminderDeliveryLogsLoadResult>}
+     */
+    async loadReminderDeliveryLogs() {
+      if (!isSupabaseConfigured()) {
+        const error = new Error(
+          "Supabase is not configured. Run npm run sync-env after setting .env."
+        );
+        return { ok: false, error };
+      }
+      await waitForAuthReady();
+      if (!isAuthenticated()) {
+        const error = new Error("Not signed in. Sign in before loading delivery logs.");
+        return { ok: false, error };
+      }
+      const organisationId = getOrganisationId();
+      if (!organisationId) {
+        const error = new Error("No organisation on the current session profile.");
+        return { ok: false, error };
+      }
+      try {
+        const supabase = getSupabaseClient();
+        const { data, error } = await supabase.rpc("get_reminder_delivery_logs", {
+          p_organisation_id: organisationId
+        });
+        if (error) {
+          return { ok: false, error: new Error(error.message) };
+        }
+        if (!data || typeof data !== "object" || data.status !== "ok") {
+          return {
+            ok: false,
+            error: new Error(
+              `Unexpected response from get_reminder_delivery_logs: ${JSON.stringify(data)}`
+            )
+          };
+        }
+        const rows = Array.isArray(data.logs) ? data.logs : [];
+        this.deliveryLogs = rows.map((row) => mapReminderDeliveryLogFromRpc(row));
         return { ok: true };
       } catch (error) {
         const loadError = error instanceof Error ? error : new Error(String(error));
@@ -25993,6 +26069,135 @@ ${suffix}`;
     return runs.map((run) => mapAutomationRunToAuditRow(run));
   }
 
+  // js/app/automation/delivery-operations-log-ui.js
+  var DELIVERY_OPERATIONS_LOG_EMPTY_MESSAGE = "No delivery logs yet.";
+  var DELIVERY_OPERATIONS_LOG_COLUMNS = [
+    { key: "createdAt", label: "Created" },
+    { key: "deliveryStatus", label: "Status" },
+    { key: "recipientEmail", label: "Recipient" },
+    { key: "subject", label: "Subject" },
+    { key: "failureReason", label: "Failure reason" },
+    { key: "providerMessageId", label: "Provider / message ID" },
+    { key: "automationRunId", label: "Automation run" },
+    { key: "actions", label: "" }
+  ];
+  function formatDeliveryLogTimestamp(isoString) {
+    if (typeof isoString !== "string" || !isoString.trim()) {
+      return "\u2014";
+    }
+    const date = new Date(isoString);
+    if (Number.isNaN(date.getTime())) {
+      return "\u2014";
+    }
+    return date.toLocaleString("en-GB", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit"
+    });
+  }
+  function formatDeliveryLogProviderMessageId(metadata) {
+    if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
+      return "\u2014";
+    }
+    const providerMessageId = typeof metadata.providerMessageId === "string" && metadata.providerMessageId.trim() ? metadata.providerMessageId.trim() : typeof metadata.provider_message_id === "string" && metadata.provider_message_id.trim() ? metadata.provider_message_id.trim() : "";
+    if (providerMessageId) {
+      return providerMessageId;
+    }
+    const provider = typeof metadata.provider === "string" && metadata.provider.trim() ? metadata.provider.trim() : "";
+    return provider || "\u2014";
+  }
+  function mapDeliveryLogToOperationsRow(log) {
+    return {
+      id: log.id,
+      createdAt: formatDeliveryLogTimestamp(log.createdAt),
+      deliveryStatus: typeof log.deliveryStatus === "string" && log.deliveryStatus.trim() ? log.deliveryStatus : "\u2014",
+      recipientEmail: typeof log.recipientEmail === "string" && log.recipientEmail.trim() ? log.recipientEmail.trim() : "\u2014",
+      subject: typeof log.subject === "string" && log.subject.trim() ? log.subject : "\u2014",
+      failureReason: typeof log.failureReason === "string" && log.failureReason.trim() ? log.failureReason.trim() : "\u2014",
+      providerMessageId: formatDeliveryLogProviderMessageId(log.metadata),
+      automationRunId: typeof log.automationRunId === "string" && log.automationRunId.trim() ? log.automationRunId : "\u2014",
+      bodyText: typeof log.bodyText === "string" ? log.bodyText : "",
+      metadataJson: JSON.stringify(log.metadata ?? {}, null, 2),
+      preparedAt: formatDeliveryLogTimestamp(log.preparedAt),
+      sentAt: formatDeliveryLogTimestamp(log.sentAt),
+      deliveredAt: formatDeliveryLogTimestamp(log.deliveredAt),
+      failedAt: formatDeliveryLogTimestamp(log.failedAt)
+    };
+  }
+  function mapDeliveryLogsToOperationsRows(logs) {
+    if (!Array.isArray(logs)) {
+      return [];
+    }
+    return logs.map((log) => mapDeliveryLogToOperationsRow(log));
+  }
+  function computeDeliveryOperationsLogSummary(logs) {
+    const entries = Array.isArray(logs) ? logs : [];
+    let delivered = 0;
+    let failed = 0;
+    let preparedSendingCancelled = 0;
+    for (const log of entries) {
+      const status = String(log.deliveryStatus ?? "").toLowerCase();
+      if (status === "delivered") {
+        delivered += 1;
+      } else if (status === "failed") {
+        failed += 1;
+      } else if (status === "prepared" || status === "sending" || status === "cancelled" || status === "queued") {
+        preparedSendingCancelled += 1;
+      }
+    }
+    return {
+      total: entries.length,
+      delivered,
+      failed,
+      preparedSendingCancelled
+    };
+  }
+
+  // js/app/automation/delivery-operations-log-export.js
+  var DELIVERY_OPERATIONS_LOG_EXPORT_COLUMNS = [
+    { key: "status", label: "Status" },
+    { key: "recipientEmail", label: "Recipient email" },
+    { key: "subject", label: "Subject" },
+    { key: "failureReason", label: "Failure reason" },
+    { key: "createdAt", label: "Created at" },
+    { key: "sentAt", label: "Sent at" },
+    { key: "deliveredAt", label: "Delivered at" },
+    { key: "failedAt", label: "Failed at" }
+  ];
+  function getDeliveryOperationsLogExportFilename(generatedAt = /* @__PURE__ */ new Date()) {
+    const year = generatedAt.getFullYear();
+    const month = String(generatedAt.getMonth() + 1).padStart(2, "0");
+    const day = String(generatedAt.getDate()).padStart(2, "0");
+    return `delivery-operations-log-${year}-${month}-${day}.csv`;
+  }
+  function mapDeliveryLogToExportRow(log) {
+    return {
+      status: log.deliveryStatus || "",
+      recipientEmail: log.recipientEmail || "",
+      subject: log.subject || "",
+      failureReason: log.failureReason || "",
+      createdAt: formatDeliveryLogTimestamp(log.createdAt),
+      sentAt: formatDeliveryLogTimestamp(log.sentAt),
+      deliveredAt: formatDeliveryLogTimestamp(log.deliveredAt),
+      failedAt: formatDeliveryLogTimestamp(log.failedAt)
+    };
+  }
+  function buildDeliveryOperationsLogExportCsv(logs) {
+    const entries = Array.isArray(logs) ? logs : [];
+    const exportRows = entries.map((log) => mapDeliveryLogToExportRow(log));
+    const headerRow = DELIVERY_OPERATIONS_LOG_EXPORT_COLUMNS.map(
+      (column) => escapeCsvValue(column.label)
+    ).join(",");
+    const dataRows = exportRows.map(
+      (row) => DELIVERY_OPERATIONS_LOG_EXPORT_COLUMNS.map(
+        (column) => escapeCsvValue(row[column.key] ?? "")
+      ).join(",")
+    );
+    return [headerRow, ...dataRows].join("\n");
+  }
+
   // js/app/automation/automation-dry-run.js
   var AUTOMATION_REMINDER_TYPE_BUCKETS = {
     "30-day": REMINDER_UI_LABELS[30],
@@ -26807,6 +27012,25 @@ ${template.bodyText}`;
   var automationRunAuditTableWrapper = document.getElementById("automation-run-audit-table-wrapper");
   var automationRunAuditTableHead = document.getElementById("automation-run-audit-table-head");
   var automationRunAuditTableBody = document.getElementById("automation-run-audit-table-body");
+  var deliveryOperationsLogSection = document.getElementById("delivery-operations-log-section");
+  var exportDeliveryOperationsLogCsvBtn = document.getElementById(
+    "export-delivery-operations-log-csv-btn"
+  );
+  var deliveryOperationsLogLocalHint = document.getElementById("delivery-operations-log-local-hint");
+  var deliveryOperationsLogError = document.getElementById("delivery-operations-log-error");
+  var deliveryOperationsLogEmpty = document.getElementById("delivery-operations-log-empty");
+  var deliveryOperationsLogSummary = document.getElementById("delivery-operations-log-summary");
+  var deliveryOperationsLogTotalCount = document.getElementById("delivery-operations-log-total-count");
+  var deliveryOperationsLogDeliveredCount = document.getElementById(
+    "delivery-operations-log-delivered-count"
+  );
+  var deliveryOperationsLogFailedCount = document.getElementById("delivery-operations-log-failed-count");
+  var deliveryOperationsLogOtherCount = document.getElementById("delivery-operations-log-other-count");
+  var deliveryOperationsLogTableWrapper = document.getElementById(
+    "delivery-operations-log-table-wrapper"
+  );
+  var deliveryOperationsLogTableHead = document.getElementById("delivery-operations-log-table-head");
+  var deliveryOperationsLogTableBody = document.getElementById("delivery-operations-log-table-body");
   var insightStaleEvidence = document.getElementById("insight-stale-evidence");
   var renewModalContext = null;
   var evidenceModalContext = null;
@@ -26815,6 +27039,9 @@ ${template.bodyText}`;
   var currentReminderPreviewDashboard = null;
   var automationRunAuditLoadState = "idle";
   var automationRunAuditLoadError = "";
+  var deliveryOperationsLogLoadState = "idle";
+  var deliveryOperationsLogLoadError = "";
+  var expandedDeliveryLogIds = /* @__PURE__ */ new Set();
   var expandedAutomationRunIds = /* @__PURE__ */ new Set();
   var expandedReminderQueueTemplatePreviewKeys = /* @__PURE__ */ new Set();
   var expiryWindowFilter = null;
@@ -31339,6 +31566,184 @@ This cannot be undone.`
     automationRunAuditLoadError = "";
     renderAutomationRunAudit();
   }
+  function toggleDeliveryOperationsLogDetails(logId) {
+    if (!logId) {
+      return;
+    }
+    if (expandedDeliveryLogIds.has(logId)) {
+      expandedDeliveryLogIds.delete(logId);
+    } else {
+      expandedDeliveryLogIds.add(logId);
+    }
+    renderDeliveryOperationsLog();
+  }
+  function handleDeliveryOperationsLogTableClick(event) {
+    const detailsButton = event.target.closest(".delivery-operations-log-view-details-btn");
+    if (!detailsButton) {
+      return;
+    }
+    toggleDeliveryOperationsLogDetails(detailsButton.dataset.logId);
+  }
+  function renderDeliveryOperationsLog() {
+    if (!deliveryOperationsLogSection || !deliveryOperationsLogLocalHint || !deliveryOperationsLogError || !deliveryOperationsLogEmpty || !deliveryOperationsLogSummary || !deliveryOperationsLogTotalCount || !deliveryOperationsLogDeliveredCount || !deliveryOperationsLogFailedCount || !deliveryOperationsLogOtherCount || !deliveryOperationsLogTableWrapper || !deliveryOperationsLogTableHead || !deliveryOperationsLogTableBody) {
+      return;
+    }
+    deliveryOperationsLogLocalHint.classList.add("hidden");
+    deliveryOperationsLogError.classList.add("hidden");
+    deliveryOperationsLogEmpty.classList.add("hidden");
+    deliveryOperationsLogSummary.classList.add("hidden");
+    deliveryOperationsLogTableWrapper.classList.add("hidden");
+    if (exportDeliveryOperationsLogCsvBtn) {
+      exportDeliveryOperationsLogCsvBtn.disabled = true;
+    }
+    if (deliveryOperationsLogLoadState === "local") {
+      deliveryOperationsLogLocalHint.classList.remove("hidden");
+      deliveryOperationsLogTableHead.innerHTML = "";
+      deliveryOperationsLogTableBody.innerHTML = "";
+      return;
+    }
+    if (deliveryOperationsLogLoadState === "loading") {
+      deliveryOperationsLogTableHead.innerHTML = "";
+      deliveryOperationsLogTableBody.innerHTML = "";
+      return;
+    }
+    if (deliveryOperationsLogLoadState === "error") {
+      deliveryOperationsLogError.textContent = deliveryOperationsLogLoadError || "Could not load delivery logs. Check your connection and try signing in again.";
+      deliveryOperationsLogError.classList.remove("hidden");
+      deliveryOperationsLogTableHead.innerHTML = "";
+      deliveryOperationsLogTableBody.innerHTML = "";
+      return;
+    }
+    const logs = automationRepository ? automationRepository.getReminderDeliveryLogs() : [];
+    const summary = computeDeliveryOperationsLogSummary(logs);
+    const operationsRows = mapDeliveryLogsToOperationsRows(logs);
+    if (operationsRows.length === 0) {
+      deliveryOperationsLogEmpty.textContent = DELIVERY_OPERATIONS_LOG_EMPTY_MESSAGE;
+      deliveryOperationsLogEmpty.classList.remove("hidden");
+      deliveryOperationsLogTableHead.innerHTML = "";
+      deliveryOperationsLogTableBody.innerHTML = "";
+      return;
+    }
+    if (exportDeliveryOperationsLogCsvBtn) {
+      exportDeliveryOperationsLogCsvBtn.disabled = false;
+    }
+    deliveryOperationsLogSummary.classList.remove("hidden");
+    deliveryOperationsLogTotalCount.textContent = String(summary.total);
+    deliveryOperationsLogDeliveredCount.textContent = String(summary.delivered);
+    deliveryOperationsLogFailedCount.textContent = String(summary.failed);
+    deliveryOperationsLogOtherCount.textContent = String(summary.preparedSendingCancelled);
+    deliveryOperationsLogTableWrapper.classList.remove("hidden");
+    deliveryOperationsLogTableHead.innerHTML = `<tr>${DELIVERY_OPERATIONS_LOG_COLUMNS.map(
+      (column) => `<th scope="col">${escapeHtml(column.label)}</th>`
+    ).join("")}</tr>`;
+    deliveryOperationsLogTableBody.innerHTML = operationsRows.map((row) => {
+      const isExpanded = expandedDeliveryLogIds.has(row.id);
+      const detailsLabel = isExpanded ? "Hide details" : "View details";
+      return `
+          <tr class="delivery-operations-log-row" data-log-id="${escapeHtml(row.id)}">
+            <td>${escapeHtml(row.createdAt)}</td>
+            <td>${escapeHtml(row.deliveryStatus)}</td>
+            <td>${escapeHtml(row.recipientEmail)}</td>
+            <td>${escapeHtml(row.subject)}</td>
+            <td>${escapeHtml(row.failureReason)}</td>
+            <td>${escapeHtml(row.providerMessageId)}</td>
+            <td>${escapeHtml(row.automationRunId)}</td>
+            <td class="delivery-operations-log-row-actions">
+              <button
+                type="button"
+                class="quick-action-btn delivery-operations-log-view-details-btn"
+                data-log-id="${escapeHtml(row.id)}"
+                aria-expanded="${isExpanded ? "true" : "false"}"
+              >${escapeHtml(detailsLabel)}</button>
+            </td>
+          </tr>
+          ${isExpanded ? `<tr class="delivery-operations-log-detail-row" data-log-id="${escapeHtml(row.id)}">
+            <td colspan="${DELIVERY_OPERATIONS_LOG_COLUMNS.length}">
+              <div class="delivery-operations-log-detail-panel">
+                <div>
+                  <h4>Body text</h4>
+                  <pre class="delivery-operations-log-detail-body" data-log-body-for="${escapeHtml(row.id)}"></pre>
+                </div>
+                <div>
+                  <h4>Metadata</h4>
+                  <pre class="delivery-operations-log-detail-metadata" data-log-metadata-for="${escapeHtml(row.id)}"></pre>
+                </div>
+                <div>
+                  <h4>Lifecycle timestamps</h4>
+                  <pre class="delivery-operations-log-detail-timestamps" data-log-timestamps-for="${escapeHtml(row.id)}"></pre>
+                </div>
+              </div>
+            </td>
+          </tr>` : ""}`;
+    }).join("");
+    operationsRows.forEach((row) => {
+      if (!expandedDeliveryLogIds.has(row.id)) {
+        return;
+      }
+      const bodyElement = deliveryOperationsLogTableBody.querySelector(
+        `[data-log-body-for="${row.id}"]`
+      );
+      const metadataElement = deliveryOperationsLogTableBody.querySelector(
+        `[data-log-metadata-for="${row.id}"]`
+      );
+      const timestampsElement = deliveryOperationsLogTableBody.querySelector(
+        `[data-log-timestamps-for="${row.id}"]`
+      );
+      if (bodyElement) {
+        bodyElement.textContent = row.bodyText;
+      }
+      if (metadataElement) {
+        metadataElement.textContent = row.metadataJson;
+      }
+      if (timestampsElement) {
+        timestampsElement.textContent = [
+          `Prepared: ${row.preparedAt}`,
+          `Sent: ${row.sentAt}`,
+          `Delivered: ${row.deliveredAt}`,
+          `Failed: ${row.failedAt}`
+        ].join("\n");
+      }
+    });
+  }
+  async function loadDeliveryOperationsLog() {
+    if (!deliveryOperationsLogSection) {
+      return;
+    }
+    if (!automationRepository) {
+      deliveryOperationsLogLoadState = "local";
+      deliveryOperationsLogLoadError = "";
+      renderDeliveryOperationsLog();
+      return;
+    }
+    deliveryOperationsLogLoadState = "loading";
+    renderDeliveryOperationsLog();
+    const result = await automationRepository.loadReminderDeliveryLogs();
+    if (!result.ok) {
+      deliveryOperationsLogLoadState = "error";
+      deliveryOperationsLogLoadError = result.error instanceof Error ? result.error.message : String(result.error ?? "");
+      renderDeliveryOperationsLog();
+      return;
+    }
+    deliveryOperationsLogLoadState = "loaded";
+    deliveryOperationsLogLoadError = "";
+    renderDeliveryOperationsLog();
+  }
+  function exportDeliveryOperationsLogCsv() {
+    const logs = automationRepository ? automationRepository.getReminderDeliveryLogs() : [];
+    if (!Array.isArray(logs) || logs.length === 0) {
+      return;
+    }
+    const csvContent = buildDeliveryOperationsLogExportCsv(logs);
+    downloadFile(
+      csvContent,
+      getDeliveryOperationsLogExportFilename(),
+      "text/csv;charset=utf-8"
+    );
+  }
+  function setupDeliveryOperationsLogListeners() {
+    deliveryOperationsLogTableBody?.addEventListener("click", handleDeliveryOperationsLogTableClick);
+    exportDeliveryOperationsLogCsvBtn?.addEventListener("click", exportDeliveryOperationsLogCsv);
+  }
   function setupAutomationRunAuditListeners() {
     automationRunAuditTableBody?.addEventListener("click", handleAutomationRunAuditTableClick);
   }
@@ -34739,6 +35144,7 @@ Your current data will be overwritten. Continue?`
     applyReadOnlyMode();
     renderTable();
     await loadAutomationRunAudit();
+    await loadDeliveryOperationsLog();
     document.documentElement.dataset.appReady = "true";
     return true;
   }
@@ -34757,6 +35163,7 @@ Your current data will be overwritten. Continue?`
     setupReminderPreviewDashboardListeners();
     setupReminderQueuePreviewListeners();
     setupAutomationRunAuditListeners();
+    setupDeliveryOperationsLogListeners();
     setupRecordWorkspaceListeners();
     setupReportListeners();
   }

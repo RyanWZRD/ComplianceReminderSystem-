@@ -81,6 +81,7 @@
     "verify-resend-provider-plan": "node scripts/verify-resend-provider-plan.mjs",
     "verify-resend-provider": "node scripts/verify-resend-provider.mjs",
     "verify-resend-provider-foundation": "node scripts/verify-resend-provider-foundation.mjs",
+    "verify-delivery-operations-log-ui": "node scripts/verify-delivery-operations-log-ui.mjs",
     "verify:phase2": "node scripts/verify-phase2.mjs"
   },
   "dependencies": {

@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Compliance Reminder System v6.0.0-alpha.5</title>
-  <link rel="stylesheet" href="styles.css?v=v6.0.0-alpha.5">
+  <title>Compliance Reminder System v6.0.0-alpha.6</title>
+  <link rel="stylesheet" href="styles.css?v=v6.0.0-alpha.6">
 </head>
 <body>
   <section id="auth-login-screen" class="auth-login-screen hidden" aria-labelledby="auth-login-title">
@@ -33,7 +33,7 @@
     <header>
       <h1>Compliance Reminder System</h1>
       <div class="header-badges">
-        <p class="version-badge">v6.0.0-alpha.5</p>
+        <p class="version-badge">v6.0.0-alpha.6</p>
         <p id="data-backend-badge" class="data-backend-badge">Local storage mode</p>
         <p id="auth-mode-badge" class="auth-mode-badge hidden">Local auth</p>
       </div>
@@ -329,6 +329,45 @@
         <table class="automation-run-audit-table">
           <thead id="automation-run-audit-table-head"></thead>
           <tbody id="automation-run-audit-table-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card delivery-operations-log-section" id="delivery-operations-log-section">
+      <div class="delivery-operations-log-header no-print">
+        <h2>Delivery Operations Log</h2>
+        <button
+          type="button"
+          id="export-delivery-operations-log-csv-btn"
+          class="quick-action-btn export-btn delivery-operations-log-export-btn"
+        >Export delivery log CSV</button>
+      </div>
+      <p class="settings-hint">Read-only audit of reminder delivery outcomes for your organisation. This view does not send email or execute delivery.</p>
+      <p id="delivery-operations-log-local-hint" class="settings-hint delivery-operations-log-local-hint hidden">Delivery logs are available in cloud mode only.</p>
+      <p id="delivery-operations-log-error" class="delivery-operations-log-error hidden" role="alert"></p>
+      <p id="delivery-operations-log-empty" class="settings-hint delivery-operations-log-empty hidden">No delivery logs yet.</p>
+      <div id="delivery-operations-log-summary" class="delivery-operations-log-summary hidden">
+        <div class="delivery-operations-log-summary-card delivery-operations-log-summary-total">
+          <p class="summary-label">Total logs</p>
+          <p id="delivery-operations-log-total-count" class="summary-number">0</p>
+        </div>
+        <div class="delivery-operations-log-summary-card delivery-operations-log-summary-delivered">
+          <p class="summary-label">Delivered</p>
+          <p id="delivery-operations-log-delivered-count" class="summary-number">0</p>
+        </div>
+        <div class="delivery-operations-log-summary-card delivery-operations-log-summary-failed">
+          <p class="summary-label">Failed</p>
+          <p id="delivery-operations-log-failed-count" class="summary-number">0</p>
+        </div>
+        <div class="delivery-operations-log-summary-card delivery-operations-log-summary-other">
+          <p class="summary-label">Prepared / sending / cancelled</p>
+          <p id="delivery-operations-log-other-count" class="summary-number">0</p>
+        </div>
+      </div>
+      <div id="delivery-operations-log-table-wrapper" class="table-wrapper delivery-operations-log-table-wrapper hidden">
+        <table class="delivery-operations-log-table">
+          <thead id="delivery-operations-log-table-head"></thead>
+          <tbody id="delivery-operations-log-table-body"></tbody>
         </table>
       </div>
     </section>
@@ -1227,7 +1266,7 @@
   </div>
   </div>
 
-  <script src="app.bundle.js?v=v6.0.0-alpha.5"></script>
+  <script src="app.bundle.js?v=v6.0.0-alpha.6"></script>
   <script>
     window.addEventListener("load", function () {
       window.setTimeout(function () {

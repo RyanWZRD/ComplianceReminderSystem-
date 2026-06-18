@@ -179,33 +179,39 @@ assertContains(
 
 const appJs = readFileSync(join(root, "app.js"), "utf8");
 const forbiddenExecutionNeedles = [
-  "reminder_delivery_logs",
   "buildReminderDeliveryRecords",
   "sendReminder",
   "process_notification_queue",
   "enqueue_reminder_notifications",
-  "mark_reminder_sent",
   "EmailProvider",
-  "resend",
-  "smtp",
+  "createResendEmailProvider",
+  "executeMockReminderDelivery",
 ];
 
 for (const needle of forbiddenExecutionNeedles) {
   assertNotContains(appJs, needle, `app.js has no ${needle}`);
 }
 
+assertContains(appJs, "loadDeliveryOperationsLog", "app.js loads delivery operations log (read-only)");
+assertNotContains(appJs, "create_reminder_delivery_log", "app.js does not create delivery logs");
+
 const cloudAutomationStoreJs = readFileSync(
   join(root, "js", "data", "cloud-automation-store.js"),
   "utf8"
 );
+assertContains(
+  cloudAutomationStoreJs,
+  "get_reminder_delivery_logs",
+  "cloud-automation-store loads delivery logs via get_reminder_delivery_logs"
+);
 assertNotContains(
   cloudAutomationStoreJs,
-  "reminder_delivery_logs",
-  "cloud-automation-store has no delivery log wiring"
+  "create_reminder_delivery_log",
+  "cloud-automation-store has no create delivery log wiring"
 );
 
 const repositoryJs = readFileSync(join(root, "js", "data", "repository.js"), "utf8");
-assertNotContains(repositoryJs, "reminder_delivery_logs", "repository has no delivery log wiring");
+assertNotContains(repositoryJs, "reminder_delivery_logs", "repository has no direct delivery log wiring");
 
 const migrationFiles = readdirSync(migrationsDir).join("\n");
 assertNotContains(migrationFiles, "process_notification_queue", "no queue processor migration");

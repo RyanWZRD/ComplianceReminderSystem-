@@ -9,11 +9,13 @@ import {
   mapAutomationPolicyToRpc,
 } from "./automation-policies.js";
 import { mapAutomationRunFromRpc } from "./automation-runs.js";
+import { mapReminderDeliveryLogFromRpc } from "./reminder-delivery-logs.js";
 
 /**
  * @typedef {import('./automation-policies.js').AutomationPolicyView} AutomationPolicyView
  * @typedef {import('./automation-policies.js').AutomationPolicyInput} AutomationPolicyInput
  * @typedef {import('./automation-runs.js').AutomationRunView} AutomationRunView
+ * @typedef {import('./reminder-delivery-logs.js').ReminderDeliveryLogView} ReminderDeliveryLogView
  */
 
 /**
@@ -33,6 +35,12 @@ import { mapAutomationRunFromRpc } from "./automation-runs.js";
  * @property {boolean} ok
  * @property {AutomationRunView} [run]
  * @property {Error | string} [error]
+ */
+
+/**
+ * @typedef {Object} ReminderDeliveryLogsLoadResult
+ * @property {boolean} ok
+ * @property {Error} [error]
  */
 
 /**
@@ -56,6 +64,8 @@ export class CloudAutomationStore {
     this.policies = [];
     /** @type {AutomationRunView[]} */
     this.runs = [];
+    /** @type {ReminderDeliveryLogView[]} */
+    this.deliveryLogs = [];
   }
 
   get backend() {
@@ -74,6 +84,13 @@ export class CloudAutomationStore {
    */
   getAutomationRuns() {
     return this.runs;
+  }
+
+  /**
+   * @returns {ReminderDeliveryLogView[]}
+   */
+  getReminderDeliveryLogs() {
+    return this.deliveryLogs;
   }
 
   /**
@@ -221,6 +238,61 @@ export class CloudAutomationStore {
       const rows = Array.isArray(data.runs) ? data.runs : [];
 
       this.runs = rows.map((row) => mapAutomationRunFromRpc(row));
+
+      return { ok: true };
+    } catch (error) {
+      const loadError = error instanceof Error ? error : new Error(String(error));
+      return { ok: false, error: loadError };
+    }
+  }
+
+  /**
+   * @returns {Promise<ReminderDeliveryLogsLoadResult>}
+   */
+  async loadReminderDeliveryLogs() {
+    if (!isSupabaseConfigured()) {
+      const error = new Error(
+        "Supabase is not configured. Run npm run sync-env after setting .env."
+      );
+      return { ok: false, error };
+    }
+
+    await waitForAuthReady();
+
+    if (!isAuthenticated()) {
+      const error = new Error("Not signed in. Sign in before loading delivery logs.");
+      return { ok: false, error };
+    }
+
+    const organisationId = getOrganisationId();
+
+    if (!organisationId) {
+      const error = new Error("No organisation on the current session profile.");
+      return { ok: false, error };
+    }
+
+    try {
+      const supabase = getSupabaseClient();
+      const { data, error } = await supabase.rpc("get_reminder_delivery_logs", {
+        p_organisation_id: organisationId,
+      });
+
+      if (error) {
+        return { ok: false, error: new Error(error.message) };
+      }
+
+      if (!data || typeof data !== "object" || data.status !== "ok") {
+        return {
+          ok: false,
+          error: new Error(
+            `Unexpected response from get_reminder_delivery_logs: ${JSON.stringify(data)}`
+          ),
+        };
+      }
+
+      const rows = Array.isArray(data.logs) ? data.logs : [];
+
+      this.deliveryLogs = rows.map((row) => mapReminderDeliveryLogFromRpc(row));
 
       return { ok: true };
     } catch (error) {

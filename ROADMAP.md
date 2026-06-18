@@ -6,6 +6,58 @@ A local-first safeguarding compliance tracker. Runs in the browser with localSto
 
 # Current Release
 
+## v6.0.0-alpha.6 — V6 Delivery Operations Log Release Readiness
+
+**Date:** June 2026
+
+### Summary
+
+Sixth v6 alpha checkpoint: **V6** Delivery Operations Log release readiness on top of **v6.0.0-alpha.5** Resend provider foundation. Read-only **Delivery Operations Log** UI complete with summary counts, expandable detail panel, and CSV export. Loads via `get_reminder_delivery_logs` — no send/retry/execute controls, no mark-as-sent automation, no automatic delivery execution, or compliance/action/history mutation.
+
+**Documentation:**
+
+- [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md) — V6 phases 1–23 detail and release-readiness note
+- [`docs/v6-email-provider-configuration.md`](docs/v6-email-provider-configuration.md) — cross-reference
+- [`docs/v5-automated-compliance-operations.md`](docs/v5-automated-compliance-operations.md#v6--reminder-delivery--phase-23-complete) — V6 Delivery Operations Log release readiness summary
+
+**Release verification (required before tag):**
+
+- `npm run build` — rebuild `app.bundle.js` after version bump
+- `npm run verify-resend-provider-foundation` — Resend provider foundation still safe
+- `npm run verify-delivery-operations-log-ui` — read-only audit UI and CSV export; no execution hooks
+
+Application version: **v6.0.0-alpha.6**
+
+**Next slice:** V6 Phase 24 — Worker delivery execution wiring — see [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md) · [`docs/v6-email-provider-configuration.md`](docs/v6-email-provider-configuration.md)
+
+Status: Release candidate (V6 Phase 23)  
+Tag: **v6.0.0-alpha.6** — not created unless explicitly requested
+
+---
+
+## V6 Phase 22 — Delivery Operations Log UI + Export
+
+**Date:** June 2026
+
+### Summary
+
+V6 Phase 22 adds a read-only **Delivery Operations Log** UI with summary counts, expandable detail panel, and CSV export. Loads delivery logs via `get_reminder_delivery_logs` through the cloud automation store. No send button, delivery execution, mark-as-sent automation, or provider `sendReminder` calls.
+
+**Documentation:**
+
+- [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md) — Phase 22 delivery operations log UI
+- [`docs/v6-email-provider-configuration.md`](docs/v6-email-provider-configuration.md) — cross-reference
+- [`docs/v5-automated-compliance-operations.md`](docs/v5-automated-compliance-operations.md#v6--reminder-delivery--phase-22-complete) — Phase 22 summary
+
+**Verification (required):**
+
+- `npm run verify-delivery-operations-log-ui` — UI section, summary, detail panel, CSV export, no execution hooks
+- `npm run verify-resend-provider-foundation` — Resend provider foundation still safe
+
+**Next slice:** V6 Phase 23 — Worker delivery execution wiring (planned)
+
+---
+
 ## v6.0.0-alpha.5 — V6 Resend Provider Release Readiness
 
 **Date:** June 2026
@@ -25,9 +77,9 @@ Fifth v6 alpha checkpoint: **V6** Resend provider release readiness on top of **
 - `npm run build` — rebuild `app.bundle.js` after version bump
 - `npm run verify-resend-provider-foundation` — skeleton foundation + Resend plan + Resend provider orchestrator (no live execution)
 
-Application version: **v6.0.0-alpha.5**
+Application version: **v6.0.0-alpha.5** (superseded by v6.0.0-alpha.6)
 
-**Next slice:** V6 Phase 22 — Operations Log delivery UI + export — see [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md) · [`docs/v6-email-provider-configuration.md`](docs/v6-email-provider-configuration.md)
+**Next slice:** V6 Phase 22 — Operations Log delivery UI + export
 
 Status: Release candidate (V6 Phase 21)  
 Tag: **v6.0.0-alpha.5** — not created unless explicitly requested
@@ -52,7 +104,7 @@ V6 Phase 20 adds `verify-resend-provider-foundation` — one verification comman
 
 - `npm run verify-resend-provider-foundation` — master gate (skeleton foundation + Resend plan + Resend provider)
 
-**Next slice:** V6 Phase 21 — Operations Log delivery UI + export
+**Next slice:** V6 Phase 21 — Resend provider release readiness
 
 ---
 
@@ -444,6 +496,36 @@ Tag: v3.0.0
 ---
 
 # Next Planned Release
+
+## V6.0.0 Phase 23 — Delivery Operations Log Release Readiness · Complete
+
+**Date:** June 2026
+
+Documentation and verification checkpoint for **v6.0.0-alpha.6**. Version bump, release-readiness docs, `verify-delivery-operations-log-ui` and `verify-resend-provider-foundation` gates. No application logic changes. Delivery Operations Log UI complete (read-only audit view, CSV export) — no send/retry/execute controls, mark-as-sent automation, or automatic delivery execution.
+
+**Documentation:** [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md) · [`docs/v6-email-provider-configuration.md`](docs/v6-email-provider-configuration.md) · [`docs/v5-automated-compliance-operations.md`](docs/v5-automated-compliance-operations.md#v6--reminder-delivery--phase-23-complete)
+
+**Verification:** `npm run build` · `npm run verify-resend-provider-foundation` · `npm run verify-delivery-operations-log-ui`
+
+**Release candidate:** **v6.0.0-alpha.6**
+
+**Next slice:** V6 Phase 24 — Worker delivery execution wiring
+
+---
+
+## V6.0.0 Phase 22 — Delivery Operations Log UI + Export · Complete
+
+**Date:** June 2026
+
+Read-only **Delivery Operations Log** UI with summary counts, expandable detail panel (body text and metadata via `textContent`), and CSV export. Loads via `get_reminder_delivery_logs` RPC. No send button, delivery execution, mark-as-sent automation, or provider `sendReminder` calls.
+
+**Documentation:** [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md) · [`docs/v6-email-provider-configuration.md`](docs/v6-email-provider-configuration.md) · [`docs/v5-automated-compliance-operations.md`](docs/v5-automated-compliance-operations.md#v6--reminder-delivery--phase-22-complete)
+
+**Verification:** `npm run verify-delivery-operations-log-ui` · `npm run verify-resend-provider-foundation`
+
+**Next slice:** V6 Phase 23 — Worker delivery execution wiring (planned)
+
+---
 
 ## V6.0.0 Phase 21 — Resend Provider Release Readiness · Complete
 
@@ -927,7 +1009,7 @@ Scheduled compliance operations: reminder delivery, action orchestration, escala
 
 Read-only compliance insights on the dashboard: health score, risk summary, renewal forecast, and rule-based recommendations. See [`docs/compliance-insights.md`](docs/compliance-insights.md) and [Version Roadmap — v4](#v4--compliance-insights-release-candidate).
 
-Application version: **v6.0.0-alpha.5** in source (V6 Resend provider release readiness alpha); v4 GA target **v4.0.1**.
+Application version: **v6.0.0-alpha.6** in source (V6 Delivery Operations Log release readiness alpha); v4 GA target **v4.0.1**.
 
 **RC hardening summary (June 2026):**
 

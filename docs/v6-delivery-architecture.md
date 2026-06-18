@@ -3,8 +3,8 @@
 **Theme:** Define how reminder emails would be sent and audited — lifecycle, records, duplicate prevention, retries, and provider abstraction — **without** implementing delivery.
 
 **Target:** v6.0.0 (major release)  
-**Current phase:** V6 Phase 21 — Resend Provider Release Readiness  
-**Release candidate:** v6.0.0-alpha.5  
+**Current phase:** V6 Phase 23 — Delivery Operations Log Release Readiness  
+**Release candidate:** v6.0.0-alpha.6  
 **Prerequisites:** v5.0.0-alpha.5 (V5-2 template & digest foundation)  
 **Date:** Planned — June 2026+
 
@@ -402,6 +402,7 @@ interface HealthCheckResult {
 | `npm run verify-resend-provider-plan` | Phase 17 — Resend implementation plan documentation |
 | `npm run verify-resend-provider` | Phase 19 — Resend provider network implementation (mocked `fetchImpl`; no app wiring) |
 | `npm run verify-resend-provider-foundation` | Phase 20 — orchestrator; runs skeleton foundation + Resend plan + Resend provider in order, stop on first failure |
+| `npm run verify-delivery-operations-log-ui` | Phase 22 — Delivery Operations Log UI, CSV export, no execution hooks |
 
 **Phase 1 gate:** `npm run verify-delivery-architecture` must pass. No Supabase or browser required.
 
@@ -438,6 +439,10 @@ interface HealthCheckResult {
 **Phase 20 gate:** `npm run verify-resend-provider-foundation` must pass. Verification orchestration only — no app behaviour changes, `app.js` wiring, UI send button, automatic delivery execution, or mark-as-sent automation.
 
 **Phase 21 gate:** `npm run build` and `npm run verify-resend-provider-foundation` must pass. Documentation and version bump only — no application logic changes. Isolated Resend provider complete; no `app.js` wiring, UI send button, automatic delivery execution, or mark-as-sent automation.
+
+**Phase 22 gate:** `npm run verify-delivery-operations-log-ui` must pass. Read-only audit UI and CSV export only — no send button, delivery execution, mark-as-sent automation, or provider `sendReminder` calls.
+
+**Phase 23 gate:** `npm run build`, `npm run verify-resend-provider-foundation`, and `npm run verify-delivery-operations-log-ui` must pass. Documentation and version bump only — no application logic changes. Delivery Operations Log UI complete; no send/retry/execute controls, mark-as-sent automation, or automatic delivery execution.
 
 ---
 
@@ -1074,12 +1079,89 @@ Worker flow unchanged from Phase 1 contract: `prepared` → `sending` → `deliv
 | 19 | Resend network implementation (`createResendEmailProvider`) | **Complete** |
 | 20 | Resend provider foundation verification orchestrator (`verify-resend-provider-foundation`) | **Complete** |
 | 21 | Resend provider release readiness (`v6.0.0-alpha.5`) | **Complete** |
-| 22 | Operations Log delivery UI + export | Planned |
-| 23 | Mark-as-sent on confirmed delivery (policy-gated) | Planned |
+| 22 | Delivery Operations Log UI + export | **Complete** |
+| 23 | Delivery Operations Log release readiness (`v6.0.0-alpha.6`) | **Complete** |
+| 24 | Worker delivery execution wiring | Planned |
+| 25 | Mark-as-sent on confirmed delivery (policy-gated) | Planned |
 
-**Constraints (Phase 21):** Documentation and version bump only. Isolated Resend provider complete. No `app.js` wiring, UI send button, automatic delivery execution, mark-as-sent automation, or compliance/action/history mutation.
+**Constraints (Phase 23):** Documentation and version bump only. Delivery Operations Log UI complete. No send/retry/execute controls, mark-as-sent automation, automatic delivery execution, or compliance/action/history mutation.
 
-**Next slice after Phase 21:** V6 Phase 22 — Operations Log delivery UI + export.
+**Next slice after Phase 23:** V6 Phase 24 — Worker delivery execution wiring.
+
+---
+
+## Phase 23 — Delivery Operations Log release readiness
+
+**Scope:** Documentation, version bump (`v6.0.0-alpha.6`), and release-readiness gate for the read-only Delivery Operations Log slice. No application logic changes.
+
+**Release-readiness note (v6.0.0-alpha.6):**
+
+- V6 Phases 1–23 complete
+- Delivery Operations Log UI complete (read-only audit view, summary counts, expandable detail panel)
+- CSV export complete (`buildDeliveryOperationsLogExportCsv`)
+- Loads via `get_reminder_delivery_logs` RPC (read-only)
+- **No send/retry/execute controls**
+- **No mark-as-sent automation**
+- **No automatic delivery execution**
+- **No compliance/action/history mutation**
+
+**Release verification (required before tag):**
+
+- `npm run build` — rebuild `app.bundle.js` after version bump
+- `npm run verify-resend-provider-foundation` — Resend provider foundation still safe
+- `npm run verify-delivery-operations-log-ui` — read-only audit UI and CSV export; no execution hooks
+
+**Release candidate:** **v6.0.0-alpha.6**
+
+### Phase 23 constraints
+
+- Documentation and version display only — no app behaviour changes
+- No send/retry/execute controls, mark-as-sent automation, or automatic delivery execution
+- No compliance/action/history mutation
+
+---
+
+**Constraints (Phase 22):** Read-only audit UI and CSV export only. No send button, delivery execution, mark-as-sent automation, or provider `sendReminder` calls.
+
+**Next slice after Phase 22:** V6 Phase 23 — Delivery Operations Log release readiness.
+
+---
+
+## Phase 22 — Delivery Operations Log UI + export
+
+**Scope:** Read-only UI for `reminder_delivery_logs` with summary counts, expandable detail panel, and CSV export. **No send button, delivery execution, mark-as-sent automation, or provider calls.**
+
+**Script:** `scripts/verify-delivery-operations-log-ui.mjs`
+
+`npm run verify-delivery-operations-log-ui` verifies:
+
+1. Delivery Operations Log section in `index.html`
+2. Summary counts (total, delivered, failed, prepared/sending/cancelled)
+3. Expandable detail panel with `textContent` for body and metadata
+4. CSV export button and export module
+5. No send/retry/execute/mark-sent hooks; app does not call `provider.sendReminder`
+
+### Phase 22 deliverables
+
+| Item | Location |
+|------|----------|
+| Delivery log mapper | `js/data/reminder-delivery-logs.js` |
+| UI helpers | `js/app/automation/delivery-operations-log-ui.js` |
+| CSV export | `js/app/automation/delivery-operations-log-export.js` |
+| Cloud load | `js/data/cloud-automation-store.js` (`loadReminderDeliveryLogs`) |
+| UI verification | `scripts/verify-delivery-operations-log-ui.mjs` |
+
+### Phase 22 constraints
+
+- Read-only audit UI — no delivery execution from browser
+- No send button, retry button, or mark-as-sent automation
+- No `sendReminder` or provider network calls from `app.js`
+
+---
+
+**Constraints (Phase 21):** Documentation and version bump only. Isolated Resend provider complete. No `app.js` wiring for delivery execution, UI send button, mark-as-sent automation, or compliance/action/history mutation.
+
+**Next slice after Phase 21:** V6 Phase 22 — Delivery Operations Log UI + export.
 
 ---
 

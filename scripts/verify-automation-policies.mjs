@@ -155,8 +155,6 @@ for (const needle of forbiddenExecutionNeedles) {
   assertNotContains(appJs, needle, `app.js has no ${needle}`);
 }
 
-assertNotContains(appJs, "automationRepository", "app.js does not wire automationRepository yet");
-
 if (failures.length > 0) {
   console.error("FAIL verify-automation-policies (static):");
   for (const label of failures) {

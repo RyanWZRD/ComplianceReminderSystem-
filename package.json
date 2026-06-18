@@ -55,6 +55,16 @@
     "verify-automation-dry-run-logging": "node scripts/verify-automation-dry-run-logging.mjs",
     "verify-automation-run-ui": "node scripts/verify-automation-run-ui.mjs",
     "verify-automation-v5-foundation": "node scripts/verify-automation-v5-foundation.mjs",
+    "verify-reminder-queue": "node scripts/verify-reminder-queue.mjs",
+    "verify-reminder-queue-ui": "node scripts/verify-reminder-queue-ui.mjs",
+    "verify-reminder-queue-export": "node scripts/verify-reminder-queue-export.mjs",
+    "verify-reminder-queue-foundation": "node scripts/verify-reminder-queue-foundation.mjs",
+    "verify-reminder-template-builder": "node scripts/verify-reminder-template-builder.mjs",
+    "verify-reminder-queue-template-preview-ui": "node scripts/verify-reminder-queue-template-preview-ui.mjs",
+    "verify-reminder-template-copy": "node scripts/verify-reminder-template-copy.mjs",
+    "verify-reminder-digest-builder": "node scripts/verify-reminder-digest-builder.mjs",
+    "verify-reminder-digest-preview-ui": "node scripts/verify-reminder-digest-preview-ui.mjs",
+    "verify-reminder-template-digest-foundation": "node scripts/verify-reminder-template-digest-foundation.mjs",
     "verify:phase2": "node scripts/verify-phase2.mjs"
   },
   "dependencies": {

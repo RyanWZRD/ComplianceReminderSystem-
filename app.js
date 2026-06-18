@@ -30,6 +30,7 @@ import {
   APP_VERSION,
   CLOUD_WRITES_ENABLED,
   DATA_BACKEND,
+  automationRepository,
   repository,
   settingsRepository,
 } from "./js/data/repository.js";
@@ -116,6 +117,42 @@ import {
   buildReminderPreviewPackText,
   countPreviewableReminderDashboardMetrics,
 } from "./js/app/reminders/reminder-preview-dashboard.js";
+import {
+  AUTOMATION_RUN_AUDIT_COLUMNS,
+  mapAutomationRunsToAuditRows,
+} from "./js/app/automation/automation-run-audit-ui.js";
+import { computeAutomationDryRun } from "./js/app/automation/automation-dry-run.js";
+import { buildReminderQueueFromDryRun } from "./js/app/automation/reminder-queue.js";
+import {
+  REMINDER_QUEUE_PREVIEW_COLUMNS,
+  REMINDER_QUEUE_PREVIEW_EMPTY_MESSAGE,
+  mapReminderQueueItemsToPreviewRows,
+} from "./js/app/automation/reminder-queue-ui.js";
+import {
+  buildReminderQueueExportCsv,
+  getReminderQueueExportFilename,
+} from "./js/app/automation/reminder-queue-export.js";
+import { buildReminderEmailTemplate } from "./js/app/automation/reminder-template-builder.js";
+import { buildReminderDigest } from "./js/app/automation/reminder-digest-builder.js";
+import {
+  REMINDER_DIGEST_COPY_BUTTON_LABEL,
+  REMINDER_DIGEST_COPY_SUCCESS_MESSAGE,
+  REMINDER_DIGEST_COPY_UNAVAILABLE_MESSAGE,
+  REMINDER_DIGEST_PREVIEW_SAFETY_NOTE,
+  buildReminderDigestCopyText,
+  mapReminderDigestPreviewMetadata,
+} from "./js/app/automation/reminder-digest-preview-ui.js";
+import {
+  REMINDER_QUEUE_TEMPLATE_COPY_BUTTON_LABEL,
+  REMINDER_QUEUE_TEMPLATE_COPY_SUCCESS_MESSAGE,
+  REMINDER_QUEUE_TEMPLATE_COPY_UNAVAILABLE_MESSAGE,
+  REMINDER_QUEUE_TEMPLATE_MISSING_EMAIL_WARNING,
+  REMINDER_QUEUE_TEMPLATE_PREVIEW_SAFETY_NOTE,
+  buildReminderQueueTemplateCopyText,
+  getReminderQueueTemplatePreviewButtonLabel,
+  getReminderQueueTemplatePreviewRowKey,
+  mapReminderQueueTemplatePreviewMetadata,
+} from "./js/app/automation/reminder-queue-template-preview-ui.js";
 
 console.log(
   `Compliance Reminder System ${APP_VERSION} — app.js loaded (${DATA_BACKEND} data, ${AUTH_MODE} auth)`
@@ -323,6 +360,46 @@ const clearReminderPreviewDashboardPreviewBtn = document.getElementById(
 const reminderPreviewDashboardCards = document.querySelectorAll(
   "[data-reminder-preview-dashboard]"
 );
+const reminderQueuePreviewSection = document.getElementById("reminder-queue-preview-section");
+const reminderQueuePreviewTotalCount = document.getElementById("reminder-queue-preview-total-count");
+const reminderQueuePreviewMissingEmailCount = document.getElementById(
+  "reminder-queue-preview-missing-email-count"
+);
+const reminderQueuePreviewExpiredCount = document.getElementById(
+  "reminder-queue-preview-expired-count"
+);
+const reminderQueuePreview30Count = document.getElementById("reminder-queue-preview-30-count");
+const reminderQueuePreview14Count = document.getElementById("reminder-queue-preview-14-count");
+const reminderQueuePreview7Count = document.getElementById("reminder-queue-preview-7-count");
+const reminderQueuePreviewMeta = document.getElementById("reminder-queue-preview-meta");
+const reminderQueuePreviewEmpty = document.getElementById("reminder-queue-preview-empty");
+const reminderQueuePreviewTableWrapper = document.getElementById(
+  "reminder-queue-preview-table-wrapper"
+);
+const reminderQueuePreviewTableHead = document.getElementById("reminder-queue-preview-table-head");
+const reminderQueuePreviewTableBody = document.getElementById("reminder-queue-preview-table-body");
+const exportReminderQueueCsvBtn = document.getElementById("export-reminder-queue-csv-btn");
+const reminderDigestPreview = document.getElementById("reminder-digest-preview");
+const reminderDigestPreviewSafetyNote = document.getElementById("reminder-digest-preview-safety-note");
+const reminderDigestPreviewTotalCount = document.getElementById("reminder-digest-preview-total-count");
+const reminderDigestPreviewMissingEmailCount = document.getElementById(
+  "reminder-digest-preview-missing-email-count"
+);
+const reminderDigestPreviewExpiredCount = document.getElementById("reminder-digest-preview-expired-count");
+const reminderDigestPreview30Count = document.getElementById("reminder-digest-preview-30-count");
+const reminderDigestPreview14Count = document.getElementById("reminder-digest-preview-14-count");
+const reminderDigestPreview7Count = document.getElementById("reminder-digest-preview-7-count");
+const reminderDigestPreviewSubject = document.getElementById("reminder-digest-preview-subject");
+const reminderDigestPreviewBody = document.getElementById("reminder-digest-preview-body");
+const reminderDigestPreviewCopyBtn = document.getElementById("reminder-digest-preview-copy-btn");
+const reminderDigestPreviewCopyMessage = document.getElementById("reminder-digest-preview-copy-message");
+const automationRunAuditSection = document.getElementById("automation-run-audit-section");
+const automationRunAuditLocalHint = document.getElementById("automation-run-audit-local-hint");
+const automationRunAuditError = document.getElementById("automation-run-audit-error");
+const automationRunAuditEmpty = document.getElementById("automation-run-audit-empty");
+const automationRunAuditTableWrapper = document.getElementById("automation-run-audit-table-wrapper");
+const automationRunAuditTableHead = document.getElementById("automation-run-audit-table-head");
+const automationRunAuditTableBody = document.getElementById("automation-run-audit-table-body");
 const insightStaleEvidence = document.getElementById("insight-stale-evidence");
 
 let renewModalContext = null;
@@ -330,6 +407,11 @@ let evidenceModalContext = null;
 let actionModalContext = null;
 let workspaceActionFilter = "all";
 let currentReminderPreviewDashboard = null;
+/** @type {"idle" | "loading" | "loaded" | "error" | "local"} */
+let automationRunAuditLoadState = "idle";
+let automationRunAuditLoadError = "";
+const expandedAutomationRunIds = new Set();
+const expandedReminderQueueTemplatePreviewKeys = new Set();
 
 // Tracks which dashboard expiry window is active (30, 60, 90, or null)
 let expiryWindowFilter = null;
@@ -5482,6 +5564,416 @@ function renderReminderPreviewDashboardCards() {
   }
 }
 
+function buildReminderQueuePreviewData() {
+  const rows = getAllComplianceRows();
+  const dryRunResult = computeAutomationDryRun(rows, reminderSettings);
+
+  return buildReminderQueueFromDryRun({
+    dryRunResult,
+    asOfDate: dryRunResult.asOfDate,
+    rows,
+    settings: reminderSettings,
+  });
+}
+
+function renderReminderDigestPreview(queue) {
+  if (
+    !reminderDigestPreview ||
+    !reminderDigestPreviewSafetyNote ||
+    !reminderDigestPreviewTotalCount ||
+    !reminderDigestPreviewMissingEmailCount ||
+    !reminderDigestPreviewExpiredCount ||
+    !reminderDigestPreview30Count ||
+    !reminderDigestPreview14Count ||
+    !reminderDigestPreview7Count ||
+    !reminderDigestPreviewSubject ||
+    !reminderDigestPreviewBody
+  ) {
+    return;
+  }
+
+  const digest = buildReminderDigest({
+    queueItems: queue.items,
+    asOfDate: queue.asOfDate,
+  });
+  const metadata = mapReminderDigestPreviewMetadata(digest.metadata);
+
+  reminderDigestPreviewSafetyNote.textContent = REMINDER_DIGEST_PREVIEW_SAFETY_NOTE;
+  reminderDigestPreviewTotalCount.textContent = metadata.totalQueued;
+  reminderDigestPreviewMissingEmailCount.textContent = metadata.missingEmail;
+  reminderDigestPreviewExpiredCount.textContent = metadata.expired;
+  reminderDigestPreview30Count.textContent = metadata.day30;
+  reminderDigestPreview14Count.textContent = metadata.day14;
+  reminderDigestPreview7Count.textContent = metadata.day7;
+  reminderDigestPreviewSubject.textContent = digest.subject;
+  reminderDigestPreviewBody.textContent = digest.bodyText;
+
+  if (reminderDigestPreviewCopyBtn) {
+    reminderDigestPreviewCopyBtn.textContent = REMINDER_DIGEST_COPY_BUTTON_LABEL;
+  }
+
+  if (reminderDigestPreviewCopyMessage) {
+    hideMessage(reminderDigestPreviewCopyMessage);
+  }
+}
+
+function showReminderDigestCopyMessage(text, type) {
+  if (!reminderDigestPreviewCopyMessage) {
+    return;
+  }
+
+  showMessage(reminderDigestPreviewCopyMessage, text, type);
+}
+
+async function copyReminderDigest() {
+  const queue = buildReminderQueuePreviewData();
+  const digest = buildReminderDigest({
+    queueItems: queue.items,
+    asOfDate: queue.asOfDate,
+  });
+  const copyText = buildReminderDigestCopyText(digest);
+
+  if (!navigator.clipboard?.writeText) {
+    showReminderDigestCopyMessage(REMINDER_DIGEST_COPY_UNAVAILABLE_MESSAGE, "error");
+    return;
+  }
+
+  try {
+    await navigator.clipboard.writeText(copyText);
+    showReminderDigestCopyMessage(REMINDER_DIGEST_COPY_SUCCESS_MESSAGE, "success");
+  } catch (error) {
+    console.error("Could not copy reminder digest text.", error);
+    showReminderDigestCopyMessage(REMINDER_DIGEST_COPY_UNAVAILABLE_MESSAGE, "error");
+  }
+}
+
+function toggleReminderQueueTemplatePreview(rowKey) {
+  if (expandedReminderQueueTemplatePreviewKeys.has(rowKey)) {
+    expandedReminderQueueTemplatePreviewKeys.delete(rowKey);
+  } else {
+    expandedReminderQueueTemplatePreviewKeys.add(rowKey);
+  }
+
+  renderReminderQueuePreview();
+}
+
+function populateReminderQueueTemplatePreviewDetail(detailRow, queueItem) {
+  const template = buildReminderEmailTemplate({ queueItem });
+  const metadata = mapReminderQueueTemplatePreviewMetadata(template.metadata);
+
+  const safetyNote = detailRow.querySelector(".reminder-queue-template-preview-safety-note");
+  if (safetyNote) {
+    safetyNote.textContent = REMINDER_QUEUE_TEMPLATE_PREVIEW_SAFETY_NOTE;
+  }
+
+  const missingEmailWarning = detailRow.querySelector(
+    ".reminder-queue-template-preview-missing-email"
+  );
+  if (missingEmailWarning) {
+    missingEmailWarning.textContent = REMINDER_QUEUE_TEMPLATE_MISSING_EMAIL_WARNING;
+    missingEmailWarning.classList.toggle("hidden", !template.emailMissing);
+  }
+
+  const reminderWindowField = detailRow.querySelector(
+    '[data-template-field="reminderWindow"]'
+  );
+  if (reminderWindowField) {
+    reminderWindowField.textContent = metadata.reminderWindow;
+  }
+
+  const complianceTypeField = detailRow.querySelector('[data-template-field="complianceType"]');
+  if (complianceTypeField) {
+    complianceTypeField.textContent = metadata.complianceType;
+  }
+
+  const expiryDateField = detailRow.querySelector('[data-template-field="expiryDate"]');
+  if (expiryDateField) {
+    expiryDateField.textContent = metadata.expiryDate;
+  }
+
+  const sourceField = detailRow.querySelector('[data-template-field="source"]');
+  if (sourceField) {
+    sourceField.textContent = metadata.source;
+  }
+
+  const subjectField = detailRow.querySelector('[data-template-field="subject"]');
+  if (subjectField) {
+    subjectField.textContent = template.subject;
+  }
+
+  const bodyField = detailRow.querySelector('[data-template-field="bodyText"]');
+  if (bodyField) {
+    bodyField.textContent = template.bodyText;
+  }
+
+  const copyMessage = detailRow.querySelector(".reminder-queue-template-preview-copy-message");
+  if (copyMessage) {
+    hideMessage(copyMessage);
+  }
+}
+
+function showReminderQueueTemplateCopyMessage(detailRow, text, type) {
+  const copyMessage = detailRow?.querySelector(".reminder-queue-template-preview-copy-message");
+
+  if (!copyMessage) {
+    return;
+  }
+
+  showMessage(copyMessage, text, type);
+}
+
+async function copyReminderQueueTemplate(rowKey) {
+  const detailRow = reminderQueuePreviewTableBody?.querySelector(
+    `.reminder-queue-template-preview-detail-row[data-queue-row-key="${rowKey}"]`
+  );
+
+  if (!detailRow) {
+    return;
+  }
+
+  const queue = buildReminderQueuePreviewData();
+  const index = Number.parseInt(rowKey.replace("queue-template-", ""), 10);
+  const queueItem = Number.isNaN(index) ? null : queue.items[index];
+
+  if (!queueItem) {
+    return;
+  }
+
+  const template = buildReminderEmailTemplate({ queueItem });
+  const copyText = buildReminderQueueTemplateCopyText(template);
+
+  if (!navigator.clipboard?.writeText) {
+    showReminderQueueTemplateCopyMessage(
+      detailRow,
+      REMINDER_QUEUE_TEMPLATE_COPY_UNAVAILABLE_MESSAGE,
+      "error"
+    );
+    return;
+  }
+
+  try {
+    await navigator.clipboard.writeText(copyText);
+    showReminderQueueTemplateCopyMessage(
+      detailRow,
+      REMINDER_QUEUE_TEMPLATE_COPY_SUCCESS_MESSAGE,
+      "success"
+    );
+  } catch (error) {
+    console.error("Could not copy reminder queue template text.", error);
+    showReminderQueueTemplateCopyMessage(
+      detailRow,
+      REMINDER_QUEUE_TEMPLATE_COPY_UNAVAILABLE_MESSAGE,
+      "error"
+    );
+  }
+}
+
+function handleReminderQueuePreviewTableClick(event) {
+  const copyButton = event.target.closest(".reminder-queue-template-preview-copy-btn");
+
+  if (copyButton) {
+    const rowKey = copyButton.dataset.queueRowKey;
+
+    if (rowKey) {
+      void copyReminderQueueTemplate(rowKey);
+    }
+
+    return;
+  }
+
+  const previewButton = event.target.closest(".reminder-queue-template-preview-btn");
+
+  if (!previewButton) {
+    return;
+  }
+
+  const rowKey = previewButton.dataset.queueRowKey;
+
+  if (!rowKey) {
+    return;
+  }
+
+  toggleReminderQueueTemplatePreview(rowKey);
+}
+
+function renderReminderQueuePreview() {
+  if (
+    !reminderQueuePreviewSection ||
+    !reminderQueuePreviewTotalCount ||
+    !reminderQueuePreviewMissingEmailCount ||
+    !reminderQueuePreviewExpiredCount ||
+    !reminderQueuePreview30Count ||
+    !reminderQueuePreview14Count ||
+    !reminderQueuePreview7Count ||
+    !reminderQueuePreviewEmpty ||
+    !reminderQueuePreviewTableWrapper ||
+    !reminderQueuePreviewTableHead ||
+    !reminderQueuePreviewTableBody
+  ) {
+    return;
+  }
+
+  const queue = buildReminderQueuePreviewData();
+
+  reminderQueuePreviewTotalCount.textContent = String(queue.summary.total);
+  reminderQueuePreviewMissingEmailCount.textContent = String(queue.summary.missingEmail);
+  reminderQueuePreviewExpiredCount.textContent = String(queue.summary.byWindow.expired);
+  reminderQueuePreview30Count.textContent = String(queue.summary.byWindow["30-day"]);
+  reminderQueuePreview14Count.textContent = String(queue.summary.byWindow["14-day"]);
+  reminderQueuePreview7Count.textContent = String(queue.summary.byWindow["7-day"]);
+
+  if (reminderQueuePreviewMeta) {
+    const scanDateLabel =
+      queue.asOfDate && !Number.isNaN(parseDateAtMidnight(queue.asOfDate).getTime())
+        ? formatDate(queue.asOfDate)
+        : "today";
+    reminderQueuePreviewMeta.textContent = `Scan as of ${scanDateLabel} · ${queue.summary.total} queued`;
+  }
+
+  renderReminderDigestPreview(queue);
+
+  reminderQueuePreviewEmpty.classList.add("hidden");
+  reminderQueuePreviewTableWrapper.classList.add("hidden");
+  reminderQueuePreviewTableHead.innerHTML = "";
+  reminderQueuePreviewTableBody.innerHTML = "";
+
+  if (exportReminderQueueCsvBtn) {
+    exportReminderQueueCsvBtn.disabled = queue.items.length === 0;
+  }
+
+  if (queue.items.length === 0) {
+    reminderQueuePreviewEmpty.classList.remove("hidden");
+    return;
+  }
+
+  const previewRows = mapReminderQueueItemsToPreviewRows(queue.items, formatDate);
+  const queueColumnCount = REMINDER_QUEUE_PREVIEW_COLUMNS.length + 1;
+
+  reminderQueuePreviewTableWrapper.classList.remove("hidden");
+  reminderQueuePreviewTableHead.innerHTML = `<tr>${REMINDER_QUEUE_PREVIEW_COLUMNS.map(
+    (column) => `<th scope="col">${escapeHtml(column.label)}</th>`
+  ).join("")}<th scope="col">Template</th></tr>`;
+
+  reminderQueuePreviewTableBody.innerHTML = previewRows
+    .map((row, index) => {
+      const rowKey = getReminderQueueTemplatePreviewRowKey(index);
+      const isExpanded = expandedReminderQueueTemplatePreviewKeys.has(rowKey);
+      const previewButtonLabel = getReminderQueueTemplatePreviewButtonLabel(isExpanded);
+
+      return `
+        <tr class="reminder-queue-preview-row" data-queue-row-key="${escapeHtml(rowKey)}">
+          <td>${escapeHtml(row.personName)}</td>
+          <td>${escapeHtml(row.complianceType)}</td>
+          <td>${escapeHtml(row.expiryDate)}</td>
+          <td>${escapeHtml(row.reminderWindow)}</td>
+          <td class="${row.emailMissing ? "reminder-queue-preview-email-missing" : ""}">${escapeHtml(row.email)}</td>
+          <td>${escapeHtml(row.status)}</td>
+          <td>${escapeHtml(row.source)}</td>
+          <td class="reminder-queue-preview-row-actions">
+            <button
+              type="button"
+              class="quick-action-btn reminder-queue-template-preview-btn"
+              data-queue-row-key="${escapeHtml(rowKey)}"
+              aria-expanded="${isExpanded ? "true" : "false"}"
+            >${escapeHtml(previewButtonLabel)}</button>
+          </td>
+        </tr>
+        ${
+          isExpanded
+            ? `<tr class="reminder-queue-template-preview-detail-row" data-queue-row-key="${escapeHtml(rowKey)}">
+          <td colspan="${queueColumnCount}">
+            <div class="reminder-queue-template-preview-detail">
+              <p class="reminder-queue-template-preview-safety-note settings-hint"></p>
+              <p class="reminder-queue-template-preview-missing-email settings-hint hidden"></p>
+              <dl class="reminder-queue-template-preview-metadata">
+                <div>
+                  <dt>Reminder window</dt>
+                  <dd data-template-field="reminderWindow"></dd>
+                </div>
+                <div>
+                  <dt>Compliance type</dt>
+                  <dd data-template-field="complianceType"></dd>
+                </div>
+                <div>
+                  <dt>Expiry date</dt>
+                  <dd data-template-field="expiryDate"></dd>
+                </div>
+                <div>
+                  <dt>Source</dt>
+                  <dd data-template-field="source"></dd>
+                </div>
+              </dl>
+              <div class="reminder-queue-template-preview-subject">
+                <h4>Subject</h4>
+                <p class="reminder-queue-template-preview-subject-text" data-template-field="subject"></p>
+              </div>
+              <div class="reminder-queue-template-preview-body-block">
+                <h4>Body</h4>
+                <pre class="reminder-queue-template-preview-body" data-template-field="bodyText"></pre>
+              </div>
+              <div class="reminder-queue-template-preview-actions">
+                <button
+                  type="button"
+                  class="quick-action-btn reminder-queue-template-preview-copy-btn"
+                  data-queue-row-key="${escapeHtml(rowKey)}"
+                >${escapeHtml(REMINDER_QUEUE_TEMPLATE_COPY_BUTTON_LABEL)}</button>
+                <p
+                  class="reminder-queue-template-preview-copy-message settings-hint hidden"
+                  role="status"
+                ></p>
+              </div>
+            </div>
+          </td>
+        </tr>`
+            : ""
+        }`;
+    })
+    .join("");
+
+  queue.items.forEach((queueItem, index) => {
+    const rowKey = getReminderQueueTemplatePreviewRowKey(index);
+
+    if (!expandedReminderQueueTemplatePreviewKeys.has(rowKey)) {
+      return;
+    }
+
+    const detailRow = reminderQueuePreviewTableBody.querySelector(
+      `.reminder-queue-template-preview-detail-row[data-queue-row-key="${rowKey}"]`
+    );
+
+    if (detailRow) {
+      populateReminderQueueTemplatePreviewDetail(detailRow, queueItem);
+    }
+  });
+}
+
+function exportReminderQueueCsv() {
+  const queue = buildReminderQueuePreviewData();
+
+  if (queue.items.length === 0) {
+    showMessage(appMessage, REMINDER_QUEUE_PREVIEW_EMPTY_MESSAGE, "error");
+    return;
+  }
+
+  const generatedAt = new Date();
+  const csvContent = buildReminderQueueExportCsv(queue, formatDate);
+
+  downloadFile(
+    csvContent,
+    getReminderQueueExportFilename(queue.asOfDate, generatedAt),
+    "text/csv"
+  );
+  showMessage(appMessage, "Reminder queue preview CSV downloaded.", "success");
+}
+
+function setupReminderQueuePreviewListeners() {
+  exportReminderQueueCsvBtn?.addEventListener("click", exportReminderQueueCsv);
+  reminderQueuePreviewTableBody?.addEventListener("click", handleReminderQueuePreviewTableClick);
+  reminderDigestPreviewCopyBtn?.addEventListener("click", () => {
+    void copyReminderDigest();
+  });
+}
+
 function renderReminderPreviewDashboardPreview(report) {
   if (
     !reminderPreviewDashboardPreview ||
@@ -5703,6 +6195,172 @@ function setupReminderPreviewDashboardListeners() {
     "click",
     handleReminderPreviewDashboardRowClick
   );
+}
+
+function toggleAutomationRunSummary(runId) {
+  if (!runId) {
+    return;
+  }
+
+  if (expandedAutomationRunIds.has(runId)) {
+    expandedAutomationRunIds.delete(runId);
+  } else {
+    expandedAutomationRunIds.add(runId);
+  }
+
+  renderAutomationRunAudit();
+}
+
+function handleAutomationRunAuditTableClick(event) {
+  const summaryButton = event.target.closest(".automation-run-audit-view-summary-btn");
+
+  if (!summaryButton) {
+    return;
+  }
+
+  toggleAutomationRunSummary(summaryButton.dataset.runId);
+}
+
+function renderAutomationRunAudit() {
+  if (
+    !automationRunAuditSection ||
+    !automationRunAuditLocalHint ||
+    !automationRunAuditError ||
+    !automationRunAuditEmpty ||
+    !automationRunAuditTableWrapper ||
+    !automationRunAuditTableHead ||
+    !automationRunAuditTableBody
+  ) {
+    return;
+  }
+
+  automationRunAuditLocalHint.classList.add("hidden");
+  automationRunAuditError.classList.add("hidden");
+  automationRunAuditEmpty.classList.add("hidden");
+  automationRunAuditTableWrapper.classList.add("hidden");
+
+  if (automationRunAuditLoadState === "local") {
+    automationRunAuditLocalHint.classList.remove("hidden");
+    automationRunAuditTableHead.innerHTML = "";
+    automationRunAuditTableBody.innerHTML = "";
+    return;
+  }
+
+  if (automationRunAuditLoadState === "loading") {
+    automationRunAuditTableHead.innerHTML = "";
+    automationRunAuditTableBody.innerHTML = "";
+    return;
+  }
+
+  if (automationRunAuditLoadState === "error") {
+    automationRunAuditError.textContent =
+      automationRunAuditLoadError ||
+      "Could not load automation runs. Check your connection and try signing in again.";
+    automationRunAuditError.classList.remove("hidden");
+    automationRunAuditTableHead.innerHTML = "";
+    automationRunAuditTableBody.innerHTML = "";
+    return;
+  }
+
+  const runs = automationRepository ? automationRepository.getAutomationRuns() : [];
+  const auditRows = mapAutomationRunsToAuditRows(runs);
+
+  if (auditRows.length === 0) {
+    automationRunAuditEmpty.classList.remove("hidden");
+    automationRunAuditTableHead.innerHTML = "";
+    automationRunAuditTableBody.innerHTML = "";
+    return;
+  }
+
+  automationRunAuditTableWrapper.classList.remove("hidden");
+  automationRunAuditTableHead.innerHTML = `<tr>${AUTOMATION_RUN_AUDIT_COLUMNS.map(
+    (column) => `<th scope="col">${escapeHtml(column.label)}</th>`
+  ).join("")}</tr>`;
+
+  automationRunAuditTableBody.innerHTML = auditRows
+    .map((row) => {
+      const isExpanded = expandedAutomationRunIds.has(row.id);
+      const summaryLabel = isExpanded ? "Hide summary" : "View summary";
+
+      return `
+          <tr class="automation-run-audit-row" data-run-id="${escapeHtml(row.id)}">
+            <td>${escapeHtml(row.runAt)}</td>
+            <td>${escapeHtml(row.runType)}</td>
+            <td>${escapeHtml(row.status)}</td>
+            <td>${escapeHtml(row.source)}</td>
+            <td>${escapeHtml(row.totalRecords)}</td>
+            <td>${escapeHtml(row.reminderCandidatesTotal)}</td>
+            <td>${escapeHtml(row.actionCandidatesTotal)}</td>
+            <td>${escapeHtml(row.executionCounters)}</td>
+            <td class="automation-run-audit-row-actions">
+              <button
+                type="button"
+                class="quick-action-btn automation-run-audit-view-summary-btn"
+                data-run-id="${escapeHtml(row.id)}"
+                aria-expanded="${isExpanded ? "true" : "false"}"
+              >${escapeHtml(summaryLabel)}</button>
+            </td>
+          </tr>
+          ${
+            isExpanded
+              ? `<tr class="automation-run-audit-detail-row" data-run-id="${escapeHtml(row.id)}">
+            <td colspan="${AUTOMATION_RUN_AUDIT_COLUMNS.length}">
+              <pre class="automation-run-audit-summary-json" data-run-summary-for="${escapeHtml(row.id)}"></pre>
+            </td>
+          </tr>`
+              : ""
+          }`;
+    })
+    .join("");
+
+  auditRows.forEach((row) => {
+    if (!expandedAutomationRunIds.has(row.id)) {
+      return;
+    }
+
+    const summaryElement = automationRunAuditTableBody.querySelector(
+      `[data-run-summary-for="${row.id}"]`
+    );
+
+    if (summaryElement) {
+      summaryElement.textContent = row.summaryJson;
+    }
+  });
+}
+
+async function loadAutomationRunAudit() {
+  if (!automationRunAuditSection) {
+    return;
+  }
+
+  if (!automationRepository) {
+    automationRunAuditLoadState = "local";
+    automationRunAuditLoadError = "";
+    renderAutomationRunAudit();
+    return;
+  }
+
+  automationRunAuditLoadState = "loading";
+  renderAutomationRunAudit();
+
+  const result = await automationRepository.loadAutomationRuns();
+
+  if (!result.ok) {
+    automationRunAuditLoadState = "error";
+    automationRunAuditLoadError =
+      result.error?.message ||
+      "Could not load automation runs. Check your connection and try signing in again.";
+    renderAutomationRunAudit();
+    return;
+  }
+
+  automationRunAuditLoadState = "loaded";
+  automationRunAuditLoadError = "";
+  renderAutomationRunAudit();
+}
+
+function setupAutomationRunAuditListeners() {
+  automationRunAuditTableBody?.addEventListener("click", handleAutomationRunAuditTableClick);
 }
 
 function renderActionSummaryCards() {
@@ -5989,6 +6647,7 @@ async function handleReminderSettingsChange() {
   await saveReminderSettings();
   renderReminders();
   renderReminderPreviewDashboardCards();
+  renderReminderQueuePreview();
   refreshActiveReminderPreviewDashboardPreview();
 }
 
@@ -7030,6 +7689,7 @@ function renderDashboard() {
   dashboard90Count.textContent = countExpiringWithinDays(90);
   renderReminders();
   renderReminderPreviewDashboardCards();
+  renderReminderQueuePreview();
   updateFilterActiveState();
 }
 
@@ -10079,6 +10739,7 @@ async function finishAppBoot() {
 
   applyReadOnlyMode();
   renderTable();
+  await loadAutomationRunAudit();
   document.documentElement.dataset.appReady = "true";
   return true;
 }
@@ -10096,6 +10757,8 @@ function runBootSetup() {
   setupVisualInsightsListeners();
   setupActionDashboardListeners();
   setupReminderPreviewDashboardListeners();
+  setupReminderQueuePreviewListeners();
+  setupAutomationRunAuditListeners();
   setupRecordWorkspaceListeners();
   setupReportListeners();
 }

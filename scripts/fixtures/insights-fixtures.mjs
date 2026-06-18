@@ -596,6 +596,25 @@ export const EXPECTED_AUTOMATION_DRY_RUN = {
   },
 };
 
+/** V5-1 Phase 1 reminder queue expectations for LOCAL_FIXTURE_ROWS dry-run. */
+export const EXPECTED_REMINDER_QUEUE_SUMMARY = {
+  total: 3,
+  withEmail: 0,
+  missingEmail: 3,
+  byWindow: {
+    "30-day": 1,
+    "14-day": 1,
+    "7-day": 0,
+    expired: 1,
+  },
+};
+
+export const EXPECTED_REMINDER_QUEUE_NAMES = [
+  "Sam Priest",
+  "Jordan Coordinator",
+  "Riley Safeguarding",
+];
+
 export const EXPECTED_RECOMMENDATIONS = [
   {
     id: "expiry-expired-records",

@@ -100,7 +100,9 @@ assertContains(
   '"verify-automation-dry-run": "node scripts/verify-automation-dry-run.mjs"',
   "package.json verify-automation-dry-run script"
 );
-assertNotContains(appJs, "computeAutomationDryRun", "app.js does not wire dry-run yet");
+assertContains(appJs, "computeAutomationDryRun", "app.js wires dry-run for reminder queue preview");
+assertNotContains(appJs, "logAutomationDryRunRun", "app.js does not wire dry-run logging");
+assertNotContains(appJs, "createAutomationRun", "app.js does not create automation runs");
 
 const localResult = computeAutomationDryRun(LOCAL_FIXTURE_ROWS, FIXTURE_SETTINGS, FIXTURE_AS_OF_DATE);
 assertDeepEqual(localResult, EXPECTED_AUTOMATION_DRY_RUN, "local fixture dry-run output");

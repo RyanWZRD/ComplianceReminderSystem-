@@ -722,7 +722,85 @@ supabase functions deploy scheduled-reminder-runner --project-ref vmrotpztwoeifb
 
 ---
 
-**Next slice:** V6 Phase 63 — duplicate prevention for live scheduled sends (complete).
+**Next slice:** V6 Phase 64 — failure handling and retry-safe delivery statuses (complete).
+
+---
+
+## Phase 64 — Scheduled runner failure handling and retry-safe delivery statuses
+
+**Goal:** Harden **`live_send`** provider failure handling so failures are logged clearly, never mark reminders sent, and remain retryable in future runs. **No automatic retry loops** in this phase.
+
+### Provider failure behaviour
+
+When **`sendReminderEmail`** does not return **`sent`**:
+
+- Insert **`reminder_delivery_logs`** with **`delivery_status: failed`**, **`provider: resend`**, **`error_code`**, **`error_message`**, **`sent_at: null`**, **`provider_message_id: null`**
+- **`payload.mode: live_send`**, **`payload.asOfDate`**, and **`payload.emailPreview`** when generated
+- **No `mark_reminder_sent`**
+- Count in **`sendSummary.failed`** and **`deliveryLogSummary.failed`**
+- Top-level **`status: completed_with_errors`** when any send or mark-sent failures occur
+
+### Retry posture
+
+- Duplicate prevention (Phase 63) checks **`delivery_status: sent`** only
+- Existing **`failed`** or **`skipped`** rows do **not** block future sends
+- Response includes **`retrySummary: { retryableFailures }`** — count of failed sends eligible for retry on a future run
+
+### Success response (`live_send` — provider failure)
+
+```json
+{
+  "status": "completed_with_errors",
+  "mode": "live_send",
+  "organisationId": "uuid",
+  "automationRunId": "uuid",
+  "summary": { "totalCandidates": 5, "withEmail": 3, "missingEmail": 2, "wouldSend": 3, "wouldSkip": 2 },
+  "deliveryLogSummary": { "total": 5, "sent": 0, "skipped": 4, "failed": 1, "pending": 0 },
+  "sendSummary": {
+    "attempted": 1,
+    "sent": 0,
+    "failed": 1,
+    "skippedMissingEmail": 2,
+    "skippedNotAllowlisted": 2,
+    "skippedDuplicate": 0
+  },
+  "markSentSummary": {
+    "attempted": 0,
+    "markedSent": 0,
+    "failed": 0,
+    "skipped": 0
+  },
+  "duplicatePreventionSummary": {
+    "checked": 1,
+    "duplicatesPrevented": 0
+  },
+  "retrySummary": {
+    "retryableFailures": 1
+  }
+}
+```
+
+### Test hook
+
+Staging verification temporarily sets **`FORCE_EMAIL_PROVIDER_FAILURE=true`** (Edge secret). When enabled, **`sendReminderEmail`** returns a failed provider result without calling Resend. The staging script restores **`FORCE_EMAIL_PROVIDER_FAILURE=false`** on exit.
+
+### Verification
+
+```powershell
+npm run verify-scheduled-runner-failure-handling
+npm run verify-scheduled-runner-failure-handling-staging
+npm run build
+```
+
+**Deploy Phase 64 to staging:**
+
+```powershell
+supabase functions deploy scheduled-reminder-runner --project-ref vmrotpztwoeifbdjwdis
+```
+
+---
+
+**Next slice:** TBD — scheduler wiring (cron / external job)
 
 ---
 

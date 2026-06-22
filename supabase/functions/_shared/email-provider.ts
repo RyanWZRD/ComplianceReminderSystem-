@@ -1,7 +1,6 @@
 /**
  * V6 Phase 54: Edge shared email provider foundation — disabled by default.
- * Provider abstraction and configuration/safety gates only.
- * Not wired into scheduled-reminder-runner; no live sends from this phase.
+ * V6 Phase 64: normalizeProviderError and FORCE_EMAIL_PROVIDER_FAILURE test hook.
  */
 
 export type EmailEnv = Record<string, string | undefined>;
@@ -162,12 +161,88 @@ export function createEmailProvider(config: EmailProviderConfig): EmailProvider 
   };
 }
 
+const SECRET_REDACTION_PATTERNS: RegExp[] = [
+  /Bearer\s+\S+/gi,
+  /re_[a-zA-Z0-9_-]+/g,
+  /sk_[a-zA-Z0-9_-]+/g,
+  /api[_-]?key[=:]\s*\S+/gi,
+];
+
+/**
+ * Redacts likely secrets from provider error messages before persistence or API responses.
+ *
+ * @param {string} message
+ */
+function sanitizeProviderErrorMessage(message: string): string {
+  let sanitized = String(message ?? "").trim();
+
+  for (const pattern of SECRET_REDACTION_PATTERNS) {
+    sanitized = sanitized.replace(pattern, "[REDACTED]");
+  }
+
+  if (!sanitized) {
+    return "send_failed";
+  }
+
+  return sanitized.slice(0, 500);
+}
+
+/**
+ * @param {string} code
+ */
+function sanitizeProviderErrorCode(code: string): string {
+  const sanitized = String(code ?? "").trim();
+
+  if (!sanitized) {
+    return "send_failed";
+  }
+
+  return sanitized.slice(0, 120);
+}
+
+/**
+ * Extracts safe error_code and error_message from a provider result without exposing secrets.
+ *
+ * @param {SendReminderEmailResult | { status: string; error?: string; code?: string; reason?: string }} result
+ */
+export function normalizeProviderError(
+  result:
+    | SendReminderEmailResult
+    | { status: string; error?: string; code?: string; reason?: string },
+): { errorCode: string; errorMessage: string } {
+  if (result.status === "error") {
+    return {
+      errorCode: sanitizeProviderErrorCode(result.code),
+      errorMessage: sanitizeProviderErrorMessage(result.error),
+    };
+  }
+
+  if (result.status === "disabled") {
+    const reason = sanitizeProviderErrorCode(result.reason ?? "email_sending_disabled");
+    return {
+      errorCode: reason,
+      errorMessage: sanitizeProviderErrorMessage(result.reason ?? "email_sending_disabled"),
+    };
+  }
+
+  return {
+    errorCode: "send_failed",
+    errorMessage: "send_failed",
+  };
+}
+
+function parseForceEmailProviderFailure(raw: string | undefined): boolean {
+  const value = (raw ?? "").trim().toLowerCase();
+  return value === "true" || value === "1" || value === "yes";
+}
+
 function readDenoEnv(): EmailEnv {
   const keys = [
     "RESEND_API_KEY",
     "EMAIL_SENDING_ENABLED",
     "EMAIL_FROM_ADDRESS",
     "EMAIL_PROVIDER",
+    "FORCE_EMAIL_PROVIDER_FAILURE",
   ] as const;
 
   const env: EmailEnv = {};
@@ -190,11 +265,21 @@ function readDenoEnv(): EmailEnv {
 export async function sendReminderEmail(
   input: ReminderEmailInput,
   config?: EmailProviderConfig,
+  env?: EmailEnv,
 ): Promise<SendReminderEmailResult> {
-  const resolvedConfig = config ?? getEmailProviderConfig(readDenoEnv());
+  const resolvedEnv = env ?? readDenoEnv();
+  const resolvedConfig = config ?? getEmailProviderConfig(resolvedEnv);
 
   if (!isEmailSendingEnabled(resolvedConfig)) {
     return { status: "disabled", reason: "email_sending_disabled" };
+  }
+
+  if (parseForceEmailProviderFailure(resolvedEnv.FORCE_EMAIL_PROVIDER_FAILURE)) {
+    return {
+      status: "error",
+      error: "forced_provider_failure",
+      code: "forced_test_failure",
+    };
   }
 
   const validationError = validateEnabledSendConfig(resolvedConfig);

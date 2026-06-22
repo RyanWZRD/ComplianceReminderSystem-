@@ -31,6 +31,46 @@ V6 automated email reminders progress in safe, auditable slices. Phase 45–46 e
 | 61 | Scheduled runner controlled live send | `reminder_delivery_logs` (`sent` / `skipped` / `failed`); allowlisted sends only; no mark-as-sent |
 | 62 | Scheduled runner mark sent after delivery | `mark_reminder_sent` after successful `live_send` only; compliance notes + history |
 | 63 | Scheduled runner duplicate prevention | Idempotent `live_send` via `reminder_delivery_logs` lookup; `duplicate_prevented` skip rows |
+| 64 | Scheduled runner failure handling | Failed delivery logs without mark-sent; retry-safe posture; no automatic retries |
+
+---
+
+## Phase 64 — Scheduled runner failure handling and retry-safe delivery statuses
+
+**Status:** Complete when `npm run verify-scheduled-runner-failure-handling` and `npm run verify-scheduled-runner-failure-handling-staging` pass.
+
+**Goal:** Harden **`live_send`** provider failure handling so failures are logged clearly, never mark reminders sent, and remain retryable in future runs. **No automatic retry loops** in this phase.
+
+### Deliverables
+
+| Item | Location |
+|------|----------|
+| Failure logging and retry posture on live_send | `supabase/functions/scheduled-reminder-runner/index.ts` |
+| `normalizeProviderError` + `FORCE_EMAIL_PROVIDER_FAILURE` | `supabase/functions/_shared/email-provider.ts` |
+| Static verification gate | `scripts/verify-scheduled-runner-failure-handling.mjs` |
+| Staging verification gate | `scripts/verify-scheduled-runner-failure-handling-staging.mjs` |
+| Runner documentation | [`docs/v6-scheduled-runner.md`](v6-scheduled-runner.md) |
+
+### Behaviour
+
+- Provider failure inserts **`delivery_status: failed`** row with **`error_code`**, **`error_message`**, **`sent_at: null`**, **`provider_message_id: null`**
+- **No `mark_reminder_sent`** on failed sends
+- **`completed_with_errors`** when any send or mark-sent failures occur
+- **`retrySummary.retryableFailures`** counts failed sends eligible for retry
+- Duplicate prevention (Phase 63) still checks **`delivery_status: sent`** only — **`failed`** and **`skipped`** rows do not block retry
+- Phase 62 mark-sent-after-success preserved; sent delivery log is not downgraded on mark-sent failure
+- **`dry_run`** and **`live_send_preview`** unchanged
+
+### Verification
+
+`npm run verify-scheduled-runner-failure-handling` verifies failure branch logging, no mark-sent on failure, sent-only duplicate check, `retrySummary`, and unchanged dry_run / preview.
+
+`npm run verify-scheduled-runner-failure-handling-staging` verifies on Alpha staging:
+
+1. **Phase 64 Failure Test Person** fixture with `SCHEDULED_TEST_EMAIL_TO`
+2. Forced provider failure via `FORCE_EMAIL_PROVIDER_FAILURE=true` — one failed delivery log, no mark-sent, `completed_with_errors`
+3. Retry after disabling force failure — successful send and mark-sent
+4. Third run blocked by duplicate prevention (Phase 63)
 
 ---
 

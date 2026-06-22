@@ -418,6 +418,8 @@ interface HealthCheckResult {
 | `npm run verify-scheduled-runner-mark-sent-after-delivery-staging` | Phase 62 — staging verification of mark-sent after allowlisted scheduled send |
 | `npm run verify-scheduled-runner-duplicate-prevention` | Phase 63 — duplicate prevention / idempotency static checks for live_send |
 | `npm run verify-scheduled-runner-duplicate-prevention-staging` | Phase 63 — staging verification of duplicate prevention on repeat live_send |
+| `npm run verify-scheduled-runner-failure-handling` | Phase 64 — failure logging and retry-safe posture static checks for live_send |
+| `npm run verify-scheduled-runner-failure-handling-staging` | Phase 64 — staging verification of forced provider failure, retry, and duplicate prevention |
 | `npm run verify-browser-resend-provider-foundation` | Phase 20 — browser orchestrator; runs skeleton foundation + Resend plan + Resend provider in order, stop on first failure |
 | `npm run verify-delivery-operations-log-ui` | Phase 22 — Delivery Operations Log UI, CSV export, no execution hooks |
 | `npm run verify-delivery-worker` | Phase 24 — worker delivery execution engine (in-memory; no app wiring) |
@@ -2001,7 +2003,34 @@ Catalog/introspection queries are preferred; the script does not insert test del
 
 **Phase 61 gate:** `npm run verify-scheduled-runner-controlled-live-send` must pass; `npm run verify-scheduled-runner-controlled-live-send-staging` must pass against staging with sending enabled.
 
-**Next slice:** V6 Phase 63 — duplicate prevention for live scheduled sends (complete).
+**Next slice:** V6 Phase 64 — failure handling and retry-safe delivery statuses (complete).
+
+---
+
+## Phase 64 — Scheduled runner failure handling and retry-safe delivery statuses
+
+**Scope:** `live_send` only. Provider failures insert `reminder_delivery_logs` with `delivery_status: failed`, `error_code`, `error_message`, `sent_at: null`, and `provider_message_id: null` — no `mark_reminder_sent`. Duplicate prevention (Phase 63) still checks `delivery_status: sent` only; `failed` and `skipped` rows do not block retry. Returns `retrySummary.retryableFailures` and `completed_with_errors` when send or mark-sent failures occur. `normalizeProviderError` in shared email provider redacts secrets. `FORCE_EMAIL_PROVIDER_FAILURE` test hook for staging. **No automatic retry loops.** `dry_run` and `live_send_preview` unchanged.
+
+### Phase 64 deliverables
+
+| Item | Location |
+|------|----------|
+| Failure logging and retry posture on live_send | `supabase/functions/scheduled-reminder-runner/index.ts` |
+| `normalizeProviderError` + `FORCE_EMAIL_PROVIDER_FAILURE` | `supabase/functions/_shared/email-provider.ts` |
+| Static verification gate | `scripts/verify-scheduled-runner-failure-handling.mjs` |
+| Staging verification gate | `scripts/verify-scheduled-runner-failure-handling-staging.mjs` |
+
+**Script:** `scripts/verify-scheduled-runner-failure-handling.mjs`
+
+`npm run verify-scheduled-runner-failure-handling` verifies failed delivery log branch, no mark-sent on failure, sent-only duplicate check, `retrySummary`, and unchanged dry_run / preview behaviour.
+
+**Script:** `scripts/verify-scheduled-runner-failure-handling-staging.mjs`
+
+`npm run verify-scheduled-runner-failure-handling-staging` verifies forced provider failure, retry after failure, and duplicate prevention on third run using **Phase 64 Failure Test Person** fixture.
+
+**Phase 64 gate:** `npm run verify-scheduled-runner-failure-handling` must pass; `npm run verify-scheduled-runner-failure-handling-staging` must pass against staging with sending enabled.
+
+**Next slice:** TBD — scheduler wiring (cron / external job).
 
 ---
 

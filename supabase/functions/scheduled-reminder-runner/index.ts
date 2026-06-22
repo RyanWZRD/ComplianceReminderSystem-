@@ -7,6 +7,7 @@
  * Phase 61: live_send — allowlisted recipients only; delivery log audit.
  * Phase 62: live_send — mark reminders sent via mark_reminder_sent after successful send + log.
  * Phase 63: live_send — duplicate prevention via reminder_delivery_logs idempotency check.
+ * Phase 64: live_send — failure logging and retry-safe delivery statuses (no automatic retries).
  */
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
@@ -14,6 +15,7 @@ import { createClient, type SupabaseClient } from "jsr:@supabase/supabase-js@2";
 import {
   getEmailProviderConfig,
   isEmailSendingEnabled,
+  normalizeProviderError,
   sendReminderEmail,
   type EmailProviderConfig,
 } from "../_shared/email-provider.ts";
@@ -1199,6 +1201,15 @@ function buildDuplicatePreventionSummary(counts: {
   };
 }
 
+/**
+ * @param {{ retryableFailures: number }} counts
+ */
+function buildRetrySummary(counts: { retryableFailures: number }) {
+  return {
+    retryableFailures: counts.retryableFailures,
+  };
+}
+
 type LiveSendCandidate = ComplianceRow & { reminderType: string; hasEmail: boolean };
 
 /**
@@ -1441,9 +1452,10 @@ function buildLiveSendCandidateBasePayload(
 }
 
 /**
- * Phase 61–63: one reminder_delivery_logs row per candidate — send allowlisted only;
+ * Phase 61–64: one reminder_delivery_logs row per candidate — send allowlisted only;
  * Phase 62 marks sent via mark_reminder_sent after successful send + delivery log;
- * Phase 63 skips duplicate sends when an equivalent sent log already exists.
+ * Phase 63 skips duplicate sends when an equivalent sent log already exists;
+ * Phase 64 logs provider failures as retryable failed rows without mark_reminder_sent.
  *
  * @param {SupabaseClient} serviceSupabase
  * @param {SupabaseClient} userSupabase Caller JWT for mark_reminder_sent
@@ -1472,7 +1484,9 @@ async function processAndInsertLiveSendDeliveryLogs(
       sendSummary: ReturnType<typeof buildSendSummary>;
       markSentSummary: ReturnType<typeof buildMarkSentSummary>;
       duplicatePreventionSummary: ReturnType<typeof buildDuplicatePreventionSummary>;
+      retrySummary: ReturnType<typeof buildRetrySummary>;
       hasMarkSentErrors: boolean;
+      hasSendErrors: boolean;
     }
   | { ok: false; error: string }
 > {
@@ -1674,18 +1688,7 @@ async function processAndInsertLiveSendDeliveryLogs(
       continue;
     }
 
-    const errorCode =
-      providerResult.status === "error"
-        ? providerResult.code
-        : providerResult.status === "disabled"
-          ? providerResult.reason
-          : "send_failed";
-    const errorMessage =
-      providerResult.status === "error"
-        ? providerResult.error
-        : providerResult.status === "disabled"
-          ? providerResult.reason
-          : "send_failed";
+    const { errorCode, errorMessage } = normalizeProviderError(providerResult);
 
     const { error } = await serviceSupabase.from("reminder_delivery_logs").insert({
       organisation_id: organisationId,
@@ -1745,7 +1748,11 @@ async function processAndInsertLiveSendDeliveryLogs(
       checked: duplicateChecked,
       duplicatesPrevented,
     }),
+    retrySummary: buildRetrySummary({
+      retryableFailures: failed,
+    }),
     hasMarkSentErrors: markSentFailed > 0,
+    hasSendErrors: failed > 0,
   };
 }
 
@@ -1915,8 +1922,11 @@ Deno.serve(async (req) => {
       sendSummary,
       markSentSummary,
       duplicatePreventionSummary,
+      retrySummary,
       hasMarkSentErrors,
+      hasSendErrors,
     } = liveSendDeliveryResult;
+    const hasRunErrors = hasMarkSentErrors || hasSendErrors;
     const automationStatus =
       deliveryLogSummary.skipped > 0 ||
       deliveryLogSummary.failed > 0 ||
@@ -1933,7 +1943,7 @@ Deno.serve(async (req) => {
 
     return jsonResponse(
       {
-        status: hasMarkSentErrors ? "completed_with_errors" : "ok",
+        status: hasRunErrors ? "completed_with_errors" : "ok",
         mode: SCHEDULED_RUNNER_LIVE_SEND_MODE,
         organisationId,
         automationRunId: liveSendInsertResult.automationRunId,
@@ -1942,6 +1952,7 @@ Deno.serve(async (req) => {
         sendSummary,
         markSentSummary,
         duplicatePreventionSummary,
+        retrySummary,
       },
       200,
       corsHeaders,

@@ -6,6 +6,47 @@ A local-first safeguarding compliance tracker. Runs in the browser with localSto
 
 # Current Release
 
+## V6 Phase 64 — Scheduled Runner Failure Handling and Retry-Safe Delivery Statuses
+
+**Date:** June 2026
+
+### Summary
+
+V6 Phase 64 hardens **`live_send`** provider failure handling: failures insert **`reminder_delivery_logs`** rows with **`delivery_status: failed`**, **`error_code`**, **`error_message`**, **`sent_at: null`**, and **`provider_message_id: null`** — **no `mark_reminder_sent`**. Failed and skipped rows do **not** block future retries; duplicate prevention (Phase 63) still checks **`delivery_status: sent`** only. Response includes **`retrySummary.retryableFailures`** and returns **`completed_with_errors`** when any send or mark-sent failures occur. **`normalizeProviderError`** redacts secrets from provider errors. Test hook **`FORCE_EMAIL_PROVIDER_FAILURE`** supports staging verification. **No automatic retry loops** in this phase. **`dry_run`** and **`live_send_preview`** unchanged.
+
+**Documentation:**
+
+- [`docs/v6-scheduled-runner.md`](docs/v6-scheduled-runner.md) — Phase 64 failure handling
+- [`docs/v6-automated-email-reminders.md`](docs/v6-automated-email-reminders.md) — Phase 64 cross-reference
+- [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md) — Phase 64 cross-reference
+
+**Deliverables:**
+
+| Item | Location |
+|------|----------|
+| Failure logging and retry posture on live_send | `supabase/functions/scheduled-reminder-runner/index.ts` |
+| `normalizeProviderError` + `FORCE_EMAIL_PROVIDER_FAILURE` | `supabase/functions/_shared/email-provider.ts` |
+| Static verification gate | `scripts/verify-scheduled-runner-failure-handling.mjs` |
+| Staging verification gate | `scripts/verify-scheduled-runner-failure-handling-staging.mjs` |
+
+**Prerequisites:**
+
+1. Phase 63 `scheduled-reminder-runner` deployed to staging with live-send gates enabled
+2. Staging Edge secrets: `SCHEDULED_EMAIL_SENDING_ENABLED=true`, `EMAIL_SENDING_ENABLED=true`, `RESEND_API_KEY`, `EMAIL_FROM_ADDRESS`, `SCHEDULED_EMAIL_ALLOWLIST` (must include `SCHEDULED_TEST_EMAIL_TO`)
+3. Local `.env`: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_TEST_PASSWORD`, `SCHEDULED_TEST_EMAIL_TO`
+
+**Verification (required):**
+
+```powershell
+npm run verify-scheduled-runner-failure-handling
+npm run verify-scheduled-runner-failure-handling-staging
+npm run build
+```
+
+**Next slice:** TBD — scheduler wiring (cron / external job)
+
+---
+
 ## V6 Phase 63 — Scheduled Runner Duplicate Prevention and Idempotency
 
 **Date:** June 2026
@@ -42,7 +83,7 @@ npm run verify-scheduled-runner-duplicate-prevention-staging
 npm run build
 ```
 
-**Next slice:** TBD — scheduler wiring (cron / external job)
+**Next slice:** V6 Phase 64 — failure handling and retry-safe delivery statuses (complete).
 
 ---
 

@@ -414,6 +414,8 @@ interface HealthCheckResult {
 | `npm run verify-scheduled-runner-live-send-preview-staging` | Phase 60 — staging verification of preview gate + metadata persistence |
 | `npm run verify-scheduled-runner-controlled-live-send` | Phase 61 — controlled live_send static checks (allowlisted only) |
 | `npm run verify-scheduled-runner-controlled-live-send-staging` | Phase 61 — staging verification of one allowlisted scheduled send + audit |
+| `npm run verify-scheduled-runner-mark-sent-after-delivery` | Phase 62 — mark_reminder_sent after successful live_send static checks |
+| `npm run verify-scheduled-runner-mark-sent-after-delivery-staging` | Phase 62 — staging verification of mark-sent after allowlisted scheduled send |
 | `npm run verify-browser-resend-provider-foundation` | Phase 20 — browser orchestrator; runs skeleton foundation + Resend plan + Resend provider in order, stop on first failure |
 | `npm run verify-delivery-operations-log-ui` | Phase 22 — Delivery Operations Log UI, CSV export, no execution hooks |
 | `npm run verify-delivery-worker` | Phase 24 — worker delivery execution engine (in-memory; no app wiring) |
@@ -1997,7 +1999,33 @@ Catalog/introspection queries are preferred; the script does not insert test del
 
 **Phase 61 gate:** `npm run verify-scheduled-runner-controlled-live-send` must pass; `npm run verify-scheduled-runner-controlled-live-send-staging` must pass against staging with sending enabled.
 
-**Next slice:** TBD — mark-as-sent / compliance mutation after operational sign-off.
+**Next slice:** V6 Phase 62 — mark-as-sent after successful scheduled delivery (complete).
+
+---
+
+## Phase 62 — Scheduled runner mark sent after successful delivery
+
+**Scope:** `live_send` only. After successful provider send and persisted `sent` delivery log row, call **`mark_reminder_sent`** via caller JWT. Skipped, failed, `dry_run`, and `live_send_preview` never mark sent. Returns **`completed_with_errors`** when mark-as-sent fails after send + log success.
+
+### Phase 62 deliverables
+
+| Item | Location |
+|------|----------|
+| Mark-sent after live_send | `supabase/functions/scheduled-reminder-runner/index.ts` |
+| Static verification gate | `scripts/verify-scheduled-runner-mark-sent-after-delivery.mjs` |
+| Staging verification gate | `scripts/verify-scheduled-runner-mark-sent-after-delivery-staging.mjs` |
+
+**Script:** `scripts/verify-scheduled-runner-mark-sent-after-delivery.mjs`
+
+`npm run verify-scheduled-runner-mark-sent-after-delivery` verifies mark-sent only in live_send, ordering (send → log → mark), skipped/failed exclusions, and `markSentSummary` in response.
+
+**Script:** `scripts/verify-scheduled-runner-mark-sent-after-delivery-staging.mjs`
+
+`npm run verify-scheduled-runner-mark-sent-after-delivery-staging` verifies one allowlisted send marks compliance sent + history on staging using **Phase 62 Test Person** fixture; confirms `dry_run` and `live_send_preview` do not mark sent.
+
+**Phase 62 gate:** `npm run verify-scheduled-runner-mark-sent-after-delivery` must pass; `npm run verify-scheduled-runner-mark-sent-after-delivery-staging` must pass against staging with sending enabled.
+
+**Next slice:** TBD — scheduler wiring / idempotency for scheduled path.
 
 ---
 

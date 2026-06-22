@@ -29,6 +29,63 @@ V6 automated email reminders progress in safe, auditable slices. Phase 45–46 e
 | 59 | Scheduled runner live-send gate | None when `live_send` refused; `dry_run` unchanged |
 | 60 | Scheduled runner live-send preview | Preview metadata only (`emailPreview` in delivery logs); no emails |
 | 61 | Scheduled runner controlled live send | `reminder_delivery_logs` (`sent` / `skipped` / `failed`); allowlisted sends only; no mark-as-sent |
+| 62 | Scheduled runner mark sent after delivery | `mark_reminder_sent` after successful `live_send` only; compliance notes + history |
+
+---
+
+## Phase 62 — Scheduled runner mark sent after successful delivery
+
+**Status:** Complete when `npm run verify-scheduled-runner-mark-sent-after-delivery` and `npm run verify-scheduled-runner-mark-sent-after-delivery-staging` pass.
+
+**Goal:** Close the scheduled reminder loop: after each successful **`live_send`** provider delivery and persisted **`sent`** delivery log row, call existing **`mark_reminder_sent`** for that compliance record/reminder type. Skipped, failed, `dry_run`, and `live_send_preview` never mark sent.
+
+### Deliverables
+
+| Item | Location |
+|------|----------|
+| Mark-sent after live_send | `supabase/functions/scheduled-reminder-runner/index.ts` |
+| Static verification gate | `scripts/verify-scheduled-runner-mark-sent-after-delivery.mjs` |
+| Staging verification gate | `scripts/verify-scheduled-runner-mark-sent-after-delivery-staging.mjs` |
+| Runner documentation | [`docs/v6-scheduled-runner.md`](v6-scheduled-runner.md) |
+
+### Behaviour
+
+| Step | Action |
+|------|--------|
+| 1 | Allowlisted candidate passes gates |
+| 2 | `sendReminderEmail` succeeds |
+| 3 | `reminder_delivery_logs` row with `delivery_status=sent`, `provider_message_id`, `sent_at` |
+| 4 | `mark_reminder_sent(p_record_id, p_reminder_type)` via caller JWT |
+| 5 | Response includes `markSentSummary`; `status: completed_with_errors` if step 4 fails after 2–3 |
+
+### Response (`markSentSummary`)
+
+```json
+{
+  "markSentSummary": {
+    "attempted": 1,
+    "markedSent": 1,
+    "failed": 0,
+    "skipped": 0
+  }
+}
+```
+
+### Verification
+
+`npm run verify-scheduled-runner-mark-sent-after-delivery` verifies:
+
+1. `mark_reminder_sent` only in `live_send` path
+2. Ordering: provider success → sent delivery log → mark-sent
+3. Skipped/failed/`dry_run`/`live_send_preview` do not mark sent
+4. Response includes `markSentSummary`
+
+`npm run verify-scheduled-runner-mark-sent-after-delivery-staging` verifies on Alpha staging:
+
+1. One allowlisted send to `SCHEDULED_TEST_EMAIL_TO` via **Phase 62 Test Person** fixture
+2. `markSentSummary.markedSent = 1`
+3. Compliance record notes and `reminder_sent` history entry
+4. Skipped rows unchanged; `dry_run` and `live_send_preview` do not mark sent
 
 ---
 

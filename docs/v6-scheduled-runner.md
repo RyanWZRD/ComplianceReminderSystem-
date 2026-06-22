@@ -722,11 +722,79 @@ supabase functions deploy scheduled-reminder-runner --project-ref vmrotpztwoeifb
 
 ---
 
+**Next slice:** V6 Phase 62 — mark-as-sent after successful scheduled delivery (complete).
+
+---
+
+## Phase 62 — Scheduled runner mark sent after successful delivery
+
+**Goal:** After each successful **`live_send`** provider delivery and persisted **`sent`** delivery log row, call existing **`mark_reminder_sent`** RPC for that compliance record/reminder type. **Successful-delivery-only** — no mark-as-sent for skipped, failed, `dry_run`, or `live_send_preview`.
+
+### Success response (`live_send` — gates enabled, mark-sent succeeded)
+
+```json
+{
+  "status": "ok",
+  "mode": "live_send",
+  "organisationId": "uuid",
+  "automationRunId": "uuid",
+  "summary": { "totalCandidates": 5, "withEmail": 3, "missingEmail": 2, "wouldSend": 3, "wouldSkip": 2 },
+  "deliveryLogSummary": { "total": 5, "sent": 1, "skipped": 4, "failed": 0, "pending": 0 },
+  "sendSummary": {
+    "attempted": 1,
+    "sent": 1,
+    "failed": 0,
+    "skippedMissingEmail": 2,
+    "skippedNotAllowlisted": 2
+  },
+  "markSentSummary": {
+    "attempted": 1,
+    "markedSent": 1,
+    "failed": 0,
+    "skipped": 0
+  }
+}
+```
+
+### Partial success (`mark_reminder_sent` failed after send + log)
+
+```json
+{
+  "status": "completed_with_errors",
+  "mode": "live_send",
+  "markSentSummary": { "attempted": 1, "markedSent": 0, "failed": 1, "skipped": 0 }
+}
+```
+
+HTTP **200** — email was sent and delivery log persisted; compliance mutation failed.
+
+### Ordering (live_send only)
+
+1. `sendReminderEmail` succeeds
+2. `reminder_delivery_logs` row persisted with `delivery_status=sent`, `provider_message_id`, `sent_at`
+3. `mark_reminder_sent(p_record_id, p_reminder_type)` via caller JWT
+4. History entry written per existing RPC behaviour
+
+### Verification
+
+```powershell
+npm run verify-scheduled-runner-mark-sent-after-delivery
+npm run verify-scheduled-runner-mark-sent-after-delivery-staging
+npm run build
+```
+
+**Deploy Phase 62 to staging:**
+
+```powershell
+supabase functions deploy scheduled-reminder-runner --project-ref vmrotpztwoeifbdjwdis
+```
+
+---
+
 ## Next slice (out of scope)
 
-- Mark-as-sent and compliance mutation for scheduled path after operational sign-off
 - Wire scheduler (cron / external job) to invoke dry run or full delivery path
+- Idempotency for scheduled path
 - Invoke `send-reminder-deliveries` after operational sign-off
-- Idempotency and mark-as-sent for scheduled path
 
-See [`docs/v6-automated-email-reminders.md`](v6-automated-email-reminders.md), [`docs/v6-delivery-architecture.md`](v6-delivery-architecture.md) § Phase 47, and [`docs/v5-automated-compliance-operations.md`](v5-automated-compliance-operations.md).
+See [`docs/v6-automated-email-reminders.md`](v6-automated-email-reminders.md), [`docs/v6-delivery-architecture.md`](v6-delivery-architecture.md) § Phase 62, and [`docs/v5-automated-compliance-operations.md`](v5-automated-compliance-operations.md).

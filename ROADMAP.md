@@ -6,6 +6,46 @@ A local-first safeguarding compliance tracker. Runs in the browser with localSto
 
 # Current Release
 
+## V6 Phase 62 — Scheduled Runner Mark Sent After Successful Delivery
+
+**Date:** June 2026
+
+### Summary
+
+V6 Phase 62 closes the scheduled reminder loop by calling **`mark_reminder_sent`** on **`live_send`** only after a successful provider send and persisted **`sent`** delivery log row. Skipped, failed, **`dry_run`**, and **`live_send_preview`** candidates are never marked sent. If mark-as-sent fails after send + log success, the runner returns **`completed_with_errors`** with **`markSentSummary`** — it does not pretend full success.
+
+**Documentation:**
+
+- [`docs/v6-scheduled-runner.md`](docs/v6-scheduled-runner.md) — Phase 62 mark-sent after delivery
+- [`docs/v6-automated-email-reminders.md`](docs/v6-automated-email-reminders.md) — Phase 62 cross-reference
+- [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md) — Phase 62 cross-reference
+
+**Deliverables:**
+
+| Item | Location |
+|------|----------|
+| Mark-sent after live_send delivery | `supabase/functions/scheduled-reminder-runner/index.ts` |
+| Static verification gate | `scripts/verify-scheduled-runner-mark-sent-after-delivery.mjs` |
+| Staging verification gate | `scripts/verify-scheduled-runner-mark-sent-after-delivery-staging.mjs` |
+
+**Prerequisites:**
+
+1. Phase 61 `scheduled-reminder-runner` deployed to staging with live-send gates enabled
+2. Staging Edge secrets: `SCHEDULED_EMAIL_SENDING_ENABLED=true`, `EMAIL_SENDING_ENABLED=true`, `RESEND_API_KEY`, `EMAIL_FROM_ADDRESS`, `SCHEDULED_EMAIL_ALLOWLIST` (must include `SCHEDULED_TEST_EMAIL_TO`)
+3. Local `.env`: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_TEST_PASSWORD`, `SCHEDULED_TEST_EMAIL_TO`
+
+**Verification (required):**
+
+```powershell
+npm run verify-scheduled-runner-mark-sent-after-delivery
+npm run verify-scheduled-runner-mark-sent-after-delivery-staging
+npm run build
+```
+
+**Next slice:** TBD — scheduler wiring / idempotency for scheduled path
+
+---
+
 ## V6 Phase 61 — Scheduled Runner Controlled Live Send (Allowlisted Only)
 
 **Date:** June 2026

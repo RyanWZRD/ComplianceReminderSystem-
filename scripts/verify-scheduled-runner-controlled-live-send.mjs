@@ -123,6 +123,11 @@ assertContains(
   '"verify-scheduled-runner-controlled-live-send-staging"',
   "package.json verify-scheduled-runner-controlled-live-send-staging script",
 );
+assertContains(
+  packageJson,
+  '"verify-scheduled-runner-mark-sent-after-delivery"',
+  "package.json Phase 62 mark-sent verification script",
+);
 
 console.log("--- live_send provider wiring (required) ---");
 
@@ -240,11 +245,15 @@ assertContains(
   "skipped/failed rows keep provider_message_id null when not sent",
 );
 
-console.log("--- safety: no mark-sent or compliance mutation (required) ---");
+console.log("--- safety: mark-sent covered by Phase 62 (required) ---");
+
+assertContains(
+  packageJson,
+  '"verify-scheduled-runner-mark-sent-after-delivery"',
+  "package.json references Phase 62 mark-sent verification",
+);
 
 const forbiddenNeedles = [
-  "mark_reminder_sent",
-  "markReminderSent",
   "send-reminder-deliveries",
   "api.resend.com",
 ];
@@ -351,5 +360,5 @@ if (failures.length > 0) {
 console.log("\nverify-scheduled-runner-controlled-live-send: all checks OK");
 console.log("  mode: live_send — allowlisted recipients only with delivery log audit");
 console.log("  gates: SCHEDULED_EMAIL_SENDING_ENABLED + EMAIL_SENDING_ENABLED + allowlist");
-console.log("  safety: no mark_reminder_sent, no compliance mutation, sequential sends only");
+console.log("  safety: allowlist + delivery log audit; mark-sent verified by Phase 62 scripts");
 console.log("  dry_run and live_send_preview unchanged (no sendReminderEmail)");

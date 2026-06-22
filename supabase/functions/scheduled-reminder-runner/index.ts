@@ -4,7 +4,8 @@
  * Phase 51: persists reminder_delivery_logs rows per dry-run candidate (pending/skipped only).
  * Phase 59: explicit mode gate (dry_run default; live_send refused when sending gate off).
  * Phase 60: live_send_preview — email subject/body preview metadata only; still no sends.
- * Phase 61: live_send — allowlisted recipients only; delivery log audit; no mark-as-sent.
+ * Phase 61: live_send — allowlisted recipients only; delivery log audit.
+ * Phase 62: live_send — mark reminders sent via mark_reminder_sent after successful send + log.
  */
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
@@ -24,6 +25,7 @@ const SCHEDULED_RUNNER_DRY_RUN_RUN_TYPE = "scheduled_reminder_dry_run";
 const SCHEDULED_RUNNER_PREVIEW_RUN_TYPE = "scheduled_reminder_live_send_preview";
 const SCHEDULED_RUNNER_LIVE_SEND_RUN_TYPE = "scheduled_reminder_live_send";
 const BODY_TEXT_PREVIEW_MAX_LENGTH = 500;
+const MARK_SENT_RPC = "mark_reminder_sent";
 
 /**
  * SCHEDULED_EMAIL_SENDING_ENABLED defaults to false when unset or empty.
@@ -1182,6 +1184,110 @@ function buildSendSummary(counts: {
 }
 
 /**
+ * Maps scheduled-runner reminder UI labels to mark_reminder_sent RPC codes.
+ *
+ * @param {string} reminderType
+ */
+function mapReminderUiLabelToRpcCode(reminderType: string): string | null {
+  if (reminderType === REMINDER_UI_LABELS.expired) {
+    return "expired";
+  }
+
+  if (reminderType === REMINDER_UI_LABELS[30]) {
+    return "30";
+  }
+
+  if (reminderType === REMINDER_UI_LABELS[14]) {
+    return "14";
+  }
+
+  if (reminderType === REMINDER_UI_LABELS[7]) {
+    return "7";
+  }
+
+  return null;
+}
+
+/**
+ * @param {SupabaseClient} userSupabase Caller JWT — mark_reminder_sent is security invoker.
+ * @param {string} complianceRecordId
+ * @param {string} reminderTypeRpcCode
+ */
+async function markReminderSentAfterLiveDelivery(
+  userSupabase: SupabaseClient,
+  complianceRecordId: string,
+  reminderTypeRpcCode: string,
+): Promise<{
+  marked: boolean;
+  status: string;
+  error?: string;
+  reason?: string;
+}> {
+  const { data, error } = await userSupabase.rpc(MARK_SENT_RPC, {
+    p_record_id: complianceRecordId,
+    p_reminder_type: reminderTypeRpcCode,
+  });
+
+  if (error) {
+    return {
+      marked: false,
+      status: "failed",
+      error: error.message,
+    };
+  }
+
+  const row =
+    data && typeof data === "object" && !Array.isArray(data)
+      ? /** @type {Record<string, unknown>} */ (data)
+      : {};
+  const status = typeof row.status === "string" ? row.status : "unknown";
+
+  if (status === "marked") {
+    return { marked: true, status: "marked" };
+  }
+
+  if (status === "skipped") {
+    return {
+      marked: false,
+      status: "skipped",
+      reason: typeof row.reason === "string" ? row.reason : "already_sent",
+    };
+  }
+
+  if (status === "not_found") {
+    return { marked: false, status: "not_found" };
+  }
+
+  return {
+    marked: false,
+    status: "failed",
+    error: `unexpected_mark_sent_status:${status}`,
+  };
+}
+
+/**
+ * @param {{
+ *   attempted: number;
+ *   markedSent: number;
+ *   failed: number;
+ *   skipped: number;
+ * }} counts
+ */
+function buildMarkSentSummary(counts: {
+  attempted: number;
+  markedSent: number;
+  failed: number;
+  skipped: number;
+}) {
+  return {
+    attempted: counts.attempted,
+    markedSent: counts.markedSent,
+    failed: counts.failed,
+    skipped: counts.skipped,
+  };
+}
+
+/**
  * @param {SupabaseClient} serviceSupabase
  * @param {string} organisationId
  * @param {string} asOfDateIso
@@ -1278,9 +1384,11 @@ function buildLiveSendCandidateBasePayload(
 }
 
 /**
- * Phase 61: one reminder_delivery_logs row per candidate — send allowlisted only.
+ * Phase 61–62: one reminder_delivery_logs row per candidate — send allowlisted only;
+ * Phase 62 marks sent via mark_reminder_sent after successful send + delivery log.
  *
  * @param {SupabaseClient} serviceSupabase
+ * @param {SupabaseClient} userSupabase Caller JWT for mark_reminder_sent
  * @param {string} organisationId
  * @param {string} automationRunId
  * @param {DryRunCandidate[]} candidates
@@ -1291,6 +1399,7 @@ function buildLiveSendCandidateBasePayload(
  */
 async function processAndInsertLiveSendDeliveryLogs(
   serviceSupabase: SupabaseClient,
+  userSupabase: SupabaseClient,
   organisationId: string,
   automationRunId: string,
   candidates: Array<ComplianceRow & { reminderType: string; hasEmail: boolean }>,
@@ -1303,6 +1412,8 @@ async function processAndInsertLiveSendDeliveryLogs(
       ok: true;
       deliveryLogSummary: ReturnType<typeof buildLiveSendDeliveryLogSummary>;
       sendSummary: ReturnType<typeof buildSendSummary>;
+      markSentSummary: ReturnType<typeof buildMarkSentSummary>;
+      hasMarkSentErrors: boolean;
     }
   | { ok: false; error: string }
 > {
@@ -1312,6 +1423,10 @@ async function processAndInsertLiveSendDeliveryLogs(
   let attempted = 0;
   let skippedMissingEmail = 0;
   let skippedNotAllowlisted = 0;
+  let markSentAttempted = 0;
+  let markSentMarked = 0;
+  let markSentFailed = 0;
+  let markSentSkipped = 0;
 
   for (const candidate of candidates) {
     const basePayload = buildLiveSendCandidateBasePayload(
@@ -1432,6 +1547,29 @@ async function processAndInsertLiveSendDeliveryLogs(
       }
 
       sent += 1;
+
+      markSentAttempted += 1;
+      const reminderTypeRpcCode = mapReminderUiLabelToRpcCode(candidate.reminderType);
+
+      if (!reminderTypeRpcCode) {
+        markSentFailed += 1;
+        continue;
+      }
+
+      const markResult = await markReminderSentAfterLiveDelivery(
+        userSupabase,
+        candidate.recordId,
+        reminderTypeRpcCode,
+      );
+
+      if (markResult.marked) {
+        markSentMarked += 1;
+      } else if (markResult.status === "skipped" || markResult.status === "not_found") {
+        markSentSkipped += 1;
+      } else {
+        markSentFailed += 1;
+      }
+
       continue;
     }
 
@@ -1495,6 +1633,13 @@ async function processAndInsertLiveSendDeliveryLogs(
       skippedMissingEmail,
       skippedNotAllowlisted,
     }),
+    markSentSummary: buildMarkSentSummary({
+      attempted: markSentAttempted,
+      markedSent: markSentMarked,
+      failed: markSentFailed,
+      skipped: markSentSkipped,
+    }),
+    hasMarkSentErrors: markSentFailed > 0,
   };
 }
 
@@ -1637,6 +1782,7 @@ Deno.serve(async (req) => {
 
     const liveSendDeliveryResult = await processAndInsertLiveSendDeliveryLogs(
       serviceSupabase,
+      supabase,
       organisationId,
       liveSendInsertResult.automationRunId,
       candidates,
@@ -1658,9 +1804,12 @@ Deno.serve(async (req) => {
       );
     }
 
-    const { deliveryLogSummary, sendSummary } = liveSendDeliveryResult;
+    const { deliveryLogSummary, sendSummary, markSentSummary, hasMarkSentErrors } =
+      liveSendDeliveryResult;
     const automationStatus =
-      deliveryLogSummary.skipped > 0 || deliveryLogSummary.failed > 0
+      deliveryLogSummary.skipped > 0 ||
+      deliveryLogSummary.failed > 0 ||
+      hasMarkSentErrors
         ? "completed_with_skips"
         : "completed";
 
@@ -1673,13 +1822,14 @@ Deno.serve(async (req) => {
 
     return jsonResponse(
       {
-        status: "ok",
+        status: hasMarkSentErrors ? "completed_with_errors" : "ok",
         mode: SCHEDULED_RUNNER_LIVE_SEND_MODE,
         organisationId,
         automationRunId: liveSendInsertResult.automationRunId,
         summary,
         deliveryLogSummary,
         sendSummary,
+        markSentSummary,
       },
       200,
       corsHeaders,

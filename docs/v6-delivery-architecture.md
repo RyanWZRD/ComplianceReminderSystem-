@@ -420,6 +420,8 @@ interface HealthCheckResult {
 | `npm run verify-scheduled-runner-duplicate-prevention-staging` | Phase 63 — staging verification of duplicate prevention on repeat live_send |
 | `npm run verify-scheduled-runner-failure-handling` | Phase 64 — failure logging and retry-safe posture static checks for live_send |
 | `npm run verify-scheduled-runner-failure-handling-staging` | Phase 64 — staging verification of forced provider failure, retry, and duplicate prevention |
+| `npm run verify-automation-visibility-ui` | Phase 65 — Email Automation read-only UI, cloud SELECT helpers, no execution hooks |
+| `npm run verify-automation-visibility-cloud-load` | Phase 65 — staging admin read smoke for automation_runs and reminder_delivery_logs |
 | `npm run verify-browser-resend-provider-foundation` | Phase 20 — browser orchestrator; runs skeleton foundation + Resend plan + Resend provider in order, stop on first failure |
 | `npm run verify-delivery-operations-log-ui` | Phase 22 — Delivery Operations Log UI, CSV export, no execution hooks |
 | `npm run verify-delivery-worker` | Phase 24 — worker delivery execution engine (in-memory; no app wiring) |
@@ -2029,6 +2031,34 @@ Catalog/introspection queries are preferred; the script does not insert test del
 `npm run verify-scheduled-runner-failure-handling-staging` verifies forced provider failure, retry after failure, and duplicate prevention on third run using **Phase 64 Failure Test Person** fixture.
 
 **Phase 64 gate:** `npm run verify-scheduled-runner-failure-handling` must pass; `npm run verify-scheduled-runner-failure-handling-staging` must pass against staging with sending enabled.
+
+**Next slice:** V6 Phase 65 — read-only admin visibility for automation runs and delivery logs (complete).
+
+---
+
+## Phase 65 — Read-only admin visibility for automation runs and delivery logs
+
+**Scope:** Client-side **SELECT-only** visibility into `automation_runs` and `reminder_delivery_logs` for admin and editor users. The **Email Automation** section shows recent scheduled runs and per-run delivery logs (sent, skipped, failed, pending) with shortened provider message IDs, error details, skip reasons, and duplicate-prevention info from sanitised payload fields. **No sending, retry, mark-sent, or delivery log mutation** from the UI.
+
+### Phase 65 deliverables
+
+| Item | Location |
+|------|----------|
+| `loadAutomationRuns`, `summariseAutomationRun` | `js/app/cloud/automation-runs.js` |
+| `loadDeliveryLogs`, `sanitizePayloadForDisplay` | `js/app/cloud/delivery-logs.js` |
+| Email Automation UI section | `index.html`, `app.js`, `js/app/automation/email-automation-visibility-ui.js` |
+| Static verification gate | `scripts/verify-automation-visibility-ui.mjs` |
+| Staging read smoke gate | `scripts/verify-automation-visibility-cloud-load.mjs` |
+
+**Script:** `scripts/verify-automation-visibility-ui.mjs`
+
+`npm run verify-automation-visibility-ui` verifies cloud read helpers, read-only SELECT (no insert/update/delete/upsert), UI section wiring, delivery status rendering (`sent` / `skipped` / `failed` / `pending`), and absence of send/retry/mark-sent hooks.
+
+**Script:** `scripts/verify-automation-visibility-cloud-load.mjs`
+
+`npm run verify-automation-visibility-cloud-load` signs in as staging admin, loads recent `automation_runs`, loads delivery logs for the latest run, and asserts read succeeds with no writes.
+
+**Phase 65 gate:** `npm run verify-automation-visibility-ui` must pass; `npm run verify-automation-visibility-cloud-load` must pass against staging; `npm run build` must pass.
 
 **Next slice:** TBD — scheduler wiring (cron / external job).
 

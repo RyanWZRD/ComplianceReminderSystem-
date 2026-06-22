@@ -372,6 +372,31 @@
       </div>
     </section>
 
+    <section class="card email-automation-visibility-section" id="email-automation-visibility-section">
+      <h2>Email Automation</h2>
+      <p class="settings-hint">Read-only visibility into scheduled automation runs and per-recipient delivery logs. This view does not send email, retry delivery, or change delivery status.</p>
+      <p id="email-automation-visibility-local-hint" class="settings-hint email-automation-visibility-local-hint hidden">Email automation visibility is available in cloud mode only.</p>
+      <p id="email-automation-visibility-error" class="email-automation-visibility-error hidden" role="alert"></p>
+      <p id="email-automation-visibility-empty" class="settings-hint email-automation-visibility-empty hidden">No automation runs logged yet.</p>
+      <div id="email-automation-visibility-runs-wrapper" class="table-wrapper email-automation-visibility-runs-wrapper hidden">
+        <table class="email-automation-visibility-runs-table">
+          <thead id="email-automation-visibility-runs-head"></thead>
+          <tbody id="email-automation-visibility-runs-body"></tbody>
+        </table>
+      </div>
+      <div id="email-automation-visibility-logs-panel" class="email-automation-visibility-logs-panel hidden">
+        <h3 id="email-automation-visibility-logs-title">Delivery logs</h3>
+        <p id="email-automation-visibility-logs-error" class="email-automation-visibility-logs-error hidden" role="alert"></p>
+        <p id="email-automation-visibility-logs-empty" class="settings-hint email-automation-visibility-logs-empty hidden">No delivery logs for this automation run.</p>
+        <div id="email-automation-visibility-logs-wrapper" class="table-wrapper email-automation-visibility-logs-wrapper hidden">
+          <table class="email-automation-visibility-logs-table">
+            <thead id="email-automation-visibility-logs-head"></thead>
+            <tbody id="email-automation-visibility-logs-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
     <section class="card manual-delivery-test-section hidden" id="manual-delivery-test-section">
       <h2>Manual Delivery Test</h2>
       <p id="manual-delivery-test-safety-note" class="settings-hint manual-delivery-test-safety-note">

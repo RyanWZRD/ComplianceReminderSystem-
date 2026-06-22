@@ -128,6 +128,8 @@
     "verify-scheduled-runner-duplicate-prevention-staging": "node scripts/verify-scheduled-runner-duplicate-prevention-staging.mjs",
     "verify-scheduled-runner-failure-handling": "node scripts/verify-scheduled-runner-failure-handling.mjs",
     "verify-scheduled-runner-failure-handling-staging": "node scripts/verify-scheduled-runner-failure-handling-staging.mjs",
+    "verify-automation-visibility-ui": "node scripts/verify-automation-visibility-ui.mjs",
+    "verify-automation-visibility-cloud-load": "node scripts/verify-automation-visibility-cloud-load.mjs",
     "verify:phase2": "node scripts/verify-phase2.mjs"
   },
   "dependencies": {

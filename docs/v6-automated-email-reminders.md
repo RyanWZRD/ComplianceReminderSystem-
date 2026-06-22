@@ -1,7 +1,7 @@
 # V6 Automated Email Reminders
 
 **Theme:** Server-side scheduled reminder automation — audit and dry-run foundations before live sends.  
-**Phases:** 45 (dry run) · 46 (staging deploy smoke) · 47 (automation run records) · 48 (staging persistence verification) · 49 (delivery log schema) · 50 (staging schema verification) · 51 (dry-run delivery log rows) · 52 (staging delivery log verification) · 53 (email template framework) · 54 (Edge Resend provider foundation) · 55 (provider disabled-mode staging verification) · 56 (controlled manual test-send) · 57 (one real allowlisted staging test email) · 58 (manual test-send delivery log audit) · 59 (scheduled runner live-send gate)  
+**Phases:** 45 (dry run) · 46 (staging deploy smoke) · 47 (automation run records) · 48 (staging persistence verification) · 49 (delivery log schema) · 50 (staging schema verification) · 51 (dry-run delivery log rows) · 52 (staging delivery log verification) · 53 (email template framework) · 54 (Edge Resend provider foundation) · 55 (provider disabled-mode staging verification) · 56 (controlled manual test-send) · 57 (one real allowlisted staging test email) · 58 (manual test-send delivery log audit) · 59 (scheduled runner live-send gate) · 60 (live-send preview) · 61 (controlled live send) · 62 (mark sent after delivery) · 63 (duplicate prevention) · 64 (failure handling) · 65 (read-only admin visibility)  
 **Date:** June 2026
 
 ---
@@ -32,6 +32,39 @@ V6 automated email reminders progress in safe, auditable slices. Phase 45–46 e
 | 62 | Scheduled runner mark sent after delivery | `mark_reminder_sent` after successful `live_send` only; compliance notes + history |
 | 63 | Scheduled runner duplicate prevention | Idempotent `live_send` via `reminder_delivery_logs` lookup; `duplicate_prevented` skip rows |
 | 64 | Scheduled runner failure handling | Failed delivery logs without mark-sent; retry-safe posture; no automatic retries |
+| 65 | Read-only admin visibility | Client SELECT only; Email Automation UI; no sends or mutations |
+
+---
+
+## Phase 65 — Read-only admin visibility for automation runs and delivery logs
+
+**Status:** Complete when `npm run verify-automation-visibility-ui` and `npm run verify-automation-visibility-cloud-load` pass.
+
+**Goal:** Give admin and editor users read-only visibility into scheduled automation runs and per-recipient delivery logs — sent, skipped, failed, and pending outcomes, provider IDs (shortened), and errors — without any send, retry, or mutation controls.
+
+### Deliverables
+
+| Item | Location |
+|------|----------|
+| `loadAutomationRuns`, `summariseAutomationRun` | `js/app/cloud/automation-runs.js` |
+| `loadDeliveryLogs`, `sanitizePayloadForDisplay` | `js/app/cloud/delivery-logs.js` |
+| Email Automation UI section | `index.html`, `app.js`, `js/app/automation/email-automation-visibility-ui.js` |
+| Static verification gate | `scripts/verify-automation-visibility-ui.mjs` |
+| Staging read smoke gate | `scripts/verify-automation-visibility-cloud-load.mjs` |
+
+### Behaviour
+
+- Cloud helpers query `automation_runs` and `reminder_delivery_logs` with **SELECT only**; RLS enforces organisation and role access
+- **Email Automation** section lists recent runs with created date, mode/run type, status, candidate counts, and shortened `automation_run_id`
+- Selecting a run loads linked delivery logs: recipient, compliance type, reminder type, due date, delivery status, provider, shortened message ID, error code/message, created/sent time, skip reason, and duplicate-prevention info from sanitised payload fields
+- Payload display omits secrets and full email body by default (`sanitizePayloadForDisplay`)
+- **No** send, retry, mark-sent, delete, or delivery log mutation controls in the UI
+
+### Verification
+
+`npm run verify-automation-visibility-ui` — helpers exist, read-only SELECT, UI section, status rendering, no forbidden send hooks.
+
+`npm run verify-automation-visibility-cloud-load` — staging admin sign-in, load runs and latest-run logs, assert read succeeds with no writes.
 
 ---
 

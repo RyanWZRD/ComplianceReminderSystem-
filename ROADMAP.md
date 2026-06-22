@@ -6,6 +6,41 @@ A local-first safeguarding compliance tracker. Runs in the browser with localSto
 
 # Current Release
 
+## V6 Phase 65 — Read-Only Admin Visibility for Automation Runs and Delivery Logs
+
+**Date:** June 2026
+
+### Summary
+
+V6 Phase 65 adds **read-only operational visibility** into **`automation_runs`** and **`reminder_delivery_logs`** for admin and editor users. The **Email Automation** section shows recent scheduled runs (mode, status, candidate counts, shortened run IDs) and per-run delivery logs (recipient, compliance context, delivery status, provider message IDs, errors, skip reasons, duplicate-prevention info). Cloud helpers use **direct SELECT** only — RLS enforces org and role access. **No sending, retry, mark-sent, or delivery log mutation** from the UI.
+
+**Documentation:**
+
+- [`docs/v6-automated-email-reminders.md`](docs/v6-automated-email-reminders.md) — Phase 65 cross-reference
+- [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md) — Phase 65 operational visibility
+
+**Deliverables:**
+
+| Item | Location |
+|------|----------|
+| Cloud read helpers (`loadAutomationRuns`, `summariseAutomationRun`) | `js/app/cloud/automation-runs.js` |
+| Cloud read helpers (`loadDeliveryLogs`, `sanitizePayloadForDisplay`) | `js/app/cloud/delivery-logs.js` |
+| Email Automation UI section | `index.html`, `app.js`, `js/app/automation/email-automation-visibility-ui.js` |
+| Static verification gate | `scripts/verify-automation-visibility-ui.mjs` |
+| Staging read smoke gate | `scripts/verify-automation-visibility-cloud-load.mjs` |
+
+**Verification (required):**
+
+```powershell
+npm run verify-automation-visibility-ui
+npm run verify-automation-visibility-cloud-load
+npm run build
+```
+
+**Next slice:** TBD — scheduler wiring (cron / external job)
+
+---
+
 ## V6 Phase 64 — Scheduled Runner Failure Handling and Retry-Safe Delivery Statuses
 
 **Date:** June 2026
@@ -43,7 +78,7 @@ npm run verify-scheduled-runner-failure-handling-staging
 npm run build
 ```
 
-**Next slice:** TBD — scheduler wiring (cron / external job)
+**Next slice:** V6 Phase 65 — read-only admin visibility for automation runs and delivery logs (complete).
 
 ---
 

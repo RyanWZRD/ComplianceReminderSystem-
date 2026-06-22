@@ -539,6 +539,84 @@ header h1 {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
+.email-automation-visibility-section {
+  margin-top: 1.5rem;
+}
+
+.email-automation-visibility-error,
+.email-automation-visibility-logs-error {
+  margin: 0.75rem 0 0;
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  background: #fef2f2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+}
+
+.email-automation-visibility-runs-table,
+.email-automation-visibility-logs-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.email-automation-visibility-runs-table th,
+.email-automation-visibility-runs-table td,
+.email-automation-visibility-logs-table th,
+.email-automation-visibility-logs-table td {
+  padding: 0.625rem 0.75rem;
+  border-bottom: 1px solid #e5e7eb;
+  text-align: left;
+  vertical-align: top;
+}
+
+.email-automation-visibility-runs-table th,
+.email-automation-visibility-logs-table th {
+  font-weight: 600;
+  color: #374151;
+  background: #f9fafb;
+}
+
+.email-automation-visibility-run-row.is-selected {
+  background: #eff6ff;
+}
+
+.email-automation-visibility-row-actions {
+  white-space: nowrap;
+}
+
+.email-automation-visibility-view-logs-btn {
+  font-size: 0.8125rem;
+}
+
+.email-automation-visibility-logs-panel {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid #e5e7eb;
+}
+
+.email-automation-visibility-logs-panel h3 {
+  margin: 0 0 0.75rem;
+  font-size: 1rem;
+}
+
+.email-automation-visibility-detail-row td {
+  padding: 0;
+  background: #f9fafb;
+}
+
+.email-automation-visibility-safe-payload {
+  margin: 0;
+  padding: 0.75rem;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 0.8125rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
 .manual-delivery-test-section {
   margin-top: 1.5rem;
 }

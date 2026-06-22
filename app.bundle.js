@@ -21423,6 +21423,12 @@ ${suffix}`;
     }
     return canAdmin();
   }
+  function canReadAutomationRuns() {
+    if (!isCloudMode()) {
+      return false;
+    }
+    return canEdit();
+  }
   function canRunManualDeliveryTest() {
     if (!isCloudMode()) {
       return false;
@@ -26239,6 +26245,347 @@ ${suffix}`;
     return [headerRow, ...dataRows].join("\n");
   }
 
+  // js/app/cloud/automation-runs.js
+  var AUTOMATION_RUN_SELECT_COLUMNS = [
+    "id",
+    "organisation_id",
+    "automation_run_id",
+    "run_type",
+    "mode",
+    "as_of_date",
+    "started_at",
+    "completed_at",
+    "status",
+    "summary",
+    "error",
+    "created_at",
+    "total_candidates",
+    "with_email",
+    "missing_email",
+    "would_send",
+    "would_skip"
+  ].join(", ");
+  function toCount(value) {
+    return typeof value === "number" && !Number.isNaN(value) ? value : 0;
+  }
+  function mapAutomationRunFromRow(row) {
+    return {
+      id: String(row.id ?? ""),
+      organisationId: String(row.organisation_id ?? ""),
+      automationRunId: String(row.automation_run_id ?? ""),
+      runType: typeof row.run_type === "string" ? row.run_type : "",
+      mode: typeof row.mode === "string" ? row.mode : "",
+      asOfDate: typeof row.as_of_date === "string" ? row.as_of_date : null,
+      startedAt: String(row.started_at ?? ""),
+      completedAt: typeof row.completed_at === "string" ? row.completed_at : null,
+      status: typeof row.status === "string" ? row.status : "",
+      summary: row.summary && typeof row.summary === "object" && !Array.isArray(row.summary) ? row.summary : {},
+      error: typeof row.error === "string" ? row.error : null,
+      createdAt: String(row.created_at ?? ""),
+      totalCandidates: toCount(row.total_candidates),
+      withEmail: toCount(row.with_email),
+      missingEmail: toCount(row.missing_email),
+      wouldSend: toCount(row.would_send),
+      wouldSkip: toCount(row.would_skip)
+    };
+  }
+  function summariseAutomationRun(run, logs) {
+    const logEntries = Array.isArray(logs) ? logs : [];
+    let sent = 0;
+    let skipped = 0;
+    let failed = 0;
+    let pending = 0;
+    for (const log of logEntries) {
+      const status = String(log.deliveryStatus ?? "").toLowerCase();
+      if (status === "sent") {
+        sent += 1;
+      } else if (status === "skipped") {
+        skipped += 1;
+      } else if (status === "failed") {
+        failed += 1;
+      } else if (status === "pending") {
+        pending += 1;
+      }
+    }
+    const totalCandidates = run.totalCandidates > 0 ? run.totalCandidates : logEntries.length;
+    const wouldSend = run.wouldSend > 0 ? run.wouldSend : pending + sent + failed;
+    const skippedCount = logEntries.length > 0 ? skipped : run.wouldSkip;
+    return {
+      totalCandidates,
+      wouldSend,
+      skipped: skippedCount,
+      failed,
+      sent,
+      pending
+    };
+  }
+  async function loadAutomationRuns(options = {}) {
+    if (!isSupabaseConfigured()) {
+      return {
+        ok: false,
+        error: "Supabase is not configured. Run npm run sync-env after setting .env."
+      };
+    }
+    await waitForAuthReady();
+    if (!isAuthenticated()) {
+      return { ok: false, error: "Not signed in. Sign in before loading automation runs." };
+    }
+    const sessionOrganisationId = getOrganisationId();
+    const organisationId = options.organisationId ?? sessionOrganisationId;
+    if (!organisationId) {
+      return { ok: false, error: "No organisation on the current session profile." };
+    }
+    if (sessionOrganisationId && organisationId !== sessionOrganisationId) {
+      return { ok: false, error: "Organisation mismatch for automation run read." };
+    }
+    const limit = typeof options.limit === "number" && options.limit > 0 ? options.limit : 25;
+    try {
+      const supabase = getSupabaseClient();
+      const { data, error } = await supabase.from("automation_runs").select(AUTOMATION_RUN_SELECT_COLUMNS).eq("organisation_id", organisationId).order("created_at", { ascending: false }).limit(limit);
+      if (error) {
+        return { ok: false, error: error.message };
+      }
+      const runs = (data ?? []).map((row) => mapAutomationRunFromRow(row));
+      return { ok: true, runs };
+    } catch (error) {
+      const loadError = error instanceof Error ? error : new Error(String(error));
+      return { ok: false, error: loadError };
+    }
+  }
+
+  // js/app/automation/email-automation-visibility-ui.js
+  var EMAIL_AUTOMATION_VISIBILITY_EMPTY_MESSAGE = "No automation runs logged yet.";
+  var EMAIL_AUTOMATION_DELIVERY_LOG_EMPTY_MESSAGE = "No delivery logs for this automation run.";
+  var EMAIL_AUTOMATION_RUN_COLUMNS = [
+    { key: "createdAt", label: "Created" },
+    { key: "modeRunType", label: "Mode / run type" },
+    { key: "status", label: "Status" },
+    { key: "totalCandidates", label: "Total candidates" },
+    { key: "wouldSend", label: "Would send" },
+    { key: "skipped", label: "Skipped" },
+    { key: "failed", label: "Failed" },
+    { key: "sent", label: "Sent" },
+    { key: "automationRunId", label: "Run ID" },
+    { key: "actions", label: "" }
+  ];
+  var EMAIL_AUTOMATION_DELIVERY_LOG_COLUMNS = [
+    { key: "recipient", label: "Recipient" },
+    { key: "complianceType", label: "Compliance type" },
+    { key: "reminderType", label: "Reminder type" },
+    { key: "dueDate", label: "Due date" },
+    { key: "deliveryStatus", label: "Status" },
+    { key: "provider", label: "Provider" },
+    { key: "providerMessageId", label: "Message ID" },
+    { key: "error", label: "Error" },
+    { key: "createdSentAt", label: "Created / sent" },
+    { key: "skipReason", label: "Skip reason" },
+    { key: "duplicateInfo", label: "Duplicate info" }
+  ];
+  function shortenDisplayId(value, visibleStart = 8, visibleEnd = 4) {
+    if (typeof value !== "string" || !value.trim()) {
+      return "\u2014";
+    }
+    const trimmed = value.trim();
+    if (trimmed.length <= visibleStart + visibleEnd + 1) {
+      return trimmed;
+    }
+    return `${trimmed.slice(0, visibleStart)}\u2026${trimmed.slice(-visibleEnd)}`;
+  }
+  function formatEmailAutomationTimestamp(isoString) {
+    if (typeof isoString !== "string" || !isoString.trim()) {
+      return "\u2014";
+    }
+    const date = new Date(isoString);
+    if (Number.isNaN(date.getTime())) {
+      return "\u2014";
+    }
+    return date.toLocaleString("en-GB", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit"
+    });
+  }
+  function formatEmailAutomationDate(dateValue) {
+    if (typeof dateValue !== "string" || !dateValue.trim()) {
+      return "\u2014";
+    }
+    const date = /* @__PURE__ */ new Date(`${dateValue.trim()}T00:00:00`);
+    if (Number.isNaN(date.getTime())) {
+      return dateValue;
+    }
+    return date.toLocaleDateString("en-GB", {
+      day: "numeric",
+      month: "short",
+      year: "numeric"
+    });
+  }
+  function mapAutomationRunToVisibilityRow(run, logs = []) {
+    const summary = summariseAutomationRun(run, logs);
+    const mode = run.mode?.trim() || "\u2014";
+    const runType = run.runType?.trim() || "\u2014";
+    return {
+      automationRunId: run.automationRunId,
+      createdAt: formatEmailAutomationTimestamp(run.createdAt || run.startedAt),
+      modeRunType: `${mode} / ${runType}`,
+      status: run.status?.trim() || "\u2014",
+      totalCandidates: String(summary.totalCandidates),
+      wouldSend: String(summary.wouldSend),
+      skipped: String(summary.skipped),
+      failed: String(summary.failed),
+      sent: String(summary.sent),
+      runIdShort: shortenDisplayId(run.automationRunId)
+    };
+  }
+  function mapDeliveryLogToVisibilityRow(log) {
+    const safePayload = log.safePayload ?? {};
+    const reason = typeof safePayload.reason === "string" && safePayload.reason.trim() ? safePayload.reason.trim() : "\u2014";
+    const duplicateOf = typeof safePayload.duplicateOfDeliveryLogId === "string" && safePayload.duplicateOfDeliveryLogId.trim() ? shortenDisplayId(safePayload.duplicateOfDeliveryLogId) : "";
+    const duplicateInfo = reason === "duplicate_prevented" || duplicateOf ? duplicateOf ? `Prevented duplicate of ${duplicateOf}` : "Duplicate prevented" : "\u2014";
+    const errorParts = [log.errorCode, log.errorMessage].filter(
+      (part) => typeof part === "string" && part.trim()
+    );
+    const createdLabel = formatEmailAutomationTimestamp(log.createdAt);
+    const sentLabel = log.sentAt ? formatEmailAutomationTimestamp(log.sentAt) : "";
+    const createdSentAt = sentLabel ? `${createdLabel} / ${sentLabel}` : createdLabel;
+    const recipient = log.recipientEmail || (log.recipientName ? `${log.recipientName} (no email)` : null) || "\u2014";
+    return {
+      id: log.id,
+      recipient,
+      complianceType: log.complianceType || "\u2014",
+      reminderType: log.reminderType || "\u2014",
+      dueDate: formatEmailAutomationDate(log.dueDate),
+      deliveryStatus: log.deliveryStatus?.trim() || "\u2014",
+      provider: log.provider || "\u2014",
+      providerMessageId: shortenDisplayId(log.providerMessageId),
+      error: errorParts.length > 0 ? errorParts.join(": ") : "\u2014",
+      createdSentAt,
+      skipReason: log.deliveryStatus === "skipped" ? reason : "\u2014",
+      duplicateInfo,
+      safePayloadJson: JSON.stringify(safePayload, null, 2)
+    };
+  }
+  function mapDeliveryLogsToVisibilityRows(logs) {
+    if (!Array.isArray(logs)) {
+      return [];
+    }
+    return logs.map((log) => mapDeliveryLogToVisibilityRow(log));
+  }
+
+  // js/app/cloud/delivery-logs.js
+  var DELIVERY_LOG_SELECT_COLUMNS = [
+    "id",
+    "organisation_id",
+    "automation_run_id",
+    "compliance_record_id",
+    "person_id",
+    "recipient_email",
+    "recipient_name",
+    "compliance_type",
+    "reminder_type",
+    "due_date",
+    "delivery_status",
+    "provider",
+    "provider_message_id",
+    "error_code",
+    "error_message",
+    "payload",
+    "created_at",
+    "sent_at"
+  ].join(", ");
+  var PAYLOAD_SAFE_KEYS = [
+    "mode",
+    "reason",
+    "asOfDate",
+    "duplicateOfDeliveryLogId",
+    "duplicatePrevented",
+    "organisationName",
+    "complianceType",
+    "reminderType",
+    "personId",
+    "recordId"
+  ];
+  function toNullableString(value) {
+    return typeof value === "string" && value.trim() ? value.trim() : null;
+  }
+  function sanitizePayloadForDisplay(payload) {
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+      return {};
+    }
+    const safe = {};
+    for (const key of PAYLOAD_SAFE_KEYS) {
+      if (Object.prototype.hasOwnProperty.call(payload, key)) {
+        const value = payload[key];
+        if (value === null || typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+          safe[key] = value;
+        }
+      }
+    }
+    return safe;
+  }
+  function mapDeliveryLogFromRow(row) {
+    const payload = row.payload && typeof row.payload === "object" && !Array.isArray(row.payload) ? row.payload : {};
+    return {
+      id: String(row.id ?? ""),
+      organisationId: String(row.organisation_id ?? ""),
+      automationRunId: toNullableString(row.automation_run_id),
+      complianceRecordId: toNullableString(row.compliance_record_id),
+      personId: toNullableString(row.person_id),
+      recipientEmail: toNullableString(row.recipient_email),
+      recipientName: toNullableString(row.recipient_name),
+      complianceType: toNullableString(row.compliance_type),
+      reminderType: toNullableString(row.reminder_type),
+      dueDate: toNullableString(row.due_date),
+      deliveryStatus: typeof row.delivery_status === "string" ? row.delivery_status : "",
+      provider: toNullableString(row.provider),
+      providerMessageId: toNullableString(row.provider_message_id),
+      errorCode: toNullableString(row.error_code),
+      errorMessage: toNullableString(row.error_message),
+      payload,
+      safePayload: sanitizePayloadForDisplay(payload),
+      createdAt: String(row.created_at ?? ""),
+      sentAt: toNullableString(row.sent_at)
+    };
+  }
+  async function loadDeliveryLogs(options = {}) {
+    if (!isSupabaseConfigured()) {
+      return {
+        ok: false,
+        error: "Supabase is not configured. Run npm run sync-env after setting .env."
+      };
+    }
+    await waitForAuthReady();
+    if (!isAuthenticated()) {
+      return { ok: false, error: "Not signed in. Sign in before loading delivery logs." };
+    }
+    const sessionOrganisationId = getOrganisationId();
+    const organisationId = options.organisationId ?? sessionOrganisationId;
+    if (!organisationId) {
+      return { ok: false, error: "No organisation on the current session profile." };
+    }
+    if (sessionOrganisationId && organisationId !== sessionOrganisationId) {
+      return { ok: false, error: "Organisation mismatch for delivery log read." };
+    }
+    const limit = typeof options.limit === "number" && options.limit > 0 ? options.limit : 100;
+    try {
+      const supabase = getSupabaseClient();
+      let query = supabase.from("reminder_delivery_logs").select(DELIVERY_LOG_SELECT_COLUMNS).eq("organisation_id", organisationId).order("created_at", { ascending: false }).limit(limit);
+      if (options.automationRunId) {
+        query = query.eq("automation_run_id", options.automationRunId);
+      }
+      const { data, error } = await query;
+      if (error) {
+        return { ok: false, error: error.message };
+      }
+      const logs = (data ?? []).map((row) => mapDeliveryLogFromRow(row));
+      return { ok: true, logs };
+    } catch (error) {
+      const loadError = error instanceof Error ? error : new Error(String(error));
+      return { ok: false, error: loadError };
+    }
+  }
+
   // js/app/automation/edge-delivery-invoke.js
   var SEND_REMINDER_DELIVERIES_FUNCTION = "send-reminder-deliveries";
   function buildSendReminderDeliveriesUrl() {
@@ -27445,6 +27792,42 @@ ${template.bodyText}`;
   );
   var deliveryOperationsLogTableHead = document.getElementById("delivery-operations-log-table-head");
   var deliveryOperationsLogTableBody = document.getElementById("delivery-operations-log-table-body");
+  var emailAutomationVisibilitySection = document.getElementById("email-automation-visibility-section");
+  var emailAutomationVisibilityLocalHint = document.getElementById(
+    "email-automation-visibility-local-hint"
+  );
+  var emailAutomationVisibilityError = document.getElementById("email-automation-visibility-error");
+  var emailAutomationVisibilityEmpty = document.getElementById("email-automation-visibility-empty");
+  var emailAutomationVisibilityRunsWrapper = document.getElementById(
+    "email-automation-visibility-runs-wrapper"
+  );
+  var emailAutomationVisibilityRunsHead = document.getElementById(
+    "email-automation-visibility-runs-head"
+  );
+  var emailAutomationVisibilityRunsBody = document.getElementById(
+    "email-automation-visibility-runs-body"
+  );
+  var emailAutomationVisibilityLogsPanel = document.getElementById(
+    "email-automation-visibility-logs-panel"
+  );
+  var emailAutomationVisibilityLogsTitle = document.getElementById(
+    "email-automation-visibility-logs-title"
+  );
+  var emailAutomationVisibilityLogsError = document.getElementById(
+    "email-automation-visibility-logs-error"
+  );
+  var emailAutomationVisibilityLogsEmpty = document.getElementById(
+    "email-automation-visibility-logs-empty"
+  );
+  var emailAutomationVisibilityLogsWrapper = document.getElementById(
+    "email-automation-visibility-logs-wrapper"
+  );
+  var emailAutomationVisibilityLogsHead = document.getElementById(
+    "email-automation-visibility-logs-head"
+  );
+  var emailAutomationVisibilityLogsBody = document.getElementById(
+    "email-automation-visibility-logs-body"
+  );
   var manualDeliveryTestSection = document.getElementById("manual-delivery-test-section");
   var manualDeliveryTestSafetyNote = document.getElementById("manual-delivery-test-safety-note");
   var manualDeliveryTestTotalCount = document.getElementById("manual-delivery-test-total-count");
@@ -27489,6 +27872,13 @@ ${template.bodyText}`;
   var automationRunAuditLoadError = "";
   var deliveryOperationsLogLoadState = "idle";
   var deliveryOperationsLogLoadError = "";
+  var emailAutomationVisibilityLoadState = "idle";
+  var emailAutomationVisibilityLoadError = "";
+  var emailAutomationDeliveryLogsLoadState = "idle";
+  var emailAutomationDeliveryLogsLoadError = "";
+  var emailAutomationRuns = [];
+  var emailAutomationDeliveryLogs = [];
+  var selectedEmailAutomationRunId = "";
   var manualDeliveryTestExecutionState = "idle";
   var manualDeliveryTestErrorMessage = "";
   var expandedDeliveryLogIds = /* @__PURE__ */ new Set();
@@ -32191,6 +32581,230 @@ This cannot be undone.`
       "text/csv;charset=utf-8"
     );
   }
+  function renderEmailAutomationVisibility() {
+    if (!emailAutomationVisibilitySection || !emailAutomationVisibilityLocalHint || !emailAutomationVisibilityError || !emailAutomationVisibilityEmpty || !emailAutomationVisibilityRunsWrapper || !emailAutomationVisibilityRunsHead || !emailAutomationVisibilityRunsBody || !emailAutomationVisibilityLogsPanel || !emailAutomationVisibilityLogsTitle || !emailAutomationVisibilityLogsError || !emailAutomationVisibilityLogsEmpty || !emailAutomationVisibilityLogsWrapper || !emailAutomationVisibilityLogsHead || !emailAutomationVisibilityLogsBody) {
+      return;
+    }
+    const visible = canReadAutomationRuns();
+    emailAutomationVisibilitySection.classList.toggle("hidden", !visible);
+    if (!visible) {
+      emailAutomationVisibilityLoadState = "denied";
+      return;
+    }
+    emailAutomationVisibilityLocalHint.classList.add("hidden");
+    emailAutomationVisibilityError.classList.add("hidden");
+    emailAutomationVisibilityEmpty.classList.add("hidden");
+    emailAutomationVisibilityRunsWrapper.classList.add("hidden");
+    emailAutomationVisibilityLogsPanel.classList.add("hidden");
+    if (emailAutomationVisibilityLoadState === "local") {
+      emailAutomationVisibilityLocalHint.classList.remove("hidden");
+      emailAutomationVisibilityRunsHead.innerHTML = "";
+      emailAutomationVisibilityRunsBody.innerHTML = "";
+      return;
+    }
+    if (emailAutomationVisibilityLoadState === "loading") {
+      emailAutomationVisibilityRunsHead.innerHTML = "";
+      emailAutomationVisibilityRunsBody.innerHTML = "";
+      return;
+    }
+    if (emailAutomationVisibilityLoadState === "error") {
+      emailAutomationVisibilityError.textContent = emailAutomationVisibilityLoadError || "Could not load automation runs. Check your connection and try signing in again.";
+      emailAutomationVisibilityError.classList.remove("hidden");
+      emailAutomationVisibilityRunsHead.innerHTML = "";
+      emailAutomationVisibilityRunsBody.innerHTML = "";
+      return;
+    }
+    if (emailAutomationRuns.length === 0) {
+      emailAutomationVisibilityEmpty.textContent = EMAIL_AUTOMATION_VISIBILITY_EMPTY_MESSAGE;
+      emailAutomationVisibilityEmpty.classList.remove("hidden");
+      emailAutomationVisibilityRunsHead.innerHTML = "";
+      emailAutomationVisibilityRunsBody.innerHTML = "";
+      return;
+    }
+    emailAutomationVisibilityRunsWrapper.classList.remove("hidden");
+    emailAutomationVisibilityRunsHead.innerHTML = `<tr>${EMAIL_AUTOMATION_RUN_COLUMNS.map(
+      (column) => `<th scope="col">${escapeHtml(column.label)}</th>`
+    ).join("")}</tr>`;
+    emailAutomationVisibilityRunsBody.innerHTML = emailAutomationRuns.map((run) => {
+      const row = mapAutomationRunToVisibilityRow(run);
+      const isSelected = selectedEmailAutomationRunId === run.automationRunId;
+      const logsLabel = isSelected ? "Hide logs" : "View logs";
+      return `
+          <tr class="email-automation-visibility-run-row${isSelected ? " is-selected" : ""}" data-automation-run-id="${escapeHtml(run.automationRunId)}">
+            <td>${escapeHtml(row.createdAt)}</td>
+            <td>${escapeHtml(row.modeRunType)}</td>
+            <td>${escapeHtml(row.status)}</td>
+            <td>${escapeHtml(row.totalCandidates)}</td>
+            <td>${escapeHtml(row.wouldSend)}</td>
+            <td>${escapeHtml(row.skipped)}</td>
+            <td>${escapeHtml(row.failed)}</td>
+            <td>${escapeHtml(row.sent)}</td>
+            <td title="${escapeHtml(run.automationRunId)}">${escapeHtml(row.runIdShort)}</td>
+            <td class="email-automation-visibility-row-actions">
+              <button
+                type="button"
+                class="quick-action-btn email-automation-visibility-view-logs-btn"
+                data-automation-run-id="${escapeHtml(run.automationRunId)}"
+                aria-expanded="${isSelected ? "true" : "false"}"
+              >${escapeHtml(logsLabel)}</button>
+            </td>
+          </tr>`;
+    }).join("");
+    if (!selectedEmailAutomationRunId) {
+      return;
+    }
+    emailAutomationVisibilityLogsPanel.classList.remove("hidden");
+    emailAutomationVisibilityLogsTitle.textContent = `Delivery logs for run ${shortenDisplayId(selectedEmailAutomationRunId)}`;
+    emailAutomationVisibilityLogsError.classList.add("hidden");
+    emailAutomationVisibilityLogsEmpty.classList.add("hidden");
+    emailAutomationVisibilityLogsWrapper.classList.add("hidden");
+    if (emailAutomationDeliveryLogsLoadState === "loading") {
+      return;
+    }
+    if (emailAutomationDeliveryLogsLoadState === "error") {
+      emailAutomationVisibilityLogsError.textContent = emailAutomationDeliveryLogsLoadError || "Could not load delivery logs for this automation run.";
+      emailAutomationVisibilityLogsError.classList.remove("hidden");
+      return;
+    }
+    const logRows = mapDeliveryLogsToVisibilityRows(emailAutomationDeliveryLogs);
+    if (logRows.length === 0) {
+      emailAutomationVisibilityLogsEmpty.textContent = EMAIL_AUTOMATION_DELIVERY_LOG_EMPTY_MESSAGE;
+      emailAutomationVisibilityLogsEmpty.classList.remove("hidden");
+      return;
+    }
+    emailAutomationVisibilityLogsWrapper.classList.remove("hidden");
+    emailAutomationVisibilityLogsHead.innerHTML = `<tr>${EMAIL_AUTOMATION_DELIVERY_LOG_COLUMNS.map(
+      (column) => `<th scope="col">${escapeHtml(column.label)}</th>`
+    ).join("")}</tr>`;
+    emailAutomationVisibilityLogsBody.innerHTML = logRows.map(
+      (row) => `
+          <tr class="email-automation-visibility-log-row" data-log-id="${escapeHtml(row.id)}">
+            <td>${escapeHtml(row.recipient)}</td>
+            <td>${escapeHtml(row.complianceType)}</td>
+            <td>${escapeHtml(row.reminderType)}</td>
+            <td>${escapeHtml(row.dueDate)}</td>
+            <td>${escapeHtml(row.deliveryStatus)}</td>
+            <td>${escapeHtml(row.provider)}</td>
+            <td title="${escapeHtml(row.providerMessageId)}">${escapeHtml(row.providerMessageId)}</td>
+            <td>${escapeHtml(row.error)}</td>
+            <td>${escapeHtml(row.createdSentAt)}</td>
+            <td>${escapeHtml(row.skipReason)}</td>
+            <td>${escapeHtml(row.duplicateInfo)}</td>
+          </tr>`
+    ).join("");
+  }
+  async function loadEmailAutomationDeliveryLogs(automationRunId) {
+    if (!automationRunId) {
+      emailAutomationDeliveryLogs = [];
+      emailAutomationDeliveryLogsLoadState = "idle";
+      emailAutomationDeliveryLogsLoadError = "";
+      renderEmailAutomationVisibility();
+      return;
+    }
+    const organisationId = getOrganisationId();
+    if (!organisationId) {
+      emailAutomationDeliveryLogsLoadState = "error";
+      emailAutomationDeliveryLogsLoadError = "Organisation context is missing. Sign in again.";
+      renderEmailAutomationVisibility();
+      return;
+    }
+    emailAutomationDeliveryLogsLoadState = "loading";
+    emailAutomationDeliveryLogsLoadError = "";
+    renderEmailAutomationVisibility();
+    const result = await loadDeliveryLogs({
+      organisationId,
+      automationRunId,
+      limit: 200
+    });
+    if (!result.ok) {
+      emailAutomationDeliveryLogsLoadState = "error";
+      emailAutomationDeliveryLogsLoadError = result.error instanceof Error ? result.error.message : String(result.error ?? "");
+      emailAutomationDeliveryLogs = [];
+      renderEmailAutomationVisibility();
+      return;
+    }
+    emailAutomationDeliveryLogs = result.logs ?? [];
+    emailAutomationDeliveryLogsLoadState = "loaded";
+    emailAutomationDeliveryLogsLoadError = "";
+    renderEmailAutomationVisibility();
+  }
+  async function selectEmailAutomationRun(automationRunId) {
+    if (!automationRunId) {
+      return;
+    }
+    if (selectedEmailAutomationRunId === automationRunId) {
+      selectedEmailAutomationRunId = "";
+      emailAutomationDeliveryLogs = [];
+      emailAutomationDeliveryLogsLoadState = "idle";
+      emailAutomationDeliveryLogsLoadError = "";
+      renderEmailAutomationVisibility();
+      return;
+    }
+    selectedEmailAutomationRunId = automationRunId;
+    renderEmailAutomationVisibility();
+    await loadEmailAutomationDeliveryLogs(automationRunId);
+  }
+  function handleEmailAutomationVisibilityRunsClick(event) {
+    const logsButton = event.target.closest(".email-automation-visibility-view-logs-btn");
+    if (!logsButton) {
+      return;
+    }
+    void selectEmailAutomationRun(logsButton.dataset.automationRunId);
+  }
+  async function loadEmailAutomationVisibility() {
+    if (!emailAutomationVisibilitySection) {
+      return;
+    }
+    if (!isCloudMode()) {
+      emailAutomationVisibilityLoadState = "local";
+      emailAutomationVisibilityLoadError = "";
+      emailAutomationRuns = [];
+      selectedEmailAutomationRunId = "";
+      emailAutomationDeliveryLogs = [];
+      renderEmailAutomationVisibility();
+      return;
+    }
+    if (!canReadAutomationRuns()) {
+      emailAutomationVisibilityLoadState = "denied";
+      renderEmailAutomationVisibility();
+      return;
+    }
+    const organisationId = getOrganisationId();
+    if (!organisationId) {
+      emailAutomationVisibilityLoadState = "error";
+      emailAutomationVisibilityLoadError = "Organisation context is missing. Sign in again.";
+      renderEmailAutomationVisibility();
+      return;
+    }
+    emailAutomationVisibilityLoadState = "loading";
+    renderEmailAutomationVisibility();
+    const result = await loadAutomationRuns({ organisationId, limit: 25 });
+    if (!result.ok) {
+      emailAutomationVisibilityLoadState = "error";
+      emailAutomationVisibilityLoadError = result.error instanceof Error ? result.error.message : String(result.error ?? "");
+      emailAutomationRuns = [];
+      renderEmailAutomationVisibility();
+      return;
+    }
+    emailAutomationRuns = result.runs ?? [];
+    emailAutomationVisibilityLoadState = "loaded";
+    emailAutomationVisibilityLoadError = "";
+    if (selectedEmailAutomationRunId && !emailAutomationRuns.some((run) => run.automationRunId === selectedEmailAutomationRunId)) {
+      selectedEmailAutomationRunId = "";
+      emailAutomationDeliveryLogs = [];
+      emailAutomationDeliveryLogsLoadState = "idle";
+    }
+    renderEmailAutomationVisibility();
+    if (selectedEmailAutomationRunId) {
+      await loadEmailAutomationDeliveryLogs(selectedEmailAutomationRunId);
+    }
+  }
+  function setupEmailAutomationVisibilityListeners() {
+    emailAutomationVisibilityRunsBody?.addEventListener(
+      "click",
+      handleEmailAutomationVisibilityRunsClick
+    );
+  }
   function renderManualDeliveryTest() {
     if (!manualDeliveryTestSection || !manualDeliveryTestSafetyNote || !manualDeliveryTestTotalCount || !manualDeliveryTestMissingEmailCount || !manualDeliveryTestModeValue || !manualDeliveryTestProviderHint || !manualDeliveryTestLoading || !manualDeliveryTestError || !manualDeliveryTestResult || !manualDeliveryTestResultAttempted || !manualDeliveryTestResultDelivered || !manualDeliveryTestResultFailed || !manualDeliveryTestResultSkipped || !manualDeliveryTestRunBtn) {
       return;
@@ -35686,6 +36300,7 @@ Your current data will be overwritten. Continue?`
     renderManualDeliveryTest();
     await loadAutomationRunAudit();
     await loadDeliveryOperationsLog();
+    await loadEmailAutomationVisibility();
     document.documentElement.dataset.appReady = "true";
     return true;
   }
@@ -35705,6 +36320,7 @@ Your current data will be overwritten. Continue?`
     setupReminderQueuePreviewListeners();
     setupAutomationRunAuditListeners();
     setupDeliveryOperationsLogListeners();
+    setupEmailAutomationVisibilityListeners();
     setupManualDeliveryTestListeners();
     setupRecordWorkspaceListeners();
     setupReportListeners();

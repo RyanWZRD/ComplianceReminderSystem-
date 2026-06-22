@@ -406,6 +406,8 @@ interface HealthCheckResult {
 | `npm run verify-send-test-email-function` | Phase 56 — manual test-send function static/config checks (no live sends) |
 | `npm run verify-send-test-email-disabled-staging` | Phase 56 — staging verification that send-test-email refuses when sending disabled |
 | `npm run verify-send-test-email-live-staging` | Phase 57 — staging verification of one real allowlisted manual test email |
+| `npm run verify-send-test-email-delivery-log-audit` | Phase 58 — manual test-send delivery log audit static checks |
+| `npm run verify-send-test-email-delivery-log-audit-staging` | Phase 58 — staging verification of one manual test-send delivery log row |
 | `npm run verify-browser-resend-provider-foundation` | Phase 20 — browser orchestrator; runs skeleton foundation + Resend plan + Resend provider in order, stop on first failure |
 | `npm run verify-delivery-operations-log-ui` | Phase 22 — Delivery Operations Log UI, CSV export, no execution hooks |
 | `npm run verify-delivery-worker` | Phase 24 — worker delivery execution engine (in-memory; no app wiring) |
@@ -1904,6 +1906,76 @@ Catalog/introspection queries are preferred; the script does not insert test del
 **Phase 54 gate:** `npm run verify-resend-provider-foundation` must pass.
 
 **Next slice:** V6 Phase 55 — provider disabled-mode staging verification (complete).
+
+---
+
+## Phase 58 — Manual test-send delivery log audit
+
+**Scope:** When `send-test-email` successfully sends one manual test email, persist **one `reminder_delivery_logs` audit row** via service role. **Manual test-send audit only** — no `scheduled-reminder-runner` email sending, no compliance reminder sends, no `mark_reminder_sent`, no compliance record mutation, and **no `automation_runs` writes**.
+
+### Phase 58 deliverables
+
+| Item | Location |
+|------|----------|
+| Delivery log audit on manual test send | `supabase/functions/send-test-email/index.ts` |
+| Static verification gate | `scripts/verify-send-test-email-delivery-log-audit.mjs` |
+| Staging live verification gate | `scripts/verify-send-test-email-delivery-log-audit-staging.mjs` |
+| Contract reference | [`docs/v6-automated-email-reminders.md`](v6-automated-email-reminders.md) |
+
+**Deploy before staging verification:**
+
+```powershell
+supabase functions deploy send-test-email --project-ref vmrotpztwoeifbdjwdis
+```
+
+**Script:** `scripts/verify-send-test-email-delivery-log-audit.mjs`
+
+`npm run verify-send-test-email-delivery-log-audit` verifies:
+
+1. `send-test-email` inserts into `reminder_delivery_logs` only after provider success
+2. `delivery_status = sent`; `sent_at` and `provider_message_id` set only in `send-test-email` audit path (not `scheduled-reminder-runner`)
+3. `scheduled-reminder-runner` still does not import `email-provider` or send emails
+4. No `mark_reminder_sent`, compliance mutation, or bulk send loop
+5. Response includes `deliveryLogId`
+6. `npm run build` passes
+
+**Script:** `scripts/verify-send-test-email-delivery-log-audit-staging.mjs`
+
+`npm run verify-send-test-email-delivery-log-audit-staging` verifies:
+
+1. Signs in as staging admin; records `reminder_delivery_logs` and `automation_runs` baselines
+2. Invokes `send-test-email` once with `TEST_EMAIL_TO`
+3. Asserts response `status: sent`, `providerMessageId`, and `deliveryLogId`
+4. Queries `reminder_delivery_logs` by `deliveryLogId` — `delivery_status: sent`, `provider: resend`, `compliance_type: manual_test_email`, `reminder_type: manual_test`, `payload.mode: manual_test_send`
+5. Asserts exactly one new delivery log row; no new `automation_runs` row
+6. `scheduled-reminder-runner` remains disconnected (static checks)
+
+### Phase 58 audit row (successful manual test send)
+
+| Field | Value |
+|-------|-------|
+| `organisation_id` | Request `organisationId` when provided and accessible; else Alpha staging org |
+| `delivery_status` | `sent` |
+| `provider` | `resend` |
+| `provider_message_id` | Resend message id |
+| `compliance_type` | `manual_test_email` |
+| `reminder_type` | `manual_test` |
+| `automation_run_id` | `null` |
+| `compliance_record_id` | `null` |
+| `person_id` | `null` |
+| `due_date` | `null` |
+| `sent_at` | Set at insert |
+| `payload.mode` | `manual_test_send` |
+
+### Phase 58 constraints
+
+- Manual `send-test-email` only — no scheduled-runner email sending
+- One audit row per successful manual test send; no failed-row persistence in this phase
+- No app UI changes
+
+**Phase 58 gate:** `npm run verify-send-test-email-delivery-log-audit` must pass; `npm run verify-send-test-email-delivery-log-audit-staging` must pass against staging with sending enabled.
+
+**Next slice:** TBD — wire provider into scheduled-reminder-runner send path.
 
 ---
 

@@ -1,16 +1,21 @@
 /**
- * V6 Phase 56: Controlled manual test-send Edge Function.
- * Sends exactly one email through the provider to an allowlisted recipient.
- * No delivery log persistence, automation run records, or compliance writes.
+ * V6 Phase 56–58: Controlled manual test-send Edge Function.
+ * Phase 58: On successful provider send, persists one reminder_delivery_logs audit row.
+ * No automation run records, mark-as-sent, or compliance writes.
  */
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "jsr:@supabase/supabase-js@2";
+import { createClient, type SupabaseClient } from "jsr:@supabase/supabase-js@2";
 import {
   getEmailProviderConfig,
   isEmailSendingEnabled,
   sendReminderEmail,
 } from "../_shared/email-provider.ts";
+
+/** Alpha Test Organisation — seed / staging default (supabase/seed.sql). */
+const ALPHA_STAGING_ORGANISATION_ID = "11111111-1111-1111-1111-111111111111";
+
+const BODY_TEXT_PREVIEW_MAX_LENGTH = 500;
 
 function jsonResponse(body: unknown, status: number): Response {
   return new Response(JSON.stringify(body), {
@@ -24,7 +29,7 @@ function hasAuthorizationHeader(req: Request): boolean {
   return Boolean(authorization && authorization.trim());
 }
 
-function createUserSupabaseClient(req: Request) {
+function createUserSupabaseClient(req: Request): SupabaseClient | null {
   const supabaseUrl = (Deno.env.get("SUPABASE_URL") ?? "").trim();
   const supabaseAnonKey = (Deno.env.get("SUPABASE_ANON_KEY") ?? "").trim();
   const authorization = req.headers.get("Authorization")?.trim() ?? "";
@@ -39,6 +44,22 @@ function createUserSupabaseClient(req: Request) {
         Authorization: authorization,
       },
     },
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+  });
+}
+
+function createServiceSupabaseClient(): SupabaseClient | null {
+  const supabaseUrl = (Deno.env.get("SUPABASE_URL") ?? "").trim();
+  const serviceRoleKey = (Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "").trim();
+
+  if (!supabaseUrl || !serviceRoleKey) {
+    return null;
+  }
+
+  return createClient(supabaseUrl, serviceRoleKey, {
     auth: {
       persistSession: false,
       autoRefreshToken: false,
@@ -82,6 +103,114 @@ function parseTestEmailAllowlist(raw: string | undefined): Set<string> {
 
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
+}
+
+function isUuidString(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+    value.trim(),
+  );
+}
+
+/**
+ * @param bodyText Full plain-text body from the request.
+ */
+function buildBodyTextPreview(bodyText: string): string {
+  const trimmed = bodyText.trim();
+
+  if (trimmed.length <= BODY_TEXT_PREVIEW_MAX_LENGTH) {
+    return trimmed;
+  }
+
+  return `${trimmed.slice(0, BODY_TEXT_PREVIEW_MAX_LENGTH)}…`;
+}
+
+/**
+ * Resolves organisation scope for the manual test-send audit row.
+ * Uses request body organisationId when provided and accessible; otherwise Alpha staging org.
+ */
+async function resolveOrganisationId(
+  payload: Record<string, unknown>,
+  userSupabase: SupabaseClient,
+): Promise<{ ok: true; organisationId: string } | { ok: false; error: string }> {
+  const rawOrganisationId = payload.organisationId;
+
+  if (typeof rawOrganisationId === "string" && rawOrganisationId.trim()) {
+    const organisationId = rawOrganisationId.trim();
+
+    if (!isUuidString(organisationId)) {
+      return { ok: false, error: "invalid_organisation_id" };
+    }
+
+    const { error } = await userSupabase
+      .from("reminder_settings")
+      .select("organisation_id")
+      .eq("organisation_id", organisationId)
+      .maybeSingle();
+
+    if (error) {
+      return { ok: false, error: "organisation_access_denied" };
+    }
+
+    return { ok: true, organisationId };
+  }
+
+  return { ok: true, organisationId: ALPHA_STAGING_ORGANISATION_ID };
+}
+
+/**
+ * Persists one sent audit row after a successful provider send (service role).
+ */
+async function insertManualTestDeliveryLog(
+  serviceSupabase: SupabaseClient,
+  params: {
+    organisationId: string;
+    to: string;
+    recipientName: string | null;
+    subject: string;
+    bodyTextPreview: string;
+    providerMessageId: string;
+    providerResultStatus: string;
+  },
+): Promise<{ ok: true; deliveryLogId: string } | { ok: false; error: string }> {
+  const sentAt = new Date().toISOString();
+
+  const { data, error } = await serviceSupabase
+    .from("reminder_delivery_logs")
+    .insert({
+      organisation_id: params.organisationId,
+      automation_run_id: null,
+      compliance_record_id: null,
+      person_id: null,
+      recipient_email: params.to,
+      recipient_name: params.recipientName,
+      compliance_type: "manual_test_email",
+      reminder_type: "manual_test",
+      due_date: null,
+      delivery_status: "sent",
+      provider: "resend",
+      provider_message_id: params.providerMessageId,
+      payload: {
+        mode: "manual_test_send",
+        subject: params.subject,
+        bodyTextPreview: params.bodyTextPreview,
+        providerResult: {
+          status: params.providerResultStatus,
+        },
+        function: "send-test-email",
+      },
+      sent_at: sentAt,
+    })
+    .select("id")
+    .single();
+
+  if (error || !data?.id) {
+    return {
+      ok: false,
+      error: error?.message ?? "delivery_log_insert_failed",
+    };
+  }
+
+  return { ok: true, deliveryLogId: String(data.id) };
 }
 
 Deno.serve(async (req) => {
@@ -155,9 +284,18 @@ Deno.serve(async (req) => {
       ? (body as Record<string, unknown>)
       : {};
 
+  const organisationResult = await resolveOrganisationId(payload, supabase);
+
+  if (!organisationResult.ok) {
+    return jsonResponse({ status: "error", error: organisationResult.error }, 400);
+  }
+
+  const organisationId = organisationResult.organisationId;
+
   const toRaw = payload.to;
   const subjectRaw = payload.subject;
   const bodyTextRaw = payload.bodyText;
+  const recipientNameRaw = payload.recipientName;
 
   if (!isNonEmptyString(toRaw)) {
     return jsonResponse({ status: "error", error: "missing_recipient" }, 400);
@@ -181,11 +319,18 @@ Deno.serve(async (req) => {
     return jsonResponse({ status: "error", error: "missing_body_text" }, 400);
   }
 
+  const subject = subjectRaw.trim();
+  const bodyText = bodyTextRaw.trim();
+  const recipientName =
+    typeof recipientNameRaw === "string" && recipientNameRaw.trim()
+      ? recipientNameRaw.trim()
+      : null;
+
   const providerResult = await sendReminderEmail(
     {
       to,
-      subject: subjectRaw.trim(),
-      bodyText: bodyTextRaw.trim(),
+      subject,
+      bodyText,
     },
     config,
   );
@@ -208,10 +353,40 @@ Deno.serve(async (req) => {
     );
   }
 
+  const serviceSupabase = createServiceSupabaseClient();
+
+  if (!serviceSupabase) {
+    return jsonResponse({ status: "error", error: "service_unavailable" }, 500);
+  }
+
+  const deliveryLogResult = await insertManualTestDeliveryLog(serviceSupabase, {
+    organisationId,
+    to,
+    recipientName,
+    subject,
+    bodyTextPreview: buildBodyTextPreview(bodyText),
+    providerMessageId: providerResult.providerMessageId,
+    providerResultStatus: providerResult.status,
+  });
+
+  if (!deliveryLogResult.ok) {
+    return jsonResponse(
+      {
+        status: "error",
+        error: "delivery_log_persist_failed",
+        message: deliveryLogResult.error,
+        providerMessageId: providerResult.providerMessageId,
+        providerResult,
+      },
+      500,
+    );
+  }
+
   return jsonResponse(
     {
       status: "sent",
       providerMessageId: providerResult.providerMessageId,
+      deliveryLogId: deliveryLogResult.deliveryLogId,
       providerResult,
     },
     200,

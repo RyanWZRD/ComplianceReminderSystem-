@@ -6,6 +6,45 @@ A local-first safeguarding compliance tracker. Runs in the browser with localSto
 
 # Current Release
 
+## V6 Phase 58 — Manual Test-Send Delivery Log Audit
+
+**Date:** June 2026
+
+### Summary
+
+V6 Phase 58 persists **one `reminder_delivery_logs` audit row** when the manual `send-test-email` Edge Function successfully sends a controlled test email. **Manual test-send audit only** — no `scheduled-reminder-runner` email sending, no compliance reminder sends, no `mark_reminder_sent`, no compliance record mutation, and no `automation_runs` writes.
+
+**Documentation:**
+
+- [`docs/v6-automated-email-reminders.md`](docs/v6-automated-email-reminders.md) — Phase 58 manual test-send delivery log audit
+- [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md) — Phase 58 cross-reference
+
+**Deliverables:**
+
+| Item | Location |
+|------|----------|
+| Delivery log audit on manual test send | `supabase/functions/send-test-email/index.ts` |
+| Static verification gate | `scripts/verify-send-test-email-delivery-log-audit.mjs` |
+| Staging live verification gate | `scripts/verify-send-test-email-delivery-log-audit-staging.mjs` |
+
+**Prerequisites:**
+
+1. Phase 56–57 `send-test-email` deployed to staging with sending enabled
+2. Staging Edge secrets: `EMAIL_SENDING_ENABLED=true`, `RESEND_API_KEY`, `EMAIL_FROM_ADDRESS`, `TEST_EMAIL_ALLOWLIST` (must include `TEST_EMAIL_TO`)
+3. Local `.env`: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_TEST_PASSWORD`, `TEST_EMAIL_TO`
+
+**Verification (required):**
+
+```powershell
+npm run verify-send-test-email-delivery-log-audit
+npm run verify-send-test-email-delivery-log-audit-staging
+npm run build
+```
+
+**Next slice:** TBD — wire provider into scheduled-reminder-runner send path (not in Phase 58 scope)
+
+---
+
 ## V6 Phase 57 — One Real Allowlisted Manual Test Email on Staging
 
 **Date:** June 2026

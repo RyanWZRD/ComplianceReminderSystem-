@@ -113,11 +113,6 @@ assertNotContains(
 );
 assertNotContains(
   sendTestEmailSource,
-  'from("reminder_delivery_logs")',
-  "send-test-email does not write reminder_delivery_logs",
-);
-assertNotContains(
-  sendTestEmailSource,
   'from("automation_runs")',
   "send-test-email does not write automation_runs",
 );
@@ -125,12 +120,6 @@ assertNotContains(
   sendTestEmailSource,
   "mark_reminder_sent",
   "send-test-email has no mark_reminder_sent RPC",
-);
-assertNotContains(sendTestEmailSource, "sent_at", "send-test-email has no sent_at writes");
-assertNotContains(
-  sendTestEmailSource,
-  "provider_message_id:",
-  "send-test-email has no provider_message_id delivery-log writes",
 );
 
 const bulkSendPatterns = [
@@ -204,5 +193,5 @@ if (failures.length > 0) {
 console.log("\nverify-send-test-email-function: all checks OK");
 console.log("  - send-test-email exists with allowlist + auth + single-send contract");
 console.log("  - scheduled-reminder-runner unchanged (no email-provider import)");
-console.log("  - no reminder_delivery_logs, automation_runs, mark_reminder_sent, or sent_at writes");
+console.log("  - no automation_runs, mark_reminder_sent, or compliance mutation");
 console.log("  - npm run build passes");

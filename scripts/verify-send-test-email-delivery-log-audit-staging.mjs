@@ -1,8 +1,7 @@
 /**
- * V6 Phase 57: Staging verification — one real allowlisted manual test email.
- * Invokes deployed send-test-email on staging; confirms exactly one provider send
- * and no automation run writes. Does not invoke scheduled-reminder-runner.
- * Delivery log audit is verified separately by verify-send-test-email-delivery-log-audit-staging (Phase 58).
+ * V6 Phase 58: Staging verification — manual test-send delivery log audit row.
+ * Invokes deployed send-test-email once; confirms one reminder_delivery_logs sent row
+ * with manual_test metadata. Does not invoke scheduled-reminder-runner.
  */
 
 import { readFileSync } from "node:fs";
@@ -21,6 +20,9 @@ const scheduledRunnerPath = join(
   "scheduled-reminder-runner",
   "index.ts",
 );
+
+/** Alpha Test Organisation — seed / staging default (supabase/seed.sql). */
+const DEFAULT_STAGING_ORGANISATION_ID = "11111111-1111-1111-1111-111111111111";
 
 const STAGING_PROJECT_REF = "vmrotpztwoeifbdjwdis";
 
@@ -129,8 +131,9 @@ async function obtainAccessToken(supabaseUrl, anonKey, email, password) {
  * @param {string} anonKey
  * @param {string} accessToken
  * @param {string} to
+ * @param {string} organisationId
  */
-async function invokeSendTestEmailLive(supabaseUrl, anonKey, accessToken, to) {
+async function invokeSendTestEmail(supabaseUrl, anonKey, accessToken, to, organisationId) {
   const baseUrl = supabaseUrl.replace(/\/$/, "");
 
   const response = await fetch(`${baseUrl}/functions/v1/send-test-email`, {
@@ -141,10 +144,11 @@ async function invokeSendTestEmailLive(supabaseUrl, anonKey, accessToken, to) {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
+      organisationId,
       to,
-      subject: "Compliance Reminder System test email",
+      subject: "Compliance Reminder System manual test-send audit verification",
       bodyText:
-        "This is a controlled staging test email from the Compliance Reminder System. No compliance records were changed.",
+        "This is a controlled staging test email from the Compliance Reminder System. One delivery log audit row should be created. No compliance records were changed.",
     }),
   });
 
@@ -164,7 +168,7 @@ async function invokeSendTestEmailLive(supabaseUrl, anonKey, accessToken, to) {
 }
 
 console.log(
-  "V6 Phase 57 send-test-email live staging verification (one allowlisted recipient)\n",
+  "V6 Phase 58 send-test-email delivery log audit staging verification\n",
 );
 
 console.log("--- scheduled-reminder-runner static safety ---");
@@ -236,7 +240,7 @@ if (testEmailTo.includes(",")) {
 }
 
 if (!isNonEmptyString(serviceRoleKey)) {
-  console.error(".env must define SUPABASE_SERVICE_ROLE_KEY for row-count verification.");
+  console.error(".env must define SUPABASE_SERVICE_ROLE_KEY for delivery log verification.");
   process.exit(1);
 }
 
@@ -247,12 +251,13 @@ if (!supabaseUrl.includes(STAGING_PROJECT_REF)) {
 }
 
 const recipient = testEmailTo.trim();
+const organisationId = DEFAULT_STAGING_ORGANISATION_ID;
 
 const serviceClient = createClient(supabaseUrl, serviceRoleKey, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
 
-console.log("--- baseline row counts (no rows created by verification) ---");
+console.log("--- baseline row counts ---");
 
 const { count: deliveryLogCountBefore, error: deliveryCountBeforeError } = await serviceClient
   .from("reminder_delivery_logs")
@@ -277,6 +282,7 @@ console.log(`  automation_runs count before invoke: ${automationRunCountBefore ?
 
 console.log("\n--- invoke send-test-email (staging, one allowlisted recipient) ---");
 console.log(`  recipient: ${recipient}`);
+console.log(`  organisationId: ${organisationId}`);
 
 let accessToken;
 
@@ -290,7 +296,13 @@ try {
 let invokeResult;
 
 try {
-  invokeResult = await invokeSendTestEmailLive(supabaseUrl, anonKey, accessToken, recipient);
+  invokeResult = await invokeSendTestEmail(
+    supabaseUrl,
+    anonKey,
+    accessToken,
+    recipient,
+    organisationId,
+  );
 } catch (error) {
   console.error(error instanceof Error ? error.message : String(error));
   process.exit(1);
@@ -312,48 +324,69 @@ const body = asObject(payload);
 
 assertEqual(body.status, "sent", "response.status");
 
-const providerResult = asObject(body.providerResult);
+const providerMessageId =
+  typeof body.providerMessageId === "string" ? body.providerMessageId.trim() : "";
 
-assert(
-  body.providerResult !== undefined &&
-    body.providerResult !== null &&
-    typeof body.providerResult === "object" &&
-    !Array.isArray(body.providerResult),
-  "response must include exactly one providerResult object",
-);
+assert(isNonEmptyString(providerMessageId), "response.providerMessageId must be non-empty");
+
+const deliveryLogId = typeof body.deliveryLogId === "string" ? body.deliveryLogId.trim() : "";
+
+assert(isNonEmptyString(deliveryLogId), "response.deliveryLogId must be non-empty");
+
+const providerResult = asObject(body.providerResult);
 
 assertEqual(providerResult.status, "sent", "providerResult.status");
 
-const topLevelMessageId =
-  typeof body.providerMessageId === "string" ? body.providerMessageId.trim() : "";
-const nestedMessageId =
-  typeof providerResult.providerMessageId === "string"
-    ? providerResult.providerMessageId.trim()
-    : "";
-
-if (topLevelMessageId || nestedMessageId) {
-  assert(isNonEmptyString(topLevelMessageId), "response.providerMessageId must be non-empty when returned");
-  assert(
-    isNonEmptyString(nestedMessageId),
-    "providerResult.providerMessageId must be non-empty when returned",
-  );
-  assertEqual(
-    topLevelMessageId,
-    nestedMessageId,
-    "response.providerMessageId matches providerResult.providerMessageId",
-  );
-}
-
-assert(body.sent_at === undefined && body.sentAt === undefined, "response must not include sent_at");
-
 console.log("Response checks: OK");
 console.log(`  status: ${body.status}`);
-if (topLevelMessageId) {
-  console.log(`  providerMessageId: ${topLevelMessageId}`);
+console.log(`  providerMessageId: ${providerMessageId}`);
+console.log(`  deliveryLogId: ${deliveryLogId}`);
+
+console.log("\n--- query reminder_delivery_logs by deliveryLogId ---");
+
+const { data: deliveryLogRow, error: deliveryLogQueryError } = await serviceClient
+  .from("reminder_delivery_logs")
+  .select(
+    "id, organisation_id, automation_run_id, compliance_record_id, person_id, recipient_email, compliance_type, reminder_type, delivery_status, provider, provider_message_id, sent_at, payload",
+  )
+  .eq("id", deliveryLogId)
+  .maybeSingle();
+
+if (deliveryLogQueryError) {
+  console.error(`reminder_delivery_logs query failed: ${deliveryLogQueryError.message}`);
+  process.exit(1);
 }
-console.log(`  providerResult: ${JSON.stringify(providerResult)}`);
+
+assert(deliveryLogRow !== null, "exactly one reminder_delivery_logs row exists for deliveryLogId");
+assertEqual(deliveryLogRow.delivery_status, "sent", "row.delivery_status");
+assertEqual(deliveryLogRow.provider, "resend", "row.provider");
+assertEqual(
+  deliveryLogRow.provider_message_id,
+  providerMessageId,
+  "row.provider_message_id matches response.providerMessageId",
+);
+assertEqual(deliveryLogRow.recipient_email, recipient, "row.recipient_email");
+assertEqual(deliveryLogRow.compliance_type, "manual_test_email", "row.compliance_type");
+assertEqual(deliveryLogRow.reminder_type, "manual_test", "row.reminder_type");
+assert(deliveryLogRow.sent_at !== null && deliveryLogRow.sent_at !== undefined, "row.sent_at is not null");
+assertEqual(deliveryLogRow.automation_run_id, null, "row.automation_run_id");
+assertEqual(deliveryLogRow.compliance_record_id, null, "row.compliance_record_id");
+assertEqual(deliveryLogRow.person_id, null, "row.person_id");
+
+const rowPayload = asObject(deliveryLogRow.payload);
+
+assertEqual(rowPayload.mode, "manual_test_send", "row.payload.mode");
 
 console.log("\n--- row counts after invoke ---");
+
+const { count: deliveryLogCountAfter, error: deliveryCountAfterError } = await serviceClient
+  .from("reminder_delivery_logs")
+  .select("id", { count: "exact", head: true });
+
+if (deliveryCountAfterError) {
+  console.error(`reminder_delivery_logs count failed: ${deliveryCountAfterError.message}`);
+  process.exit(1);
+}
 
 const { count: automationRunCountAfter, error: automationCountAfterError } = await serviceClient
   .from("automation_runs")
@@ -365,6 +398,11 @@ if (automationCountAfterError) {
 }
 
 assertEqual(
+  deliveryLogCountAfter ?? 0,
+  (deliveryLogCountBefore ?? 0) + 1,
+  "exactly one new reminder_delivery_logs row was created",
+);
+assertEqual(
   automationRunCountAfter ?? 0,
   automationRunCountBefore ?? 0,
   "automation_runs row count unchanged after invoke",
@@ -374,11 +412,14 @@ if (failures.length > 0) {
   console.error("FAILURES:");
   failures.forEach((message) => console.error(`  - ${message}`));
   console.error(`Response body: ${JSON.stringify(body)}`);
+  if (deliveryLogRow) {
+    console.error(`Delivery log row: ${JSON.stringify(deliveryLogRow)}`);
+  }
   process.exit(1);
 }
 
-console.log("\nverify-send-test-email-live-staging: all checks OK");
+console.log("\nverify-send-test-email-delivery-log-audit-staging: all checks OK");
 console.log(`  one manual test email sent to allowlisted recipient: ${recipient}`);
-console.log("  providerResult.status: sent");
-console.log("  automation_runs unchanged (delivery log audit: Phase 58 staging script)");
+console.log(`  one reminder_delivery_logs sent row persisted: ${deliveryLogId}`);
+console.log("  automation_runs unchanged");
 console.log("  scheduled-reminder-runner unchanged (not invoked)");

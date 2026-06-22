@@ -118,6 +118,10 @@
     "verify-send-test-email-delivery-log-audit-staging": "node scripts/verify-send-test-email-delivery-log-audit-staging.mjs",
     "verify-scheduled-runner-live-send-gate": "node scripts/verify-scheduled-runner-live-send-gate.mjs",
     "verify-scheduled-runner-live-send-gate-staging": "node scripts/verify-scheduled-runner-live-send-gate-staging.mjs",
+    "verify-scheduled-runner-live-send-preview": "node scripts/verify-scheduled-runner-live-send-preview.mjs",
+    "verify-scheduled-runner-live-send-preview-staging": "node scripts/verify-scheduled-runner-live-send-preview-staging.mjs",
+    "verify-scheduled-runner-controlled-live-send": "node scripts/verify-scheduled-runner-controlled-live-send.mjs",
+    "verify-scheduled-runner-controlled-live-send-staging": "node scripts/verify-scheduled-runner-controlled-live-send-staging.mjs",
     "verify:phase2": "node scripts/verify-phase2.mjs"
   },
   "dependencies": {

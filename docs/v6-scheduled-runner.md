@@ -1,7 +1,7 @@
 # V6 Scheduled Automation Runner
 
 **Theme:** Server-side structure for scheduled reminder automation — candidate identification only.  
-**Phases:** 45 (dry run implementation) · 46 (staging deploy + smoke test) · 47 (automation run records) · 48 (staging persistence verification) · 51 (dry-run delivery log rows) · 59 (live-send gate — refused by default)  
+**Phases:** 45 (dry run implementation) · 46 (staging deploy + smoke test) · 47 (automation run records) · 48 (staging persistence verification) · 51 (dry-run delivery log rows) · 59 (live-send gate — refused by default) · 60 (live-send preview — metadata only, no emails)  
 **Date:** June 2026
 
 ---
@@ -10,12 +10,13 @@
 
 Phase 45 adds `scheduled-reminder-runner`, a Supabase Edge Function that scans an organisation's compliance data and returns the same reminder **candidates** as the admin **Manual Delivery Test** queue preview. Phase 46 deploys that function to **staging** and documents a **manual dry-run smoke test** — still no automatic sends, no cron, and no production mode changes.
 
-| Today (Phase 45–48, 51, 59) | Future (out of scope) |
+| Today (Phase 45–48, 51, 59, 60) | Future (out of scope) |
 |-----------------------------|----------------------|
 | Dry-run candidate scan via Edge Function | Cron / pg_cron schedule |
 | Staging deploy + manual smoke test | Automatic Resend sends |
 | `automation_runs` + `reminder_delivery_logs` dry-run audit rows | Live `sent` / `failed` delivery statuses |
 | Explicit `mode` gate (`dry_run` default; `live_send` refused) | Test-mode mark-as-sent from scheduler |
+| `live_send_preview` — email subject/body metadata only (no sends) | |
 | JWT + RLS read paths | Invoke `send-reminder-deliveries` from scheduler |
 | Same window rules as Manual Delivery Test | |
 
@@ -45,7 +46,7 @@ Phase 45 adds `scheduled-reminder-runner`, a Supabase Edge Function that scans a
 |-------|----------|-------|
 | `organisationId` | Yes | Organisation to scan |
 | `asOfDate` | No | ISO date (`YYYY-MM-DD`); defaults to today at local midnight |
-| `mode` | No | `"dry_run"` (default) or `"live_send"` — **live_send is refused in Phase 59** |
+| `mode` | No | `"dry_run"` (default), `"live_send"` (Phase 61 — allowlisted sends when gates enabled), or `"live_send_preview"` (Phase 60 — preview metadata only) |
 
 ### Response body (dry run)
 
@@ -105,7 +106,7 @@ Phase 45 adds `scheduled-reminder-runner`, a Supabase Edge Function that scans a
 | 500 | `delivery_log_persist_failed` | Could not insert `reminder_delivery_logs` rows (Phase 51); `automationRunId` may be present in error body |
 | 500 | `service_unavailable` | Service role client unavailable for audit insert |
 | 409 | — | `live_send` refused — see **Phase 59** (`status: "refused"`) |
-| 400 | `invalid_mode` | `mode` is not `dry_run` or `live_send` |
+| 400 | `invalid_mode` | `mode` is not `dry_run`, `live_send`, or `live_send_preview` |
 
 ### Response fields
 
@@ -495,7 +496,7 @@ npm run verify-scheduled-runner-delivery-log-dry-run-staging
 |--------|-----------|
 | *(omitted)* | Defaults to `dry_run` — existing Phase 52 behaviour unchanged |
 | `dry_run` | Candidate scan + `automation_runs` + dry-run `reminder_delivery_logs` |
-| `live_send` | HTTP **409** refusal — no database writes |
+| `live_send` | HTTP **409** when sending gate off; allowlisted sends when gates enabled (Phase 61) |
 
 ### Refusal response (`live_send`)
 
@@ -510,7 +511,6 @@ npm run verify-scheduled-runner-delivery-log-dry-run-staging
 | `reason` | When |
 |----------|------|
 | `scheduled_live_send_not_enabled` | `SCHEDULED_EMAIL_SENDING_ENABLED` is not explicitly `true` / `1` / `yes` (default) |
-| `scheduled_live_send_not_implemented` | Gate enabled but live send path not implemented yet (Phase 59) |
 
 Refusal is evaluated **before** any settings load, candidate computation, `automation_runs` insert, or `reminder_delivery_logs` insert.
 
@@ -529,6 +529,164 @@ npm run build
 ```
 
 **Phase 59 gate:** `npm run verify-scheduled-runner-live-send-gate` must pass; `npm run verify-scheduled-runner-live-send-gate-staging` must pass against staging (requires Phase 59 deploy).
+
+---
+
+## Phase 60 — Scheduled runner live-send preview mode (no emails)
+
+**Goal:** Add a safe **`live_send_preview`** path that generates email subject/body for each would-send candidate and persists preview metadata in `reminder_delivery_logs` — **preview only, no emails sent**.
+
+### Request modes (updated)
+
+| `mode` | Behaviour |
+|--------|-----------|
+| *(omitted)* | Defaults to `dry_run` — existing Phase 52 behaviour unchanged |
+| `dry_run` | Candidate scan + `automation_runs` + dry-run `reminder_delivery_logs` |
+| `live_send` | HTTP **409** when sending gate off; allowlisted sends when gates enabled (Phase 61) |
+| `live_send_preview` | Email preview metadata when gate enabled; HTTP **409** when gate disabled |
+
+### Refusal response (`live_send_preview` — gate disabled)
+
+```json
+{
+  "status": "refused",
+  "mode": "live_send_preview",
+  "reason": "scheduled_live_send_preview_not_enabled"
+}
+```
+
+Refusal is evaluated **before** any settings load, candidate computation, or database writes.
+
+### Success response (`live_send_preview` — gate enabled)
+
+```json
+{
+  "status": "ok",
+  "mode": "live_send_preview",
+  "organisationId": "uuid",
+  "automationRunId": "uuid",
+  "summary": {
+    "totalCandidates": 5,
+    "withEmail": 3,
+    "missingEmail": 2,
+    "wouldSend": 3,
+    "wouldSkip": 2
+  },
+  "deliveryLogSummary": {
+    "total": 5,
+    "pending": 3,
+    "skipped": 2,
+    "failed": 0,
+    "sent": 0
+  },
+  "previewSummary": {
+    "totalPreviewed": 5,
+    "withEmailPreviewed": 3,
+    "skipped": 2
+  }
+}
+```
+
+### Preview delivery log rows
+
+| Candidate | `delivery_status` | `payload` |
+|-----------|-------------------|-----------|
+| Has email | `pending` | `mode: "live_send_preview"`, `emailPreview.subject`, `emailPreview.bodyText` |
+| Missing email | `skipped` | `mode: "live_send_preview"`, `reason: "missing_email"` |
+
+All preview rows: `provider` null, `provider_message_id` null, `sent_at` null.
+
+`automation_runs.run_type` = `scheduled_reminder_live_send_preview`, `mode` = `live_send_preview`, `status` = `completed`.
+
+### Email template
+
+Reuses the Phase 53 reminder email template framework via Edge-safe shared module:
+
+`supabase/functions/_shared/reminder-email-template.ts`
+
+### Configuration
+
+| Variable | Default | Notes |
+|----------|---------|-------|
+| `SCHEDULED_EMAIL_PREVIEW_ENABLED` | `false` | Edge secret; explicit `true` / `1` / `yes` required for `live_send_preview` |
+
+### Safety constraints (Phase 60)
+
+| Guard | Behaviour |
+|-------|-----------|
+| Resend / SMTP | **Not called** |
+| `sendReminderEmail` | **Not called** |
+| `mark_reminder_sent` | **Not called** |
+| Compliance / history mutation | **None** |
+| `sent_at` / `provider_message_id` | **Not written** |
+| `dry_run` | **Unchanged** |
+| `live_send` | **Allowlisted sends when gates enabled** (Phase 61) |
+
+### Verification
+
+```powershell
+npm run verify-scheduled-runner-live-send-preview
+npm run verify-scheduled-runner-live-send-preview-staging
+npm run build
+```
+
+**Phase 60 gate:** `npm run verify-scheduled-runner-live-send-preview` must pass; `npm run verify-scheduled-runner-live-send-preview-staging` must pass against staging (requires Phase 60 deploy).
+
+**Enable preview on staging:**
+
+```powershell
+supabase secrets set SCHEDULED_EMAIL_PREVIEW_ENABLED=true --project-ref vmrotpztwoeifbdjwdis
+supabase functions deploy scheduled-reminder-runner --project-ref vmrotpztwoeifbdjwdis
+```
+
+---
+
+## Phase 61 — Scheduled runner controlled live send (allowlisted only)
+
+**Goal:** Implement **`live_send`** to send real emails **only to allowlisted recipients**, with delivery log auditing. **No mark-as-sent**, **no compliance mutation**, **no reminder sent history writes**.
+
+### Success response (`live_send` — gates enabled)
+
+```json
+{
+  "status": "ok",
+  "mode": "live_send",
+  "organisationId": "uuid",
+  "automationRunId": "uuid",
+  "summary": { "totalCandidates": 5, "withEmail": 3, "missingEmail": 2, "wouldSend": 3, "wouldSkip": 2 },
+  "deliveryLogSummary": { "total": 5, "sent": 1, "skipped": 4, "failed": 0, "pending": 0 },
+  "sendSummary": {
+    "attempted": 1,
+    "sent": 1,
+    "failed": 0,
+    "skippedMissingEmail": 2,
+    "skippedNotAllowlisted": 2
+  }
+}
+```
+
+### Configuration
+
+| Variable | Default | Notes |
+|----------|---------|-------|
+| `SCHEDULED_EMAIL_SENDING_ENABLED` | `false` | Runner gate |
+| `EMAIL_SENDING_ENABLED` | `false` | Provider gate |
+| `SCHEDULED_EMAIL_ALLOWLIST` | — | Comma-separated; required |
+
+### Verification
+
+```powershell
+npm run verify-scheduled-runner-controlled-live-send
+npm run verify-scheduled-runner-controlled-live-send-staging
+npm run build
+```
+
+**Enable live send on staging:**
+
+```powershell
+supabase secrets set SCHEDULED_EMAIL_SENDING_ENABLED=true EMAIL_SENDING_ENABLED=true SCHEDULED_EMAIL_ALLOWLIST=you@example.com --project-ref vmrotpztwoeifbdjwdis
+supabase functions deploy scheduled-reminder-runner --project-ref vmrotpztwoeifbdjwdis
+```
 
 ---
 
@@ -566,7 +724,7 @@ supabase functions deploy scheduled-reminder-runner --project-ref vmrotpztwoeifb
 
 ## Next slice (out of scope)
 
-- Implement `live_send` path (provider wiring, `sent` / `failed` delivery logs) after operational sign-off
+- Mark-as-sent and compliance mutation for scheduled path after operational sign-off
 - Wire scheduler (cron / external job) to invoke dry run or full delivery path
 - Invoke `send-reminder-deliveries` after operational sign-off
 - Idempotency and mark-as-sent for scheduled path

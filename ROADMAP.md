@@ -6,6 +6,88 @@ A local-first safeguarding compliance tracker. Runs in the browser with localSto
 
 # Current Release
 
+## V6 Phase 61 — Scheduled Runner Controlled Live Send (Allowlisted Only)
+
+**Date:** June 2026
+
+### Summary
+
+V6 Phase 61 implements **`live_send`** mode on `scheduled-reminder-runner` for **allowlisted recipients only**. When `SCHEDULED_EMAIL_SENDING_ENABLED=true` and provider secrets are configured, the runner sends **one email per eligible allowlisted candidate**, persists `automation_runs` + `reminder_delivery_logs` audit rows (`sent` / `skipped` / `failed`), and returns `sendSummary`. **No `mark_reminder_sent`**, **no compliance record mutation**, and **no reminder sent history writes**. **`dry_run` unchanged**; **`live_send_preview` unchanged**.
+
+**Documentation:**
+
+- [`docs/v6-scheduled-runner.md`](docs/v6-scheduled-runner.md) — Phase 61 controlled live send
+- [`docs/v6-automated-email-reminders.md`](docs/v6-automated-email-reminders.md) — Phase 61 cross-reference
+- [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md) — Phase 61 cross-reference
+
+**Deliverables:**
+
+| Item | Location |
+|------|----------|
+| Controlled live_send path | `supabase/functions/scheduled-reminder-runner/index.ts` |
+| Static verification gate | `scripts/verify-scheduled-runner-controlled-live-send.mjs` |
+| Staging verification gate | `scripts/verify-scheduled-runner-controlled-live-send-staging.mjs` |
+
+**Prerequisites:**
+
+1. Phase 59–60 `scheduled-reminder-runner` deployed to staging
+2. Staging Edge secrets: `SCHEDULED_EMAIL_SENDING_ENABLED=true`, `EMAIL_SENDING_ENABLED=true`, `RESEND_API_KEY`, `EMAIL_FROM_ADDRESS`, `SCHEDULED_EMAIL_ALLOWLIST` (must include `SCHEDULED_TEST_EMAIL_TO`)
+3. Local `.env`: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_TEST_PASSWORD`, `SCHEDULED_TEST_EMAIL_TO` (or `TEST_EMAIL_TO`)
+
+**Verification (required):**
+
+```powershell
+npm run verify-scheduled-runner-controlled-live-send
+npm run verify-scheduled-runner-controlled-live-send-staging
+npm run build
+```
+
+**Next slice:** TBD — mark-as-sent / compliance mutation after operational sign-off
+
+---
+
+## V6 Phase 60 — Scheduled Runner Live-Send Preview Mode
+
+**Date:** June 2026
+
+### Summary
+
+V6 Phase 60 adds **`live_send_preview`** mode to `scheduled-reminder-runner`. When `SCHEDULED_EMAIL_PREVIEW_ENABLED=true`, the runner computes scheduled candidates, generates **email subject/body preview metadata** via the Phase 53 template framework, and persists `automation_runs` + `reminder_delivery_logs` rows — **preview only, no emails sent**. No Resend calls, no `sendReminderEmail`, no `mark_reminder_sent`, no compliance record mutation, and no `sent_at` or `provider_message_id` writes. **`dry_run` unchanged**; **`live_send` still refused**.
+
+**Documentation:**
+
+- [`docs/v6-scheduled-runner.md`](docs/v6-scheduled-runner.md) — Phase 60 live-send preview mode
+- [`docs/v6-automated-email-reminders.md`](docs/v6-automated-email-reminders.md) — Phase 60 cross-reference
+- [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md) — Phase 60 cross-reference
+
+**Deliverables:**
+
+| Item | Location |
+|------|----------|
+| Preview mode + config gate | `supabase/functions/scheduled-reminder-runner/index.ts` |
+| Edge-safe email template | `supabase/functions/_shared/reminder-email-template.ts` |
+| Static verification gate | `scripts/verify-scheduled-runner-live-send-preview.mjs` |
+| Staging verification gate | `scripts/verify-scheduled-runner-live-send-preview-staging.mjs` |
+
+**Prerequisites:**
+
+1. Phase 59 `scheduled-reminder-runner` deployed to staging (live-send gate)
+2. Local `.env`: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_TEST_PASSWORD`
+3. Redeploy `scheduled-reminder-runner` with Phase 60 preview mode before staging verification
+4. Optional enabled preview on staging: `supabase secrets set SCHEDULED_EMAIL_PREVIEW_ENABLED=true --project-ref vmrotpztwoeifbdjwdis`
+
+**Verification (required):**
+
+```powershell
+npm run verify-scheduled-runner-live-send-preview
+npm run verify-scheduled-runner-live-send-preview-staging
+npm run build
+```
+
+**Next slice:** TBD — implement scheduled `live_send` send path (not in Phase 60 scope)
+
+---
+
 ## V6 Phase 59 — Scheduled Runner Live-Send Gate
 
 **Date:** June 2026

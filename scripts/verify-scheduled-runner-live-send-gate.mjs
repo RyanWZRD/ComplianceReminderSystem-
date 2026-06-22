@@ -134,12 +134,12 @@ assertContains(
   "scheduled_live_send_not_enabled",
   "index.ts refuses live_send when SCHEDULED_EMAIL_SENDING_ENABLED is off",
 );
-assertContains(
+assertNotContains(
   functionSource,
   "scheduled_live_send_not_implemented",
-  "index.ts refuses live_send even when gate enabled (Phase 59)",
+  "index.ts no longer uses Phase 59 not_implemented stub (Phase 61)",
 );
-assertContains(functionSource, "409", "index.ts returns HTTP 409 for refused live_send");
+assertContains(functionSource, "409", "index.ts returns HTTP 409 for refused live_send when gate off");
 
 assertAppearsBefore(
   serveHandlerSource,
@@ -206,35 +206,23 @@ assertContains(
   "index.ts inserts reminder_delivery_logs",
 );
 
-console.log("--- safety gates: no email delivery or live writes (required) ---");
+console.log("--- safety gates: Phase 59 gate-off only (Phase 61 implements live_send) ---");
 
 assertNotContains(
   functionSource,
-  "email-provider",
-  "scheduled-reminder-runner does not import email-provider",
-);
-assertNotContains(
-  functionSource,
-  "sendReminderEmail",
-  "scheduled-reminder-runner does not call sendReminderEmail",
-);
-
-const forbiddenNeedles = [
   "api.resend.com",
-  "RESEND_API_KEY",
-  "sendViaResend",
+  "scheduled-reminder-runner does not call Resend directly",
+);
+assertNotContains(
+  functionSource,
   "send-reminder-deliveries",
+  "scheduled-reminder-runner does not invoke send-reminder-deliveries",
+);
+assertNotContains(
+  functionSource,
   "mark_reminder_sent",
-  "sent_at:",
-];
-
-for (const needle of forbiddenNeedles) {
-  assertNotContains(
-    functionSource,
-    needle,
-    `scheduled-reminder-runner/index.ts has no ${needle}`,
-  );
-}
+  "scheduled-reminder-runner does not call mark_reminder_sent",
+);
 
 console.log("--- documentation (required) ---");
 
@@ -278,6 +266,6 @@ if (failures.length > 0) {
 
 console.log("\nverify-scheduled-runner-live-send-gate: all checks OK");
 console.log("  mode: dry_run default — existing Phase 52 dry-run behaviour unchanged");
-console.log("  mode: live_send refused (409) — no automation_runs or delivery log writes");
+console.log("  mode: live_send refused (409) when SCHEDULED_EMAIL_SENDING_ENABLED off");
 console.log("  gate: SCHEDULED_EMAIL_SENDING_ENABLED defaults false");
-console.log("  safety: no Resend, no sendReminderEmail, no mark-as-sent, no live sent_at writes");
+console.log("  live_send implementation: see Phase 61 verify-scheduled-runner-controlled-live-send");

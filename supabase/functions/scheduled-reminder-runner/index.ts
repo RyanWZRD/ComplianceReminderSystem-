@@ -1,17 +1,29 @@
 /**
- * V6 Phase 45–47, 51, 59: scheduled-reminder-runner Edge Function — dry run only.
+ * V6 Phase 45–47, 51, 59–61: scheduled-reminder-runner Edge Function.
  * Phase 47: persists one automation_runs audit row per successful dry run (service role).
  * Phase 51: persists reminder_delivery_logs rows per dry-run candidate (pending/skipped only).
- * Phase 59: explicit mode gate (dry_run default; live_send refused — no scheduled sends yet).
- * No Resend calls, email sends, mark-as-sent, sent_at writes, or delivery Edge Function invocation.
+ * Phase 59: explicit mode gate (dry_run default; live_send refused when sending gate off).
+ * Phase 60: live_send_preview — email subject/body preview metadata only; still no sends.
+ * Phase 61: live_send — allowlisted recipients only; delivery log audit; no mark-as-sent.
  */
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient, type SupabaseClient } from "jsr:@supabase/supabase-js@2";
+import {
+  getEmailProviderConfig,
+  isEmailSendingEnabled,
+  sendReminderEmail,
+  type EmailProviderConfig,
+} from "../_shared/email-provider.ts";
+import { buildReminderEmailPreview } from "../_shared/reminder-email-template.ts";
 
 const SCHEDULED_RUNNER_DRY_RUN_MODE = "dry_run";
 const SCHEDULED_RUNNER_LIVE_SEND_MODE = "live_send";
-const SCHEDULED_RUNNER_RUN_TYPE = "scheduled_reminder_dry_run";
+const SCHEDULED_RUNNER_LIVE_SEND_PREVIEW_MODE = "live_send_preview";
+const SCHEDULED_RUNNER_DRY_RUN_RUN_TYPE = "scheduled_reminder_dry_run";
+const SCHEDULED_RUNNER_PREVIEW_RUN_TYPE = "scheduled_reminder_live_send_preview";
+const SCHEDULED_RUNNER_LIVE_SEND_RUN_TYPE = "scheduled_reminder_live_send";
+const BODY_TEXT_PREVIEW_MAX_LENGTH = 500;
 
 /**
  * SCHEDULED_EMAIL_SENDING_ENABLED defaults to false when unset or empty.
@@ -29,16 +41,140 @@ function isScheduledEmailSendingEnabled(): boolean {
 }
 
 /**
- * @returns Refusal reason for live_send mode (Phase 59 — gate only, no sends).
+ * SCHEDULED_EMAIL_PREVIEW_ENABLED defaults to false when unset or empty.
+ * Only explicit true / 1 / yes enables live_send_preview (Phase 60).
  */
-function resolveLiveSendRefusalReason():
-  | "scheduled_live_send_not_enabled"
-  | "scheduled_live_send_not_implemented" {
-  if (!isScheduledEmailSendingEnabled()) {
-    return "scheduled_live_send_not_enabled";
+function parseScheduledEmailPreviewEnabled(raw: string | undefined): boolean {
+  const value = (raw ?? "").trim().toLowerCase();
+  return value === "true" || value === "1" || value === "yes";
+}
+
+function isScheduledEmailPreviewEnabled(): boolean {
+  return parseScheduledEmailPreviewEnabled(
+    Deno.env.get("SCHEDULED_EMAIL_PREVIEW_ENABLED"),
+  );
+}
+
+function readLiveSendEnv(): Record<string, string | undefined> {
+  const keys = [
+    "RESEND_API_KEY",
+    "EMAIL_SENDING_ENABLED",
+    "EMAIL_FROM_ADDRESS",
+    "EMAIL_PROVIDER",
+    "SCHEDULED_EMAIL_ALLOWLIST",
+  ] as const;
+
+  const env: Record<string, string | undefined> = {};
+
+  for (const key of keys) {
+    const value = Deno.env.get(key);
+
+    if (value !== undefined) {
+      env[key] = value;
+    }
   }
 
-  return "scheduled_live_send_not_implemented";
+  return env;
+}
+
+/**
+ * @param raw Comma-separated allowlist from SCHEDULED_EMAIL_ALLOWLIST.
+ */
+function parseScheduledEmailAllowlist(raw: string | undefined): Set<string> {
+  const entries = (raw ?? "")
+    .split(",")
+    .map((entry) => entry.trim().toLowerCase())
+    .filter(Boolean);
+
+  return new Set(entries);
+}
+
+/**
+ * @param bodyText Full plain-text body from the email template.
+ */
+function buildBodyTextPreview(bodyText: string): string {
+  const trimmed = bodyText.trim();
+
+  if (trimmed.length <= BODY_TEXT_PREVIEW_MAX_LENGTH) {
+    return trimmed;
+  }
+
+  return `${trimmed.slice(0, BODY_TEXT_PREVIEW_MAX_LENGTH)}…`;
+}
+
+type LiveSendConfigValidationResult =
+  | { ok: true; config: EmailProviderConfig; allowlist: Set<string> }
+  | {
+      ok: false;
+      status: number;
+      body: {
+        status: "refused" | "error";
+        mode: typeof SCHEDULED_RUNNER_LIVE_SEND_MODE;
+        reason?: string;
+        error?: string;
+        code?: string;
+      };
+    };
+
+function validateLiveSendConfiguration(
+  env: Record<string, string | undefined>,
+): LiveSendConfigValidationResult {
+  const config = getEmailProviderConfig(env);
+
+  if (!isEmailSendingEnabled(config)) {
+    return {
+      ok: false,
+      status: 403,
+      body: {
+        status: "refused",
+        mode: SCHEDULED_RUNNER_LIVE_SEND_MODE,
+        reason: "email_sending_disabled",
+      },
+    };
+  }
+
+  if (!config.resendApiKey) {
+    return {
+      ok: false,
+      status: 503,
+      body: {
+        status: "error",
+        mode: SCHEDULED_RUNNER_LIVE_SEND_MODE,
+        error: "provider_not_configured",
+        code: "provider_not_configured",
+      },
+    };
+  }
+
+  if (!config.fromAddress) {
+    return {
+      ok: false,
+      status: 503,
+      body: {
+        status: "error",
+        mode: SCHEDULED_RUNNER_LIVE_SEND_MODE,
+        error: "invalid_config",
+        code: "invalid_config",
+      },
+    };
+  }
+
+  const allowlist = parseScheduledEmailAllowlist(env.SCHEDULED_EMAIL_ALLOWLIST);
+
+  if (allowlist.size === 0) {
+    return {
+      ok: false,
+      status: 503,
+      body: {
+        status: "error",
+        mode: SCHEDULED_RUNNER_LIVE_SEND_MODE,
+        error: "scheduled_email_allowlist_not_configured",
+        code: "scheduled_email_allowlist_not_configured",
+      },
+    };
+  }
+
+  return { ok: true, config, allowlist };
 }
 
 const REMINDER_UI_LABELS = {
@@ -200,11 +336,14 @@ function validateRequestBody(
 /**
  * @param {unknown} raw
  */
+type ScheduledRunnerMode =
+  | typeof SCHEDULED_RUNNER_DRY_RUN_MODE
+  | typeof SCHEDULED_RUNNER_LIVE_SEND_MODE
+  | typeof SCHEDULED_RUNNER_LIVE_SEND_PREVIEW_MODE;
+
 function normalizeRequestMode(
   raw: unknown,
-):
-  | { ok: true; mode: typeof SCHEDULED_RUNNER_DRY_RUN_MODE | typeof SCHEDULED_RUNNER_LIVE_SEND_MODE }
-  | { ok: false; error: string } {
+): { ok: true; mode: ScheduledRunnerMode } | { ok: false; error: string } {
   if (raw === undefined || raw === null) {
     return { ok: true, mode: SCHEDULED_RUNNER_DRY_RUN_MODE };
   }
@@ -221,6 +360,10 @@ function normalizeRequestMode(
 
   if (mode === SCHEDULED_RUNNER_LIVE_SEND_MODE) {
     return { ok: true, mode: SCHEDULED_RUNNER_LIVE_SEND_MODE };
+  }
+
+  if (mode === SCHEDULED_RUNNER_LIVE_SEND_PREVIEW_MODE) {
+    return { ok: true, mode: SCHEDULED_RUNNER_LIVE_SEND_PREVIEW_MODE };
   }
 
   return { ok: false, error: "invalid_mode" };
@@ -667,7 +810,7 @@ async function insertScheduledDryRunAutomationRun(
     .from("automation_runs")
     .insert({
       organisation_id: organisationId,
-      run_type: SCHEDULED_RUNNER_RUN_TYPE,
+      run_type: SCHEDULED_RUNNER_DRY_RUN_RUN_TYPE,
       mode: SCHEDULED_RUNNER_DRY_RUN_MODE,
       status: "completed",
       as_of_date: asOfDateIso,
@@ -743,6 +886,618 @@ async function insertScheduledDryRunDeliveryLogs(
   return { ok: true, deliveryLogSummary };
 }
 
+/**
+ * @param {SupabaseClient} supabase
+ * @param {string} organisationId
+ */
+async function loadOrganisationName(
+  supabase: SupabaseClient,
+  organisationId: string,
+): Promise<{ ok: true; organisationName: string } | { ok: false; error: string }> {
+  const { data, error } = await supabase
+    .from("organisations")
+    .select("name")
+    .eq("id", organisationId)
+    .maybeSingle();
+
+  if (error) {
+    return { ok: false, error: error.message };
+  }
+
+  const organisationName = String(data?.name ?? "").trim();
+
+  return {
+    ok: true,
+    organisationName,
+  };
+}
+
+/**
+ * @param {DryRunCandidate[]} candidates
+ */
+function buildPreviewSummary(
+  candidates: Array<ComplianceRow & { reminderType: string; hasEmail: boolean }>,
+) {
+  let withEmailPreviewed = 0;
+  let skipped = 0;
+
+  for (const candidate of candidates) {
+    if (candidate.hasEmail) {
+      withEmailPreviewed += 1;
+    } else {
+      skipped += 1;
+    }
+  }
+
+  return {
+    totalPreviewed: candidates.length,
+    withEmailPreviewed,
+    skipped,
+  };
+}
+
+/**
+ * @param {DryRunCandidate[]} candidates
+ * @param {string} organisationId
+ * @param {string} automationRunId
+ * @param {string} asOfDateIso
+ * @param {string} organisationName
+ */
+function buildLiveSendPreviewDeliveryLogRows(
+  candidates: Array<ComplianceRow & { reminderType: string; hasEmail: boolean }>,
+  organisationId: string,
+  automationRunId: string,
+  asOfDateIso: string,
+  organisationName: string,
+) {
+  return candidates.map((candidate) => {
+    const hasEmail = candidate.hasEmail;
+    const deliveryStatus = hasEmail ? "pending" : "skipped";
+    const recipientEmail = hasEmail ? normalizeEmail(candidate.email) : null;
+
+    const basePayload = {
+      mode: SCHEDULED_RUNNER_LIVE_SEND_PREVIEW_MODE,
+      asOfDate: asOfDateIso,
+      personId: candidate.personId,
+      recordId: candidate.recordId,
+      name: candidate.name,
+      role: candidate.role,
+      email: recipientEmail ?? "",
+      complianceType: candidate.complianceType,
+      reminderType: candidate.reminderType,
+      expiryDate: candidate.expiryDate,
+      hasEmail,
+    };
+
+    if (!hasEmail) {
+      return {
+        organisation_id: organisationId,
+        automation_run_id: automationRunId,
+        compliance_record_id: candidate.recordId,
+        person_id: candidate.personId,
+        recipient_email: null,
+        recipient_name: candidate.name || null,
+        compliance_type: candidate.complianceType || null,
+        reminder_type: candidate.reminderType,
+        due_date: candidate.expiryDate || null,
+        delivery_status: deliveryStatus,
+        provider: null,
+        provider_message_id: null,
+        payload: {
+          ...basePayload,
+          reason: "missing_email",
+        },
+      };
+    }
+
+    const emailPreview = buildReminderEmailPreview(
+      {
+        recipientName: candidate.name,
+        personName: candidate.name,
+        complianceType: candidate.complianceType,
+        reminderType: candidate.reminderType,
+        expiryDate: candidate.expiryDate,
+      },
+      { organisationName },
+    );
+
+    return {
+      organisation_id: organisationId,
+      automation_run_id: automationRunId,
+      compliance_record_id: candidate.recordId,
+      person_id: candidate.personId,
+      recipient_email: recipientEmail,
+      recipient_name: candidate.name || null,
+      compliance_type: candidate.complianceType || null,
+      reminder_type: candidate.reminderType,
+      due_date: candidate.expiryDate || null,
+      delivery_status: deliveryStatus,
+      provider: null,
+      provider_message_id: null,
+      payload: {
+        ...basePayload,
+        emailPreview,
+      },
+    };
+  });
+}
+
+/**
+ * @param {SupabaseClient} serviceSupabase
+ * @param {string} organisationId
+ * @param {string} asOfDateIso
+ * @param {{
+ *   totalCandidates: number;
+ *   withEmail: number;
+ *   missingEmail: number;
+ *   wouldSend: number;
+ *   wouldSkip: number;
+ * }} summary
+ */
+async function insertScheduledLiveSendPreviewAutomationRun(
+  serviceSupabase: SupabaseClient,
+  organisationId: string,
+  asOfDateIso: string,
+  summary: {
+    totalCandidates: number;
+    withEmail: number;
+    missingEmail: number;
+    wouldSend: number;
+    wouldSkip: number;
+  },
+): Promise<{ ok: true; automationRunId: string } | { ok: false; error: string }> {
+  const summaryPayload = {
+    totalCandidates: summary.totalCandidates,
+    withEmail: summary.withEmail,
+    missingEmail: summary.missingEmail,
+    wouldSend: summary.wouldSend,
+    wouldSkip: summary.wouldSkip,
+  };
+
+  const { data, error } = await serviceSupabase
+    .from("automation_runs")
+    .insert({
+      organisation_id: organisationId,
+      run_type: SCHEDULED_RUNNER_PREVIEW_RUN_TYPE,
+      mode: SCHEDULED_RUNNER_LIVE_SEND_PREVIEW_MODE,
+      status: "completed",
+      as_of_date: asOfDateIso,
+      total_candidates: summary.totalCandidates,
+      with_email: summary.withEmail,
+      missing_email: summary.missingEmail,
+      would_send: summary.wouldSend,
+      would_skip: summary.wouldSkip,
+      summary: summaryPayload,
+      completed_at: new Date().toISOString(),
+    })
+    .select("automation_run_id")
+    .single();
+
+  if (error || !data?.automation_run_id) {
+    return {
+      ok: false,
+      error: error?.message ?? "automation_run_insert_failed",
+    };
+  }
+
+  return {
+    ok: true,
+    automationRunId: String(data.automation_run_id),
+  };
+}
+
+/**
+ * @param {SupabaseClient} serviceSupabase
+ * @param {string} organisationId
+ * @param {string} automationRunId
+ * @param {DryRunCandidate[]} candidates
+ * @param {string} asOfDateIso
+ * @param {string} organisationName
+ */
+async function insertScheduledLiveSendPreviewDeliveryLogs(
+  serviceSupabase: SupabaseClient,
+  organisationId: string,
+  automationRunId: string,
+  candidates: Array<ComplianceRow & { reminderType: string; hasEmail: boolean }>,
+  asOfDateIso: string,
+  organisationName: string,
+): Promise<
+  | {
+      ok: true;
+      deliveryLogSummary: ReturnType<typeof buildDryRunDeliveryLogSummary>;
+    }
+  | { ok: false; error: string }
+> {
+  const deliveryLogSummary = buildDryRunDeliveryLogSummary(candidates);
+
+  if (candidates.length === 0) {
+    return { ok: true, deliveryLogSummary };
+  }
+
+  const rows = buildLiveSendPreviewDeliveryLogRows(
+    candidates,
+    organisationId,
+    automationRunId,
+    asOfDateIso,
+    organisationName,
+  );
+
+  const { error } = await serviceSupabase.from("reminder_delivery_logs").insert(rows);
+
+  if (error) {
+    return {
+      ok: false,
+      error: error.message ?? "delivery_log_insert_failed",
+    };
+  }
+
+  return { ok: true, deliveryLogSummary };
+}
+
+/**
+ * @param {{
+ *   sent: number;
+ *   skipped: number;
+ *   failed: number;
+ * }} counts
+ */
+function buildLiveSendDeliveryLogSummary(counts: {
+  sent: number;
+  skipped: number;
+  failed: number;
+  total: number;
+}) {
+  return {
+    total: counts.total,
+    sent: counts.sent,
+    skipped: counts.skipped,
+    failed: counts.failed,
+    pending: 0,
+  };
+}
+
+/**
+ * @param {{
+ *   attempted: number;
+ *   sent: number;
+ *   failed: number;
+ *   skippedMissingEmail: number;
+ *   skippedNotAllowlisted: number;
+ * }} counts
+ */
+function buildSendSummary(counts: {
+  attempted: number;
+  sent: number;
+  failed: number;
+  skippedMissingEmail: number;
+  skippedNotAllowlisted: number;
+}) {
+  return {
+    attempted: counts.attempted,
+    sent: counts.sent,
+    failed: counts.failed,
+    skippedMissingEmail: counts.skippedMissingEmail,
+    skippedNotAllowlisted: counts.skippedNotAllowlisted,
+  };
+}
+
+/**
+ * @param {SupabaseClient} serviceSupabase
+ * @param {string} organisationId
+ * @param {string} asOfDateIso
+ * @param {{
+ *   totalCandidates: number;
+ *   withEmail: number;
+ *   missingEmail: number;
+ *   wouldSend: number;
+ *   wouldSkip: number;
+ * }} summary
+ * @param {string} automationStatus
+ */
+async function insertScheduledLiveSendAutomationRun(
+  serviceSupabase: SupabaseClient,
+  organisationId: string,
+  asOfDateIso: string,
+  summary: {
+    totalCandidates: number;
+    withEmail: number;
+    missingEmail: number;
+    wouldSend: number;
+    wouldSkip: number;
+  },
+  automationStatus: string,
+): Promise<{ ok: true; automationRunId: string } | { ok: false; error: string }> {
+  const summaryPayload = {
+    totalCandidates: summary.totalCandidates,
+    withEmail: summary.withEmail,
+    missingEmail: summary.missingEmail,
+    wouldSend: summary.wouldSend,
+    wouldSkip: summary.wouldSkip,
+  };
+
+  const { data, error } = await serviceSupabase
+    .from("automation_runs")
+    .insert({
+      organisation_id: organisationId,
+      run_type: SCHEDULED_RUNNER_LIVE_SEND_RUN_TYPE,
+      mode: SCHEDULED_RUNNER_LIVE_SEND_MODE,
+      status: automationStatus,
+      as_of_date: asOfDateIso,
+      total_candidates: summary.totalCandidates,
+      with_email: summary.withEmail,
+      missing_email: summary.missingEmail,
+      would_send: summary.wouldSend,
+      would_skip: summary.wouldSkip,
+      summary: summaryPayload,
+      completed_at: new Date().toISOString(),
+    })
+    .select("automation_run_id")
+    .single();
+
+  if (error || !data?.automation_run_id) {
+    return {
+      ok: false,
+      error: error?.message ?? "automation_run_insert_failed",
+    };
+  }
+
+  return {
+    ok: true,
+    automationRunId: String(data.automation_run_id),
+  };
+}
+
+/**
+ * @param {DryRunCandidate} candidate
+ * @param {string} organisationId
+ * @param {string} automationRunId
+ * @param {string} asOfDateIso
+ * @param {string} organisationName
+ */
+function buildLiveSendCandidateBasePayload(
+  candidate: ComplianceRow & { reminderType: string; hasEmail: boolean },
+  asOfDateIso: string,
+  organisationName: string,
+) {
+  const recipientEmail = candidate.hasEmail ? normalizeEmail(candidate.email) : null;
+
+  return {
+    mode: SCHEDULED_RUNNER_LIVE_SEND_MODE,
+    asOfDate: asOfDateIso,
+    organisationName,
+    personId: candidate.personId,
+    recordId: candidate.recordId,
+    name: candidate.name,
+    role: candidate.role,
+    email: recipientEmail ?? "",
+    complianceType: candidate.complianceType,
+    reminderType: candidate.reminderType,
+    expiryDate: candidate.expiryDate,
+    hasEmail: candidate.hasEmail,
+  };
+}
+
+/**
+ * Phase 61: one reminder_delivery_logs row per candidate — send allowlisted only.
+ *
+ * @param {SupabaseClient} serviceSupabase
+ * @param {string} organisationId
+ * @param {string} automationRunId
+ * @param {DryRunCandidate[]} candidates
+ * @param {string} asOfDateIso
+ * @param {string} organisationName
+ * @param {Set<string>} allowlist
+ * @param {EmailProviderConfig} emailConfig
+ */
+async function processAndInsertLiveSendDeliveryLogs(
+  serviceSupabase: SupabaseClient,
+  organisationId: string,
+  automationRunId: string,
+  candidates: Array<ComplianceRow & { reminderType: string; hasEmail: boolean }>,
+  asOfDateIso: string,
+  organisationName: string,
+  allowlist: Set<string>,
+  emailConfig: EmailProviderConfig,
+): Promise<
+  | {
+      ok: true;
+      deliveryLogSummary: ReturnType<typeof buildLiveSendDeliveryLogSummary>;
+      sendSummary: ReturnType<typeof buildSendSummary>;
+    }
+  | { ok: false; error: string }
+> {
+  let sent = 0;
+  let skipped = 0;
+  let failed = 0;
+  let attempted = 0;
+  let skippedMissingEmail = 0;
+  let skippedNotAllowlisted = 0;
+
+  for (const candidate of candidates) {
+    const basePayload = buildLiveSendCandidateBasePayload(
+      candidate,
+      asOfDateIso,
+      organisationName,
+    );
+
+    if (!candidate.hasEmail) {
+      const { error } = await serviceSupabase.from("reminder_delivery_logs").insert({
+        organisation_id: organisationId,
+        automation_run_id: automationRunId,
+        compliance_record_id: candidate.recordId,
+        person_id: candidate.personId,
+        recipient_email: null,
+        recipient_name: candidate.name || null,
+        compliance_type: candidate.complianceType || null,
+        reminder_type: candidate.reminderType,
+        due_date: candidate.expiryDate || null,
+        delivery_status: "skipped",
+        provider: null,
+        provider_message_id: null,
+        payload: {
+          ...basePayload,
+          reason: "missing_email",
+        },
+      });
+
+      if (error) {
+        return { ok: false, error: error.message ?? "delivery_log_insert_failed" };
+      }
+
+      skipped += 1;
+      skippedMissingEmail += 1;
+      continue;
+    }
+
+    const recipientEmail = normalizeEmail(candidate.email);
+
+    if (!allowlist.has(recipientEmail)) {
+      const { error } = await serviceSupabase.from("reminder_delivery_logs").insert({
+        organisation_id: organisationId,
+        automation_run_id: automationRunId,
+        compliance_record_id: candidate.recordId,
+        person_id: candidate.personId,
+        recipient_email: recipientEmail,
+        recipient_name: candidate.name || null,
+        compliance_type: candidate.complianceType || null,
+        reminder_type: candidate.reminderType,
+        due_date: candidate.expiryDate || null,
+        delivery_status: "skipped",
+        provider: null,
+        provider_message_id: null,
+        payload: {
+          ...basePayload,
+          reason: "not_allowlisted",
+        },
+      });
+
+      if (error) {
+        return { ok: false, error: error.message ?? "delivery_log_insert_failed" };
+      }
+
+      skipped += 1;
+      skippedNotAllowlisted += 1;
+      continue;
+    }
+
+    attempted += 1;
+
+    const emailPreview = buildReminderEmailPreview(
+      {
+        recipientName: candidate.name,
+        personName: candidate.name,
+        complianceType: candidate.complianceType,
+        reminderType: candidate.reminderType,
+        expiryDate: candidate.expiryDate,
+      },
+      { organisationName },
+    );
+
+    const providerResult = await sendReminderEmail(
+      {
+        to: String(candidate.email).trim(),
+        subject: emailPreview.subject,
+        bodyText: emailPreview.bodyText,
+      },
+      emailConfig,
+    );
+
+    if (providerResult.status === "sent") {
+      const sentAt = new Date().toISOString();
+      const { error } = await serviceSupabase.from("reminder_delivery_logs").insert({
+        organisation_id: organisationId,
+        automation_run_id: automationRunId,
+        compliance_record_id: candidate.recordId,
+        person_id: candidate.personId,
+        recipient_email: recipientEmail,
+        recipient_name: candidate.name || null,
+        compliance_type: candidate.complianceType || null,
+        reminder_type: candidate.reminderType,
+        due_date: candidate.expiryDate || null,
+        delivery_status: "sent",
+        provider: "resend",
+        provider_message_id: providerResult.providerMessageId,
+        payload: {
+          ...basePayload,
+          emailPreview: {
+            subject: emailPreview.subject,
+            bodyText: buildBodyTextPreview(emailPreview.bodyText),
+          },
+        },
+        sent_at: sentAt,
+      });
+
+      if (error) {
+        return { ok: false, error: error.message ?? "delivery_log_insert_failed" };
+      }
+
+      sent += 1;
+      continue;
+    }
+
+    const errorCode =
+      providerResult.status === "error"
+        ? providerResult.code
+        : providerResult.status === "disabled"
+          ? providerResult.reason
+          : "send_failed";
+    const errorMessage =
+      providerResult.status === "error"
+        ? providerResult.error
+        : providerResult.status === "disabled"
+          ? providerResult.reason
+          : "send_failed";
+
+    const { error } = await serviceSupabase.from("reminder_delivery_logs").insert({
+      organisation_id: organisationId,
+      automation_run_id: automationRunId,
+      compliance_record_id: candidate.recordId,
+      person_id: candidate.personId,
+      recipient_email: recipientEmail,
+      recipient_name: candidate.name || null,
+      compliance_type: candidate.complianceType || null,
+      reminder_type: candidate.reminderType,
+      due_date: candidate.expiryDate || null,
+      delivery_status: "failed",
+      provider: "resend",
+      provider_message_id: null,
+      error_code: errorCode,
+      error_message: errorMessage,
+      payload: {
+        ...basePayload,
+        emailPreview: {
+          subject: emailPreview.subject,
+          bodyText: buildBodyTextPreview(emailPreview.bodyText),
+        },
+      },
+      sent_at: null,
+    });
+
+    if (error) {
+      return { ok: false, error: error.message ?? "delivery_log_insert_failed" };
+    }
+
+    failed += 1;
+  }
+
+  return {
+    ok: true,
+    deliveryLogSummary: buildLiveSendDeliveryLogSummary({
+      total: candidates.length,
+      sent,
+      skipped,
+      failed,
+    }),
+    sendSummary: buildSendSummary({
+      attempted,
+      sent,
+      failed,
+      skippedMissingEmail,
+      skippedNotAllowlisted,
+    }),
+  };
+}
+
 Deno.serve(async (req) => {
   const origin = req.headers.get("Origin");
   const corsHeaders = buildCorsHeaders(origin);
@@ -788,15 +1543,31 @@ Deno.serve(async (req) => {
   }
 
   if (modeResult.mode === SCHEDULED_RUNNER_LIVE_SEND_MODE) {
-    return jsonResponse(
-      {
-        status: "refused",
-        mode: SCHEDULED_RUNNER_LIVE_SEND_MODE,
-        reason: resolveLiveSendRefusalReason(),
-      },
-      409,
-      corsHeaders,
-    );
+    if (!isScheduledEmailSendingEnabled()) {
+      return jsonResponse(
+        {
+          status: "refused",
+          mode: SCHEDULED_RUNNER_LIVE_SEND_MODE,
+          reason: "scheduled_live_send_not_enabled",
+        },
+        409,
+        corsHeaders,
+      );
+    }
+  }
+
+  if (modeResult.mode === SCHEDULED_RUNNER_LIVE_SEND_PREVIEW_MODE) {
+    if (!isScheduledEmailPreviewEnabled()) {
+      return jsonResponse(
+        {
+          status: "refused",
+          mode: SCHEDULED_RUNNER_LIVE_SEND_PREVIEW_MODE,
+          reason: "scheduled_live_send_preview_not_enabled",
+        },
+        409,
+        corsHeaders,
+      );
+    }
   }
 
   const asOfDateInput =
@@ -829,6 +1600,151 @@ Deno.serve(async (req) => {
 
   if (!serviceSupabase) {
     return jsonResponse({ error: "service_unavailable" }, 500, corsHeaders);
+  }
+
+  if (modeResult.mode === SCHEDULED_RUNNER_LIVE_SEND_MODE) {
+    const liveSendEnv = readLiveSendEnv();
+    const liveSendConfigResult = validateLiveSendConfiguration(liveSendEnv);
+
+    if (!liveSendConfigResult.ok) {
+      return jsonResponse(liveSendConfigResult.body, liveSendConfigResult.status, corsHeaders);
+    }
+
+    const organisationResult = await loadOrganisationName(supabase, organisationId);
+
+    if (!organisationResult.ok) {
+      return jsonResponse({ error: "organisation_load_failed" }, 500, corsHeaders);
+    }
+
+    const liveSendInsertResult = await insertScheduledLiveSendAutomationRun(
+      serviceSupabase,
+      organisationId,
+      asOfDateIso,
+      summary,
+      "completed",
+    );
+
+    if (!liveSendInsertResult.ok) {
+      return jsonResponse(
+        {
+          error: "automation_run_persist_failed",
+          message: liveSendInsertResult.error,
+        },
+        500,
+        corsHeaders,
+      );
+    }
+
+    const liveSendDeliveryResult = await processAndInsertLiveSendDeliveryLogs(
+      serviceSupabase,
+      organisationId,
+      liveSendInsertResult.automationRunId,
+      candidates,
+      asOfDateIso,
+      organisationResult.organisationName,
+      liveSendConfigResult.allowlist,
+      liveSendConfigResult.config,
+    );
+
+    if (!liveSendDeliveryResult.ok) {
+      return jsonResponse(
+        {
+          error: "delivery_log_persist_failed",
+          message: liveSendDeliveryResult.error,
+          automationRunId: liveSendInsertResult.automationRunId,
+        },
+        500,
+        corsHeaders,
+      );
+    }
+
+    const { deliveryLogSummary, sendSummary } = liveSendDeliveryResult;
+    const automationStatus =
+      deliveryLogSummary.skipped > 0 || deliveryLogSummary.failed > 0
+        ? "completed_with_skips"
+        : "completed";
+
+    if (automationStatus === "completed_with_skips") {
+      await serviceSupabase
+        .from("automation_runs")
+        .update({ status: automationStatus })
+        .eq("automation_run_id", liveSendInsertResult.automationRunId);
+    }
+
+    return jsonResponse(
+      {
+        status: "ok",
+        mode: SCHEDULED_RUNNER_LIVE_SEND_MODE,
+        organisationId,
+        automationRunId: liveSendInsertResult.automationRunId,
+        summary,
+        deliveryLogSummary,
+        sendSummary,
+      },
+      200,
+      corsHeaders,
+    );
+  }
+
+  if (modeResult.mode === SCHEDULED_RUNNER_LIVE_SEND_PREVIEW_MODE) {
+    const organisationResult = await loadOrganisationName(supabase, organisationId);
+
+    if (!organisationResult.ok) {
+      return jsonResponse({ error: "organisation_load_failed" }, 500, corsHeaders);
+    }
+
+    const previewInsertResult = await insertScheduledLiveSendPreviewAutomationRun(
+      serviceSupabase,
+      organisationId,
+      asOfDateIso,
+      summary,
+    );
+
+    if (!previewInsertResult.ok) {
+      return jsonResponse(
+        {
+          error: "automation_run_persist_failed",
+          message: previewInsertResult.error,
+        },
+        500,
+        corsHeaders,
+      );
+    }
+
+    const previewDeliveryLogResult = await insertScheduledLiveSendPreviewDeliveryLogs(
+      serviceSupabase,
+      organisationId,
+      previewInsertResult.automationRunId,
+      candidates,
+      asOfDateIso,
+      organisationResult.organisationName,
+    );
+
+    if (!previewDeliveryLogResult.ok) {
+      return jsonResponse(
+        {
+          error: "delivery_log_persist_failed",
+          message: previewDeliveryLogResult.error,
+          automationRunId: previewInsertResult.automationRunId,
+        },
+        500,
+        corsHeaders,
+      );
+    }
+
+    return jsonResponse(
+      {
+        status: "ok",
+        mode: SCHEDULED_RUNNER_LIVE_SEND_PREVIEW_MODE,
+        organisationId,
+        automationRunId: previewInsertResult.automationRunId,
+        summary,
+        deliveryLogSummary: previewDeliveryLogResult.deliveryLogSummary,
+        previewSummary: buildPreviewSummary(candidates),
+      },
+      200,
+      corsHeaders,
+    );
   }
 
   const insertResult = await insertScheduledDryRunAutomationRun(

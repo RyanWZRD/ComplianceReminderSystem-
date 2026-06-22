@@ -20,10 +20,7 @@ const DEFAULT_STAGING_ORGANISATION_ID = "11111111-1111-1111-1111-111111111111";
 
 const STAGING_PROJECT_REF = "vmrotpztwoeifbdjwdis";
 
-const LIVE_SEND_REFUSAL_REASONS = new Set([
-  "scheduled_live_send_not_enabled",
-  "scheduled_live_send_not_implemented",
-]);
+const LIVE_SEND_REFUSAL_REASONS = new Set(["scheduled_live_send_not_enabled"]);
 
 /** @type {string[]} */
 const failures = [];
@@ -297,28 +294,29 @@ if (liveSendHttpStatus === 404) {
   process.exit(1);
 }
 
-if (liveSendHttpStatus === 200) {
-  console.error(
-    "scheduled-reminder-runner returned 200 for live_send — redeploy Phase 59 gate to staging:\n" +
-      `  supabase functions deploy scheduled-reminder-runner --project-ref ${STAGING_PROJECT_REF}`,
-  );
-  process.exit(1);
-}
-
-assert(liveSendHttpStatus === 409, `live_send HTTP status must be 409 (got ${liveSendHttpStatus})`);
-
 const liveSendBody = asObject(liveSendPayload);
 
-assertEqual(liveSendBody.status, "refused", "live_send response.status");
-assertEqual(liveSendBody.mode, "live_send", "live_send response.mode");
-assert(
-  typeof liveSendBody.reason === "string" &&
-    LIVE_SEND_REFUSAL_REASONS.has(liveSendBody.reason),
-  `live_send response.reason must be one of ${[...LIVE_SEND_REFUSAL_REASONS].join(", ")}`,
-);
+if (liveSendHttpStatus === 200 && liveSendBody.status === "ok") {
+  console.log(
+    "live_send returned 200 — Phase 61 enabled on staging; Phase 59 gate-off test skipped (disable SCHEDULED_EMAIL_SENDING_ENABLED to verify 409 refusal)",
+  );
+} else {
+  assert(liveSendHttpStatus === 409, `live_send HTTP status must be 409 when gate off (got ${liveSendHttpStatus})`);
 
-console.log("live_send refusal checks: OK");
-console.log(`  reason: ${liveSendBody.reason}`);
+  assertEqual(liveSendBody.status, "refused", "live_send response.status");
+  assertEqual(liveSendBody.mode, "live_send", "live_send response.mode");
+  assert(
+    typeof liveSendBody.reason === "string" &&
+      LIVE_SEND_REFUSAL_REASONS.has(liveSendBody.reason),
+    `live_send response.reason must be one of ${[...LIVE_SEND_REFUSAL_REASONS].join(", ")}`,
+  );
+
+  console.log("live_send refusal checks: OK");
+  console.log(`  reason: ${liveSendBody.reason}`);
+}
+
+const liveSendGateOffRefused =
+  liveSendHttpStatus === 409 && liveSendBody.status === "refused";
 
 console.log("\n--- row counts after live_send invoke ---");
 
@@ -344,16 +342,27 @@ if (automationCountAfterLiveSendError) {
   process.exit(1);
 }
 
-assertEqual(
-  deliveryLogCountAfterLiveSend ?? 0,
-  deliveryLogCountBefore ?? 0,
-  "reminder_delivery_logs count unchanged after live_send invoke",
-);
-assertEqual(
-  automationRunCountAfterLiveSend ?? 0,
-  automationRunCountBefore ?? 0,
-  "automation_runs count unchanged after live_send invoke",
-);
+if (liveSendGateOffRefused) {
+  assertEqual(
+    deliveryLogCountAfterLiveSend ?? 0,
+    deliveryLogCountBefore ?? 0,
+    "reminder_delivery_logs count unchanged after refused live_send invoke",
+  );
+  assertEqual(
+    automationRunCountAfterLiveSend ?? 0,
+    automationRunCountBefore ?? 0,
+    "automation_runs count unchanged after refused live_send invoke",
+  );
+} else if (liveSendHttpStatus === 200 && liveSendBody.status === "ok") {
+  assert(
+    (deliveryLogCountAfterLiveSend ?? 0) > (deliveryLogCountBefore ?? 0),
+    "live_send enabled — delivery log rows increased",
+  );
+  assert(
+    (automationRunCountAfterLiveSend ?? 0) > (automationRunCountBefore ?? 0),
+    "live_send enabled — automation_runs rows increased",
+  );
+}
 
 console.log("\n--- invoke scheduled-reminder-runner (mode: dry_run) ---");
 
@@ -460,7 +469,10 @@ if (failures.length > 0) {
 
 console.log("\nverify-scheduled-runner-live-send-gate-staging: all checks OK");
 console.log(`  organisation: ${organisationId}`);
-console.log(`  live_send refused: ${liveSendBody.reason} (no row writes)`);
+console.log(
+  liveSendGateOffRefused
+    ? `  live_send refused: ${liveSendBody.reason} (no row writes)`
+    : `  live_send: enabled (Phase 61)`,
+);
 console.log(`  dry_run automationRunId: ${automationRunId}`);
 console.log(`  dry_run delivery log rows: ${deliveryRows?.length ?? 0}`);
-console.log("  scope: gate only — no scheduled email sends");

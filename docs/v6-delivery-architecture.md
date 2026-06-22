@@ -410,6 +410,10 @@ interface HealthCheckResult {
 | `npm run verify-send-test-email-delivery-log-audit-staging` | Phase 58 — staging verification of one manual test-send delivery log row |
 | `npm run verify-scheduled-runner-live-send-gate` | Phase 59 — scheduled runner live-send gate static checks |
 | `npm run verify-scheduled-runner-live-send-gate-staging` | Phase 59 — staging verification of live_send refusal + dry_run unchanged |
+| `npm run verify-scheduled-runner-live-send-preview` | Phase 60 — scheduled runner live-send preview static checks |
+| `npm run verify-scheduled-runner-live-send-preview-staging` | Phase 60 — staging verification of preview gate + metadata persistence |
+| `npm run verify-scheduled-runner-controlled-live-send` | Phase 61 — controlled live_send static checks (allowlisted only) |
+| `npm run verify-scheduled-runner-controlled-live-send-staging` | Phase 61 — staging verification of one allowlisted scheduled send + audit |
 | `npm run verify-browser-resend-provider-foundation` | Phase 20 — browser orchestrator; runs skeleton foundation + Resend plan + Resend provider in order, stop on first failure |
 | `npm run verify-delivery-operations-log-ui` | Phase 22 — Delivery Operations Log UI, CSV export, no execution hooks |
 | `npm run verify-delivery-worker` | Phase 24 — worker delivery execution engine (in-memory; no app wiring) |
@@ -1911,11 +1915,93 @@ Catalog/introspection queries are preferred; the script does not insert test del
 
 ---
 
+## Phase 60 — Scheduled runner live-send preview mode
+
+**Scope:** `live_send_preview` mode on `scheduled-reminder-runner` with `SCHEDULED_EMAIL_PREVIEW_ENABLED` config gate. **Preview only** — generates email subject/body metadata via Phase 53 template framework and persists `automation_runs` + `reminder_delivery_logs` rows. No Resend, no `sendReminderEmail`, no `mark_reminder_sent`, no compliance mutation, and no `sent_at` / `provider_message_id` writes. **`dry_run` unchanged**; **`live_send` still refused**.
+
+### Phase 60 deliverables
+
+| Item | Location |
+|------|----------|
+| Preview mode + config gate | `supabase/functions/scheduled-reminder-runner/index.ts` |
+| Edge-safe email template | `supabase/functions/_shared/reminder-email-template.ts` |
+| Static verification gate | `scripts/verify-scheduled-runner-live-send-preview.mjs` |
+| Staging verification gate | `scripts/verify-scheduled-runner-live-send-preview-staging.mjs` |
+| Runner documentation | [`docs/v6-scheduled-runner.md`](v6-scheduled-runner.md) |
+
+**Script:** `scripts/verify-scheduled-runner-live-send-preview.mjs`
+
+`npm run verify-scheduled-runner-live-send-preview` verifies:
+
+1. `live_send_preview` mode constant and preview gate (`SCHEDULED_EMAIL_PREVIEW_ENABLED` defaults false)
+2. Refusal path (`scheduled_live_send_preview_not_enabled`) before database writes
+3. Enabled preview path inserts `automation_runs` (`scheduled_reminder_live_send_preview`) and delivery logs with `emailPreview`
+4. `provider`, `provider_message_id`, `sent_at` remain null on preview rows
+5. No `email-provider`, `sendReminderEmail`, Resend, or `mark_reminder_sent`
+6. `dry_run` and `live_send` behaviour unchanged
+
+**Script:** `scripts/verify-scheduled-runner-live-send-preview-staging.mjs`
+
+`npm run verify-scheduled-runner-live-send-preview-staging` verifies:
+
+1. Signs in as staging admin
+2. POST `mode: "live_send_preview"` — gate disabled: HTTP 409, no row writes; gate enabled: HTTP 200, preview metadata persisted
+3. POST `mode: "live_send"` — still refused
+
+### Phase 60 configuration
+
+| Variable | Default | Notes |
+|----------|---------|-------|
+| `SCHEDULED_EMAIL_PREVIEW_ENABLED` | `false` | Edge secret on `scheduled-reminder-runner` |
+
+### Phase 60 constraints
+
+- Preview metadata only — no live scheduled sends
+- Refused `live_send_preview` (gate off) creates no rows
+- Preview rows: `delivery_status` `pending`/`skipped` only; `emailPreview` in payload for pending rows
+
+**Phase 60 gate:** `npm run verify-scheduled-runner-live-send-preview` must pass; `npm run verify-scheduled-runner-live-send-preview-staging` must pass against staging.
+
+**Next slice:** V6 Phase 61 — scheduled runner controlled live send (complete).
+
+---
+
+## Phase 61 — Scheduled runner controlled live send (allowlisted only)
+
+**Scope:** `live_send` mode on `scheduled-reminder-runner` with `SCHEDULED_EMAIL_SENDING_ENABLED`, `EMAIL_SENDING_ENABLED`, and `SCHEDULED_EMAIL_ALLOWLIST` gates. **Allowlisted recipients only** — one email per eligible candidate, delivery log audit (`sent` / `skipped` / `failed`). No `mark_reminder_sent`, no compliance mutation, no reminder sent history writes. **`dry_run` unchanged**; **`live_send_preview` unchanged**.
+
+### Phase 61 deliverables
+
+| Item | Location |
+|------|----------|
+| Controlled live_send path | `supabase/functions/scheduled-reminder-runner/index.ts` |
+| Static verification gate | `scripts/verify-scheduled-runner-controlled-live-send.mjs` |
+| Staging verification gate | `scripts/verify-scheduled-runner-controlled-live-send-staging.mjs` |
+
+**Script:** `scripts/verify-scheduled-runner-controlled-live-send.mjs`
+
+`npm run verify-scheduled-runner-controlled-live-send` verifies live_send provider wiring, allowlist gates, delivery log audit, no mark-as-sent, and unchanged dry_run/preview paths.
+
+**Script:** `scripts/verify-scheduled-runner-controlled-live-send-staging.mjs`
+
+`npm run verify-scheduled-runner-controlled-live-send-staging` verifies one allowlisted scheduled send on staging, delivery log rows, no compliance/history mutation, and prints live send count.
+
+### Phase 61 configuration
+
+| Variable | Default | Notes |
+|----------|---------|-------|
+| `SCHEDULED_EMAIL_SENDING_ENABLED` | `false` | Runner gate |
+| `EMAIL_SENDING_ENABLED` | `false` | Provider gate |
+| `SCHEDULED_EMAIL_ALLOWLIST` | — | Edge secret; comma-separated |
+| `SCHEDULED_TEST_EMAIL_TO` | — | Local `.env`; single allowlisted recipient for staging test |
+
+**Phase 61 gate:** `npm run verify-scheduled-runner-controlled-live-send` must pass; `npm run verify-scheduled-runner-controlled-live-send-staging` must pass against staging with sending enabled.
+
+**Next slice:** TBD — mark-as-sent / compliance mutation after operational sign-off.
+
+---
+
 ## Phase 59 — Scheduled runner live-send gate
-
-**Scope:** Explicit `mode` (`dry_run` | `live_send`) and `SCHEDULED_EMAIL_SENDING_ENABLED` config gate on `scheduled-reminder-runner`. **`live_send` refused by default** — no scheduled reminder emails, no Resend, no `sendReminderEmail`, no `mark_reminder_sent`, no compliance mutation, and no `sent_at` / `provider_message_id` writes from the runner. **`dry_run` unchanged** (Phase 52).
-
-### Phase 59 deliverables
 
 | Item | Location |
 |------|----------|
@@ -2027,7 +2113,7 @@ supabase functions deploy send-test-email --project-ref vmrotpztwoeifbdjwdis
 
 **Phase 58 gate:** `npm run verify-send-test-email-delivery-log-audit` must pass; `npm run verify-send-test-email-delivery-log-audit-staging` must pass against staging with sending enabled.
 
-**Next slice:** V6 Phase 59 — scheduled runner live-send gate (complete).
+**Next slice:** V6 Phase 60 — scheduled runner live-send preview mode (complete).
 
 ---
 

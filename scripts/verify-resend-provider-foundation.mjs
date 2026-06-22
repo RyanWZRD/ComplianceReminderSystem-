@@ -213,23 +213,8 @@ for (const needle of providerForbiddenNeedles) {
 
 assertNotContains(
   scheduledRunnerSource,
-  "email-provider",
-  "scheduled-reminder-runner does not import email-provider",
-);
-assertNotContains(
-  scheduledRunnerSource,
-  "sendReminderEmail",
-  "scheduled-reminder-runner does not call sendReminderEmail",
-);
-assertNotContains(
-  scheduledRunnerSource,
   "api.resend.com",
-  "scheduled-reminder-runner does not call Resend",
-);
-assertNotContains(
-  scheduledRunnerSource,
-  "RESEND_API_KEY",
-  "scheduled-reminder-runner does not read RESEND_API_KEY",
+  "scheduled-reminder-runner does not call Resend directly",
 );
 
 const edgeFunctionDir = join(root, "supabase", "functions");
@@ -238,13 +223,15 @@ const edgeSources = listEdgeFunctionSources(edgeFunctionDir);
 for (const [index, source] of edgeSources.entries()) {
   const isProviderDefinition = source.includes("export async function sendReminderEmail");
   const isDisabledModeVerification = source.includes("provider_disabled_verification");
-  const isManualTestSend = source.includes("V6 Phase 56: Controlled manual test-send");
+  const isManualTestSend = source.includes("Controlled manual test-send");
+  const isScheduledRunnerLiveSend = source.includes("processAndInsertLiveSendDeliveryLogs");
 
   if (
     source.includes("sendReminderEmail(") &&
     !isProviderDefinition &&
     !isDisabledModeVerification &&
-    !isManualTestSend
+    !isManualTestSend &&
+    !isScheduledRunnerLiveSend
   ) {
     fail(`Edge Function source ${index} calls sendReminderEmail`);
   }
@@ -335,7 +322,7 @@ if (failures.length > 0) {
 console.log("\nverify-resend-provider-foundation: all checks OK");
 console.log("  - Edge shared email-provider module exists with safety gates");
 console.log("  - EMAIL_SENDING_ENABLED defaults false; RESEND_API_KEY optional when disabled");
-console.log("  - scheduled-reminder-runner does not import provider or call Resend");
-console.log("  - Only verify-email-provider-disabled and send-test-email may call sendReminderEmail");
+console.log("  - scheduled-reminder-runner uses provider in live_send path only (Phase 61)");
+console.log("  - send-test-email and scheduled-reminder-runner may call sendReminderEmail");
 console.log("  - No delivery_status/sent_at/provider_message_id/mark_reminder_sent in provider module");
 console.log("  - npm run build passes without RESEND_API_KEY");

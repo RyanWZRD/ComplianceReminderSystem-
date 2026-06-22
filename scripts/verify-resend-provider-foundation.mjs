@@ -238,11 +238,13 @@ const edgeSources = listEdgeFunctionSources(edgeFunctionDir);
 for (const [index, source] of edgeSources.entries()) {
   const isProviderDefinition = source.includes("export async function sendReminderEmail");
   const isDisabledModeVerification = source.includes("provider_disabled_verification");
+  const isManualTestSend = source.includes("V6 Phase 56: Controlled manual test-send");
 
   if (
     source.includes("sendReminderEmail(") &&
     !isProviderDefinition &&
-    !isDisabledModeVerification
+    !isDisabledModeVerification &&
+    !isManualTestSend
   ) {
     fail(`Edge Function source ${index} calls sendReminderEmail`);
   }
@@ -334,6 +336,6 @@ console.log("\nverify-resend-provider-foundation: all checks OK");
 console.log("  - Edge shared email-provider module exists with safety gates");
 console.log("  - EMAIL_SENDING_ENABLED defaults false; RESEND_API_KEY optional when disabled");
 console.log("  - scheduled-reminder-runner does not import provider or call Resend");
-console.log("  - Only verify-email-provider-disabled may call sendReminderEmail (Phase 55 staging gate)");
+console.log("  - Only verify-email-provider-disabled and send-test-email may call sendReminderEmail");
 console.log("  - No delivery_status/sent_at/provider_message_id/mark_reminder_sent in provider module");
 console.log("  - npm run build passes without RESEND_API_KEY");

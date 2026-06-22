@@ -111,6 +111,8 @@
     "verify-reminder-delivery-log-schema-staging": "node scripts/verify-reminder-delivery-log-schema-staging.mjs",
     "verify-reminder-email-template": "node scripts/verify-reminder-email-template.mjs",
     "verify-email-provider-disabled-staging": "node scripts/verify-email-provider-disabled-staging.mjs",
+    "verify-send-test-email-function": "node scripts/verify-send-test-email-function.mjs",
+    "verify-send-test-email-disabled-staging": "node scripts/verify-send-test-email-disabled-staging.mjs",
     "verify:phase2": "node scripts/verify-phase2.mjs"
   },
   "dependencies": {

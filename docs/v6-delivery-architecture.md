@@ -403,6 +403,8 @@ interface HealthCheckResult {
 | `npm run verify-resend-provider` | Phase 19 — Resend provider network implementation (mocked `fetchImpl`; no app wiring) |
 | `npm run verify-resend-provider-foundation` | Phase 54 — Edge shared email provider foundation (disabled by default; no live sends) |
 | `npm run verify-email-provider-disabled-staging` | Phase 55 — staging verification that provider is disabled by default (no live sends) |
+| `npm run verify-send-test-email-function` | Phase 56 — manual test-send function static/config checks (no live sends) |
+| `npm run verify-send-test-email-disabled-staging` | Phase 56 — staging verification that send-test-email refuses when sending disabled |
 | `npm run verify-browser-resend-provider-foundation` | Phase 20 — browser orchestrator; runs skeleton foundation + Resend plan + Resend provider in order, stop on first failure |
 | `npm run verify-delivery-operations-log-ui` | Phase 22 — Delivery Operations Log UI, CSV export, no execution hooks |
 | `npm run verify-delivery-worker` | Phase 24 — worker delivery execution engine (in-memory; no app wiring) |
@@ -1877,7 +1879,7 @@ Catalog/introspection queries are preferred; the script does not insert test del
 2. `EMAIL_SENDING_ENABLED` defaults to `false`; `EMAIL_PROVIDER` defaults to `resend`
 3. Missing `RESEND_API_KEY` is safe when sending is disabled
 4. `scheduled-reminder-runner` does not import Resend or `email-provider`
-5. Only `verify-email-provider-disabled` may call `sendReminderEmail` (Phase 55); `scheduled-reminder-runner` must not
+5. Only `verify-email-provider-disabled` and `send-test-email` may call `sendReminderEmail` (Phases 55–56); `scheduled-reminder-runner` must not
 6. Provider module has no `delivery_status`, `sent_at`, `provider_message_id`, or `mark_reminder_sent` patterns
 7. No live Resend calls; `npm run build` passes without `RESEND_API_KEY`
 
@@ -1901,6 +1903,68 @@ Catalog/introspection queries are preferred; the script does not insert test del
 **Phase 54 gate:** `npm run verify-resend-provider-foundation` must pass.
 
 **Next slice:** V6 Phase 55 — provider disabled-mode staging verification (complete).
+
+---
+
+## Phase 56 — Controlled manual test-send function
+
+**Scope:** Dedicated manual `send-test-email` Edge Function that sends exactly one controlled test email through the Resend provider to an **allowlisted** recipient when `EMAIL_SENDING_ENABLED=true`. **Manual only** — `scheduled-reminder-runner` remains disconnected, no bulk sends, no reminder candidate sends, no `mark_reminder_sent`, no compliance mutation, and **no `reminder_delivery_logs` or `automation_runs` writes** in this phase.
+
+### Phase 56 deliverables
+
+| Item | Location |
+|------|----------|
+| Manual test-send Edge Function | `supabase/functions/send-test-email/index.ts` |
+| Static verification gate | `scripts/verify-send-test-email-function.mjs` |
+| Disabled-mode staging gate | `scripts/verify-send-test-email-disabled-staging.mjs` |
+| Contract reference | [`docs/v6-automated-email-reminders.md`](v6-automated-email-reminders.md) |
+
+**Deploy before staging verification:**
+
+```powershell
+supabase functions deploy send-test-email --project-ref vmrotpztwoeifbdjwdis
+```
+
+**Script:** `scripts/verify-send-test-email-function.mjs`
+
+`npm run verify-send-test-email-function` verifies:
+
+1. `send-test-email` exists; POST + Authorization + authenticated user required
+2. `EMAIL_SENDING_ENABLED`, `RESEND_API_KEY`, `EMAIL_FROM_ADDRESS`, and `TEST_EMAIL_ALLOWLIST` gates present
+3. Allowlist checked before send; `sendReminderEmail` called at most once
+4. No `reminder_delivery_logs`, `automation_runs`, `mark_reminder_sent`, or `sent_at` writes
+5. `scheduled-reminder-runner` does not import `email-provider` or reference `send-test-email`
+6. No bulk loop sends
+
+**Script:** `scripts/verify-send-test-email-disabled-staging.mjs`
+
+`npm run verify-send-test-email-disabled-staging` verifies:
+
+1. Deployed invoke returns HTTP 403 with `status: refused`, `reason: email_sending_disabled`
+2. Response has no `providerMessageId` or `sent_at`
+3. `reminder_delivery_logs` and `automation_runs` row counts unchanged
+4. `scheduled-reminder-runner` unchanged
+5. `RESEND_API_KEY` not required for this verification
+
+### Phase 56 configuration
+
+| Variable | Default | Notes |
+|----------|---------|-------|
+| `EMAIL_SENDING_ENABLED` | `false` | Explicit `true` required to send |
+| `TEST_EMAIL_ALLOWLIST` | — | Comma-separated allowlisted recipient emails |
+| `RESEND_API_KEY` | — | Required when sending enabled |
+| `EMAIL_FROM_ADDRESS` | — | Required when sending enabled |
+
+### Phase 56 constraints
+
+- Manual test function only — no scheduled-runner email sending
+- Recipient allowlist required
+- Exactly one email per invoke; no delivery log writes
+- No app UI changes
+
+**Phase 56 gate:** `npm run verify-send-test-email-function` must pass; `npm run verify-send-test-email-disabled-staging` must pass against staging.
+
+**Next slice:** TBD — wire provider into scheduled-reminder-runner send path.
 
 ---
 
@@ -1941,7 +2005,7 @@ supabase functions deploy verify-email-provider-disabled --project-ref vmrotpztw
 
 **Phase 55 gate:** `npm run verify-email-provider-disabled-staging` must pass against staging.
 
-**Next slice:** TBD — wire provider into scheduled-reminder-runner send path.
+**Next slice:** V6 Phase 56 — controlled manual test-send function (complete).
 
 ---
 

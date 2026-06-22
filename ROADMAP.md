@@ -6,6 +6,45 @@ A local-first safeguarding compliance tracker. Runs in the browser with localSto
 
 # Current Release
 
+## V6 Phase 56 — Controlled Manual Test-Send Function
+
+**Date:** June 2026
+
+### Summary
+
+V6 Phase 56 adds a **dedicated manual** `send-test-email` Edge Function that can send exactly one controlled test email through the Resend provider to an **allowlisted** recipient. **Manual only** — no `scheduled-reminder-runner` email sending, no bulk sends, no reminder candidate sends, no `mark_reminder_sent`, no compliance record mutation, and no `reminder_delivery_logs` or `automation_runs` writes.
+
+**Documentation:**
+
+- [`docs/v6-automated-email-reminders.md`](docs/v6-automated-email-reminders.md) — Phase 56 controlled manual test-send
+- [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md) — Phase 56 cross-reference
+
+**Deliverables:**
+
+| Item | Location |
+|------|----------|
+| Manual test-send Edge Function | `supabase/functions/send-test-email/index.ts` |
+| Static verification gate | `scripts/verify-send-test-email-function.mjs` |
+| Disabled-mode staging gate | `scripts/verify-send-test-email-disabled-staging.mjs` |
+
+**Deploy before staging verification:**
+
+```powershell
+supabase functions deploy send-test-email --project-ref vmrotpztwoeifbdjwdis
+```
+
+**Verification (required):**
+
+```powershell
+npm run verify-send-test-email-function
+npm run verify-send-test-email-disabled-staging
+npm run build
+```
+
+**Next slice:** TBD — wire provider into scheduled-reminder-runner send path (not in Phase 56 scope)
+
+---
+
 ## V6 Phase 55 — Provider Disabled-Mode Staging Verification
 
 **Date:** June 2026

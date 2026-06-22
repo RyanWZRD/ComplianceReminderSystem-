@@ -2149,7 +2149,7 @@ Catalog/introspection queries are preferred; the script does not insert test del
 
 **Script:** `scripts/verify-scheduled-runner-mark-sent-after-delivery-staging.mjs`
 
-`npm run verify-scheduled-runner-mark-sent-after-delivery-staging` verifies one allowlisted send marks compliance sent + history on staging using **Phase 62 Test Person** fixture; confirms `dry_run` and `live_send_preview` do not mark sent.
+`npm run verify-scheduled-runner-mark-sent-after-delivery-staging` verifies one allowlisted send marks compliance sent + history on staging using a **unique timestamped Phase 62 test person** per run (isolated from prior `sent` delivery logs); confirms `dry_run` and `live_send_preview` do not mark sent.
 
 **Phase 62 gate:** `npm run verify-scheduled-runner-mark-sent-after-delivery` must pass; `npm run verify-scheduled-runner-mark-sent-after-delivery-staging` must pass against staging with sending enabled.
 

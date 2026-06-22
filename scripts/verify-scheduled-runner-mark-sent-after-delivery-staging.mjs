@@ -19,7 +19,17 @@ const envPath = join(root, ".env");
 const DEFAULT_STAGING_ORGANISATION_ID = "11111111-1111-1111-1111-111111111111";
 
 const STAGING_PROJECT_REF = "vmrotpztwoeifbdjwdis";
-const PHASE_62_TEST_PERSON_NAME = "Phase 62 Test Person";
+const PHASE_62_TEST_PERSON_PREFIX = "Phase 62 Test Person";
+
+/**
+ * Unique person name per run so Phase 63 duplicate prevention on prior sent logs
+ * does not block repeat staging acceptance.
+ * @returns {string}
+ */
+function buildPhase62TestPersonName() {
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+  return `${PHASE_62_TEST_PERSON_PREFIX} ${stamp}`;
+}
 
 /** @type {string[]} */
 const failures = [];
@@ -319,70 +329,26 @@ const userClient = createClient(supabaseUrl, anonKey, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
 
-console.log("\n--- ensure Phase 62 staging test fixture ---");
-console.log(`  person: ${PHASE_62_TEST_PERSON_NAME}`);
+const testPersonName = buildPhase62TestPersonName();
+
+console.log("\n--- create Phase 62 staging test fixture (unique per run) ---");
+console.log(`  person: ${testPersonName}`);
 console.log(`  email: ${allowlistedRecipient}`);
 console.log(`  expiry: ${testExpiryDate} (7-day reminder window)`);
-
-const { data: existingPeople, error: peopleQueryError } = await serviceClient
-  .from("people")
-  .select("id, name, email")
-  .eq("organisation_id", organisationId)
-  .ilike("name", PHASE_62_TEST_PERSON_NAME);
-
-if (peopleQueryError) {
-  console.error(`people query failed: ${peopleQueryError.message}`);
-  process.exit(1);
-}
 
 /** @type {{ recordId: string; personId: string }} */
 let testFixture;
 
-if ((existingPeople ?? []).length > 0) {
-  const person = existingPeople[0];
-  const personId = String(person.id);
-
-  await serviceClient
-    .from("people")
-    .update({ email: allowlistedRecipient })
-    .eq("id", personId);
-
-  const { data: records, error: recordsError } = await serviceClient
-    .from("compliance_records")
-    .select("id, expiry_date, notes")
-    .eq("person_id", personId)
-    .eq("organisation_id", organisationId)
-    .order("created_at", { ascending: false });
-
-  if (recordsError) {
-    console.error(`compliance_records query failed: ${recordsError.message}`);
-    process.exit(1);
-  }
-
-  let recordId = String(records?.[0]?.id ?? "").trim();
-
-  if (!isUuidString(recordId)) {
-    testFixture = await ensurePhase62TestRecord(
-      userClient,
-      PHASE_62_TEST_PERSON_NAME,
-      allowlistedRecipient,
-      testExpiryDate,
-    );
-  } else {
-    await serviceClient
-      .from("compliance_records")
-      .update({ expiry_date: testExpiryDate, notes: "" })
-      .eq("id", recordId);
-
-    testFixture = { recordId, personId };
-  }
-} else {
+try {
   testFixture = await ensurePhase62TestRecord(
     userClient,
-    PHASE_62_TEST_PERSON_NAME,
+    testPersonName,
     allowlistedRecipient,
     testExpiryDate,
   );
+} catch (error) {
+  console.error(error instanceof Error ? error.message : String(error));
+  process.exit(1);
 }
 
 const { recordId: testRecordId, personId: testPersonId } = testFixture;
@@ -706,9 +672,11 @@ if (failures.length > 0) {
 
 console.log("\nverify-scheduled-runner-mark-sent-after-delivery-staging: all checks OK");
 console.log(`  organisation: ${organisationId}`);
-console.log(`  test person: ${PHASE_62_TEST_PERSON_NAME} (${testPersonId})`);
+console.log(`  test person: ${testPersonName} (${testPersonId})`);
 console.log(`  test record: ${testRecordId}`);
 console.log(`  automationRunId: ${automationRunId}`);
 console.log(`  markedSent: ${markSentSummary.markedSent}`);
 console.log(`  sent delivery logs: ${sentDeliveryRows?.length ?? 0}`);
-console.log("\nStaging fixture left in place for repeat runs — reset notes before next live_send if needed.");
+console.log(
+  "\nUnique fixture per run — prior sent delivery logs on other records do not block repeat staging acceptance.",
+);

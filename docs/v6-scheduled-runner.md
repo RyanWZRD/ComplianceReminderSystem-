@@ -966,6 +966,8 @@ npm run verify-scheduled-runner-mark-sent-after-delivery-staging
 npm run build
 ```
 
+**Staging fixture:** `verify-scheduled-runner-mark-sent-after-delivery-staging` creates a **unique timestamped Phase 62 test person** per run so Phase 63 duplicate prevention on prior `sent` logs does not block repeat acceptance. See [`docs/v6-production-readiness.md`](v6-production-readiness.md) § Staging fixture isolation (Phase 67).
+
 **Deploy Phase 62 to staging:**
 
 ```powershell

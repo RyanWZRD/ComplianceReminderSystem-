@@ -30,6 +30,8 @@ npm run verify-v6-production-readiness
 npm run build
 ```
 
+**Production go-live (Phase 68):** [`docs/v6-production-go-live.md`](v6-production-go-live.md) — operator runbook, allowlist transition, first live-send checklist, emergency disable. Gate: `npm run verify-v6-production-go-live-readiness`.
+
 ---
 
 ## Required environment variables and secrets
@@ -125,6 +127,17 @@ npm run verify-scheduled-runner-failure-handling-staging
 npm run verify-automation-visibility-cloud-load
 ```
 
+### Staging fixture isolation (Phase 67)
+
+Phase 63 duplicate prevention blocks a second `live_send` when a compliance record already has a `sent` `reminder_delivery_logs` row for the same `asOfDate`. The Phase 62 mark-sent staging gate therefore creates a **new person and compliance record per run** (`Phase 62 Test Person <ISO-timestamp>`) instead of reusing a fixed fixture. This keeps repeat staging acceptance reliable without weakening duplicate prevention or deleting global delivery logs.
+
+| Constraint | Value |
+|------------|-------|
+| Organisation | `11111111-1111-1111-1111-111111111111` (Alpha Test Organisation) |
+| Recipient | `SCHEDULED_TEST_EMAIL_TO` (single allowlisted address) |
+| Reminder window | 7 Day Reminder |
+| Expiry | `asOfDate + 5 days` (matches runner 7-day window) |
+
 Static gates (no staging network):
 
 ```powershell
@@ -179,6 +192,7 @@ Phase 66 adds **verification only** — rollback is operational (secret disable 
 
 ## Related documentation
 
+- [`v6-production-go-live.md`](v6-production-go-live.md) — Phase 68 production go-live runbook, allowlist transition, emergency disable (`npm run verify-v6-production-go-live-readiness`)
 - [`v6-automated-email-reminders.md`](v6-automated-email-reminders.md) — phase-by-phase automated reminder history
 - [`v6-delivery-architecture.md`](v6-delivery-architecture.md) — delivery domain model and verification index
 - [`v6-scheduled-runner.md`](v6-scheduled-runner.md) — runner deploy, modes, and staging smoke tests

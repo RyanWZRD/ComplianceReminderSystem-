@@ -131,6 +131,7 @@
     "verify-automation-visibility-ui": "node scripts/verify-automation-visibility-ui.mjs",
     "verify-automation-visibility-cloud-load": "node scripts/verify-automation-visibility-cloud-load.mjs",
     "verify-v6-production-readiness": "node scripts/verify-v6-production-readiness.mjs",
+    "verify-v6-production-go-live-readiness": "node scripts/verify-v6-production-go-live-readiness.mjs",
     "verify:phase2": "node scripts/verify-phase2.mjs"
   },
   "dependencies": {

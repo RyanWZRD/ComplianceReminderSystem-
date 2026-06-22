@@ -6,6 +6,72 @@ A local-first safeguarding compliance tracker. Runs in the browser with localSto
 
 # Current Release
 
+## V6 Phase 68 — Production Go-Live Preparation
+
+**Date:** June 2026
+
+### Summary
+
+V6 Phase 68 adds a **production go-live operator runbook** and static verification gate for the first controlled production `live_send`. This phase is **verification and documentation only** — no runtime sending behaviour, retry behaviour, mutation behaviour, UI write controls, or Resend changes. `verify-v6-production-go-live-readiness` confirms the runbook, Phase 67 staging gate references, rollback/emergency-disable instructions, and that runtime delivery code was not modified.
+
+**Documentation:**
+
+- [`docs/v6-production-go-live.md`](docs/v6-production-go-live.md) — production secrets, safe defaults, allowlist transition, Resend/domain checks, first live-send checklist, rollback, emergency disable, Phase 67 evidence
+- [`docs/v6-production-readiness.md`](docs/v6-production-readiness.md) — Phase 66 safety gates (cross-linked)
+- [`docs/v6-automated-email-reminders.md`](docs/v6-automated-email-reminders.md) — Phase 68 cross-reference
+- [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md) — Phase 68 cross-reference
+
+**Deliverables:**
+
+| Item | Location |
+|------|----------|
+| Production go-live runbook | `docs/v6-production-go-live.md` |
+| Go-live readiness verification gate | `scripts/verify-v6-production-go-live-readiness.mjs` |
+
+**Verification (required):**
+
+```powershell
+npm run verify-v6-production-go-live-readiness
+npm run verify-v6-production-readiness
+npm run build
+```
+
+**Next slice:** TBD — scheduler wiring (cron / external job)
+
+---
+
+## V6 Phase 67 — Staging Fixture Isolation for Repeat Acceptance
+
+**Date:** June 2026
+
+### Summary
+
+V6 Phase 67 fixes **staging acceptance reliability** for the Phase 62 mark-sent gate. `verify-scheduled-runner-mark-sent-after-delivery-staging` now creates a **unique timestamped Phase 62 test person** per run so Phase 63 duplicate prevention on prior `sent` delivery logs does not block repeat runs. Organisation, recipient, reminder window, and assertions are unchanged — **no weakening of duplicate prevention** and **no runtime send behaviour changes**.
+
+**Documentation:**
+
+- [`docs/v6-production-readiness.md`](docs/v6-production-readiness.md) — § Staging fixture isolation (Phase 67)
+- [`docs/v6-scheduled-runner.md`](docs/v6-scheduled-runner.md) — Phase 67 staging fixture note
+- [`docs/v6-automated-email-reminders.md`](docs/v6-automated-email-reminders.md) — Phase 67 cross-reference
+- [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md) — Phase 67 cross-reference
+
+**Deliverables:**
+
+| Item | Location |
+|------|----------|
+| Unique per-run staging fixture | `scripts/verify-scheduled-runner-mark-sent-after-delivery-staging.mjs` |
+
+**Verification (required):**
+
+```powershell
+npm run verify-scheduled-runner-mark-sent-after-delivery-staging
+npm run build
+```
+
+**Next slice:** V6 Phase 68 — production go-live preparation (complete).
+
+---
+
 ## V6 Phase 66 — Production Readiness and Safety Verification
 
 **Date:** June 2026
@@ -34,7 +100,7 @@ npm run verify-v6-production-readiness
 npm run build
 ```
 
-**Next slice:** TBD — scheduler wiring (cron / external job)
+**Next slice:** V6 Phase 67 — staging fixture isolation for repeat acceptance (complete).
 
 ---
 

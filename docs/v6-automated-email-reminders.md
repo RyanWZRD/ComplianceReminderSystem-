@@ -251,7 +251,7 @@ npm run verify-automation-visibility-cloud-load
 
 `npm run verify-scheduled-runner-mark-sent-after-delivery-staging` verifies on Alpha staging:
 
-1. One allowlisted send to `SCHEDULED_TEST_EMAIL_TO` via **Phase 62 Test Person** fixture
+1. One allowlisted send to `SCHEDULED_TEST_EMAIL_TO` via a **unique timestamped Phase 62 test person** fixture per run (organisation `11111111-1111-1111-1111-111111111111`, expiry `asOfDate + 5 days`, 7-day reminder window)
 2. `markSentSummary.markedSent = 1`
 3. Compliance record notes and `reminder_sent` history entry
 4. Skipped rows unchanged; `dry_run` and `live_send_preview` do not mark sent

@@ -578,6 +578,16 @@ header h1 {
   font-size: 1rem;
 }
 
+.manual-delivery-test-result-subtitle {
+  margin: 1rem 0 0.5rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.manual-delivery-test-result-mark-sent {
+  margin-top: 0.25rem;
+}
+
 .manual-delivery-test-actions {
   margin-top: 0.75rem;
 }

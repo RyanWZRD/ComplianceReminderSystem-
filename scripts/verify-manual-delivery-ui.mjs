@@ -264,6 +264,22 @@ assertEqual(resultSummary.delivered, 1, "result summary delivered");
 assertEqual(resultSummary.failed, 1, "result summary failed");
 assertEqual(resultSummary.skipped, 3, "result summary skipped");
 
+const markSentSummary = buildManualDeliveryResultSummary({
+  attempted: 1,
+  delivered: 1,
+  failed: 0,
+  skipped: 0,
+  markSent: 1,
+  markSentFailed: 0,
+  markSentSkipped: 0,
+});
+
+assertEqual(markSentSummary.markSent, 1, "result summary markSent when available");
+assertEqual(markSentSummary.markSentFailed, 0, "result summary markSentFailed when available");
+assertEqual(markSentSummary.markSentSkipped, 0, "result summary markSentSkipped when available");
+
+assertContains(indexHtml, "manual-delivery-test-result-mark-sent", "index.html mark-sent result counts");
+
 assertContains(MANUAL_DELIVERY_CONFIRMATION_MESSAGE, "Emails may be sent", "confirmation mentions emails may be sent");
 assertContains(
   MANUAL_DELIVERY_CONFIRMATION_MESSAGE,

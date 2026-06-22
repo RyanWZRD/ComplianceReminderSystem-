@@ -161,15 +161,8 @@ assertContains(functionSource, "failed", "index.ts summary includes failed");
 assertContains(functionSource, "skipped", "index.ts summary includes skipped");
 assertContains(functionSource, "results", "index.ts returns per-record results");
 
-const forbiddenFunctionNeedles = [
-  "mark_reminder_sent",
-  "markReminderSent",
-  "mark-as-sent",
-];
-
-for (const needle of forbiddenFunctionNeedles) {
-  assertNotContains(functionSource, needle, `index.ts has no ${needle}`);
-}
+console.log("--- server-side mark-as-sent (Phase 43+) ---");
+console.log("  mark-as-sent checks: npm run verify-edge-delivery-mark-sent");
 
 console.log("--- browser transition safety (Phase 39) ---");
 

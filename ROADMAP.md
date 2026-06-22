@@ -6,6 +6,36 @@ A local-first safeguarding compliance tracker. Runs in the browser with localSto
 
 # Current Release
 
+## V6 Phase 43 — Mark Reminders Sent After Edge Delivery
+
+**Date:** June 2026
+
+### Summary
+
+V6 Phase 43 calls the existing `mark_reminder_sent` RPC from `send-reminder-deliveries` after a **delivered** outcome is persisted to `reminder_delivery_logs`. Mark-as-sent runs **only in test mode** (`EMAIL_MODE=test`), only for Manual Delivery Test invocations, and only when delivery log persistence succeeds — skipped and failed outcomes are never marked.
+
+**Documentation:**
+
+- [`docs/v6-edge-delivery-function.md`](docs/v6-edge-delivery-function.md) — Phase 43 mark-as-sent after delivery
+- [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md) — Phase 43 cross-reference
+- [`docs/v5-automated-compliance-operations.md`](docs/v5-automated-compliance-operations.md) — Phase 43 summary
+
+**Verification (required):**
+
+```powershell
+npm run build
+npm run verify-edge-delivery-function-skeleton
+npm run verify-edge-delivery-resend
+npm run verify-edge-delivery-browser-invoke
+npm run verify-edge-delivery-log-persistence
+npm run verify-edge-delivery-mark-sent
+npm run verify-manual-delivery-ui
+```
+
+**Next slice:** TBD (scheduled execution — not in Phase 43 scope)
+
+---
+
 ## V6 Phase 42 — Delivery Log Persistence
 
 **Date:** June 2026

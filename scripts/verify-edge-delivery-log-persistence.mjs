@@ -128,10 +128,6 @@ assertContains(functionSource, "redirectedToEmail", "index.ts stores test redire
 assertContains(functionSource, "originalRecipientEmail", "index.ts stores original recipient in test mode");
 
 const forbiddenFunctionNeedles = [
-  "mark_reminder_sent",
-  "markReminderSent",
-  "mark-as-sent",
-  "compliance_records",
   "history_entries",
 ];
 
@@ -256,4 +252,4 @@ if (failures.length > 0) {
 console.log("\nverify-edge-delivery-log-persistence: all checks OK");
 console.log("  server: Edge Function persists delivery logs via create_reminder_delivery_log (caller JWT)");
 console.log("  browser: no service role key, no browser-side delivery log RPC writes");
-console.log("  safety: no mark-sent, compliance, or history mutation in Edge Function path");
+console.log("  safety: delivery log persistence only — mark-as-sent covered by verify-edge-delivery-mark-sent");

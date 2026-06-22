@@ -1,11 +1,12 @@
 /**
- * V6 Phase 42: Manual delivery test execution coordinator.
+ * V6 Phase 43: Manual delivery test execution coordinator.
  * Invokes send-reminder-deliveries Edge Function for admin-initiated tests only.
  *
- * Server-side Resend + delivery log persistence via Edge Function — no browser Resend fetch,
- * no Resend API key in the browser, and no browser-side delivery log RPC writes.
+ * Server-side Resend, delivery log persistence, and test-mode mark-as-sent via Edge
+ * Function — no browser Resend fetch, no Resend API key in the browser, and no
+ * browser-side delivery log or mark-sent RPC writes.
  *
- * No scheduling, reminder mark-sent automation, or compliance/history mutation.
+ * No scheduling or automatic execution.
  */
 
 import {
@@ -51,13 +52,30 @@ function mapEdgeResponseToExecutionSummary(edgeResponse, recordCount) {
       ? /** @type {Record<string, unknown>} */ (edgeResponse.summary)
       : {};
 
-  return {
+  /** @type {import("./delivery-worker.js").DeliveryExecutionSummary & {
+   *   markSent?: number;
+   *   markSentFailed?: number;
+   *   markSentSkipped?: number;
+   * }} */
+  const result = {
     total: Number(summary.total ?? recordCount),
     attempted: Number(summary.attempted ?? 0),
     delivered: Number(summary.delivered ?? 0),
     failed: Number(summary.failed ?? 0),
     skipped: Number(summary.skipped ?? 0),
   };
+
+  if (
+    Object.prototype.hasOwnProperty.call(summary, "markSent") ||
+    Object.prototype.hasOwnProperty.call(summary, "markSentFailed") ||
+    Object.prototype.hasOwnProperty.call(summary, "markSentSkipped")
+  ) {
+    result.markSent = Number(summary.markSent ?? 0);
+    result.markSentFailed = Number(summary.markSentFailed ?? 0);
+    result.markSentSkipped = Number(summary.markSentSkipped ?? 0);
+  }
+
+  return result;
 }
 
 /**

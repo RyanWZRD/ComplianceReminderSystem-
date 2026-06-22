@@ -154,15 +154,8 @@ assertContains(functionSource, "provider_not_configured", "index.ts fails withou
 assertContains(functionSource, "invalid_email_mode", "index.ts fails on invalid EMAIL_MODE");
 assertContains(functionSource, "invalid_config", "index.ts fails on missing from/redirect config");
 
-const forbiddenFunctionNeedles = [
-  "mark_reminder_sent",
-  "markReminderSent",
-  "mark-as-sent",
-];
-
-for (const needle of forbiddenFunctionNeedles) {
-  assertNotContains(functionSource, needle, `index.ts has no ${needle}`);
-}
+console.log("--- server-side mark-as-sent (Phase 43+, test mode only) ---");
+console.log("  mark-as-sent checks: npm run verify-edge-delivery-mark-sent");
 
 console.log("--- static safety gates (browser invoke only) ---");
 

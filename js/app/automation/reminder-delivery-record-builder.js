@@ -38,6 +38,7 @@ import { buildReminderEmailTemplate } from "./reminder-template-builder.js";
  * @property {string | null} deliveredAt
  * @property {string | null} failedAt
  * @property {string | null} failureReason
+ * @property {string | null} complianceRecordId
  * @property {ReminderDeliveryRecordMetadata} metadata
  */
 
@@ -130,6 +131,7 @@ export function buildReminderDeliveryRecords({
       source: template.metadata.source,
       emailMissing,
     };
+    const complianceRecordId = String(queueItem.complianceRecordId ?? "").trim() || null;
 
     if (emailMissing) {
       return {
@@ -137,6 +139,7 @@ export function buildReminderDeliveryRecords({
         organisationId: resolvedOrganisationId,
         automationRunId: resolvedAutomationRunId,
         queueItemId,
+        complianceRecordId,
         recipientEmail: null,
         subject: template.subject,
         bodyText: template.bodyText,
@@ -155,6 +158,7 @@ export function buildReminderDeliveryRecords({
       organisationId: resolvedOrganisationId,
       automationRunId: resolvedAutomationRunId,
       queueItemId,
+      complianceRecordId,
       recipientEmail: String(queueItem.email ?? "").trim(),
       subject: template.subject,
       bodyText: template.bodyText,

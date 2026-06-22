@@ -66,6 +66,7 @@ function createEmptyWindowCounts() {
  *   reminderType: string;
  *   email: string | null;
  *   emailMissing: boolean;
+ *   complianceRecordId: string | null;
  *   status: typeof REMINDER_QUEUE_STATUS;
  *   source: typeof REMINDER_QUEUE_SOURCE;
  *   asOfDate: string;
@@ -176,6 +177,7 @@ export function buildReminderQueueFromDryRun({
         reminderType,
         email,
         emailMissing,
+        complianceRecordId: String(row.recordId ?? "").trim() || null,
         status: REMINDER_QUEUE_STATUS,
         source: REMINDER_QUEUE_SOURCE,
         asOfDate: resolvedAsOfDate,

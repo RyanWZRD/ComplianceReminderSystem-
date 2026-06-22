@@ -462,6 +462,18 @@ const manualDeliveryTestResultFailed = document.getElementById("manual-delivery-
 const manualDeliveryTestResultSkipped = document.getElementById(
   "manual-delivery-test-result-skipped"
 );
+const manualDeliveryTestResultMarkSent = document.getElementById(
+  "manual-delivery-test-result-mark-sent"
+);
+const manualDeliveryTestResultMarkSentFailed = document.getElementById(
+  "manual-delivery-test-result-mark-sent-failed"
+);
+const manualDeliveryTestResultMarkSentSkipped = document.getElementById(
+  "manual-delivery-test-result-mark-sent-skipped"
+);
+const manualDeliveryTestResultMarkSentSection = document.getElementById(
+  "manual-delivery-test-result-mark-sent-section"
+);
 const manualDeliveryTestRunBtn = document.getElementById("manual-delivery-test-run-btn");
 const insightStaleEvidence = document.getElementById("insight-stale-evidence");
 
@@ -6755,6 +6767,19 @@ async function handleManualDeliveryTestRun() {
     manualDeliveryTestResultDelivered.textContent = String(summary.delivered);
     manualDeliveryTestResultFailed.textContent = String(summary.failed);
     manualDeliveryTestResultSkipped.textContent = String(summary.skipped);
+
+    if (
+      manualDeliveryTestResultMarkSentSection &&
+      Object.prototype.hasOwnProperty.call(summary, "markSent")
+    ) {
+      manualDeliveryTestResultMarkSentSection.classList.remove("hidden");
+      manualDeliveryTestResultMarkSent.textContent = String(summary.markSent ?? 0);
+      manualDeliveryTestResultMarkSentFailed.textContent = String(summary.markSentFailed ?? 0);
+      manualDeliveryTestResultMarkSentSkipped.textContent = String(summary.markSentSkipped ?? 0);
+    } else if (manualDeliveryTestResultMarkSentSection) {
+      manualDeliveryTestResultMarkSentSection.classList.add("hidden");
+    }
+
     manualDeliveryTestResult.classList.remove("hidden");
 
     await loadDeliveryOperationsLog();

@@ -748,6 +748,40 @@ The Reminder Queue Preview section includes a **Digest preview** area wired to `
 
 ---
 
+## V6 — Reminder delivery · Phase 43 complete
+
+**Goal:** After successful Edge delivery and delivery log persistence, mark delivered reminder outcomes as sent via the existing `mark_reminder_sent` RPC — **test mode only**, Manual Delivery Test path.
+
+**Status:** Edge Function test-mode mark-as-sent complete. V6 Phase 43 complete on **v6.0.0-beta.1** baseline.
+
+**Deliverables:**
+
+- `supabase/functions/send-reminder-deliveries/index.ts` — `maybeMarkReminderSentAfterDelivery` → `mark_reminder_sent` after persisted delivered outcomes
+- `js/app/automation/reminder-queue.js` — `complianceRecordId` on queue items for RPC linkage
+- `js/app/automation/manual-delivery-ui.js` — mark-sent counts in Manual Delivery Test result summary
+- `scripts/verify-edge-delivery-mark-sent.mjs` — mark-as-sent verification gate
+- `npm run verify-edge-delivery-mark-sent`
+
+| Item | Detail |
+|------|--------|
+| Trigger | Delivered + `persisted === true` only |
+| RPC | Existing `mark_reminder_sent(p_record_id, p_reminder_type)` — caller JWT |
+| Test mode | `EMAIL_MODE=test` gate — no production mark-as-sent |
+| Safeguards | Skipped, failed, and unpersisted outcomes never marked |
+| Phase 43 scope | Manual Delivery Test only — no scheduling |
+
+**Constraints:** No scheduled execution, no production mode mark-as-sent, no browser-side mark-sent RPC writes.
+
+**Verification:** `npm run verify-edge-delivery-mark-sent`
+
+| Phase | Deliverable | Status |
+|-------|-------------|--------|
+| 43 | Mark-as-sent after Edge delivery (`verify-edge-delivery-mark-sent`) | **Complete** |
+
+**Next slice:** TBD — scheduled execution (out of Phase 43 scope).
+
+---
+
 ## V6 — Reminder delivery · Phase 42 complete
 
 **Goal:** Persist `send-reminder-deliveries` outcomes to `reminder_delivery_logs` after Edge Function delivery attempts — delivery log writes only.

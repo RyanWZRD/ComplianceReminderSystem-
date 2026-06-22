@@ -95,6 +95,7 @@ export function assertEdgeDeliveryInvokeHeaders(headers) {
  *   recipientEmail: string | null;
  *   subject: string;
  *   bodyText: string;
+ *   complianceRecordId?: string | null;
  *   metadata?: Record<string, unknown>;
  * }>}
  */
@@ -104,6 +105,7 @@ export function mapDeliveryRecordsForEdgeInvoke(records) {
     recipientEmail: record.recipientEmail,
     subject: record.subject,
     bodyText: record.bodyText,
+    complianceRecordId: record.complianceRecordId ?? null,
     metadata: record.metadata,
   }));
 }
@@ -155,6 +157,9 @@ async function throwEdgeFunctionHttpError(response) {
  *     skipped?: number;
  *     persisted?: number;
  *     persistFailed?: number;
+ *     markSent?: number;
+ *     markSentFailed?: number;
+ *     markSentSkipped?: number;
  *   };
  *   results?: Array<Record<string, unknown>>;
  * }>}

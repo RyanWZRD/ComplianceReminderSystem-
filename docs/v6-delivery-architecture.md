@@ -1521,7 +1521,45 @@ Browser Manual Delivery UI
 
 **Phase 42 gate:** `npm run verify-edge-delivery-log-persistence` must pass.
 
-**Next slice:** TBD — mark-as-sent automation or scheduled execution (out of Phase 42 scope).
+**Next slice after Phase 42:** V6 Phase 43 — mark reminders sent after Edge delivery.
+
+---
+
+## Phase 43 — Mark reminders sent after Edge delivery
+
+**Scope:** Call existing `mark_reminder_sent` RPC from the Edge Function after delivered outcomes are persisted. **Test mode only** — Manual Delivery Test path; no scheduled execution.
+
+### Phase 43 deliverables
+
+| Item | Location |
+|------|----------|
+| Edge Function mark-as-sent | `supabase/functions/send-reminder-deliveries/index.ts` — `maybeMarkReminderSentAfterDelivery` |
+| Compliance record linkage | `reminder-queue.js`, `reminder-delivery-record-builder.js`, `edge-delivery-invoke.js` |
+| UI summary | `manual-delivery-ui.js`, `app.js`, `index.html` |
+| Verification gate | `scripts/verify-edge-delivery-mark-sent.mjs` |
+| Contract cross-reference | [`docs/v6-edge-delivery-function.md`](v6-edge-delivery-function.md) § Phase 43 |
+
+**Script:** `scripts/verify-edge-delivery-mark-sent.mjs`
+
+`npm run verify-edge-delivery-mark-sent` verifies:
+
+1. Edge Function calls `mark_reminder_sent` only after `persistResult.persisted` on delivered outcomes
+2. Test-mode gate (`EMAIL_MODE=test`) — no production mark-as-sent
+3. Skipped and failed outcome branches never call mark-as-sent
+4. `complianceRecordId` forwarded from queue → delivery records → Edge invoke
+5. Browser manual delivery path has no `mark_reminder_sent` RPC writes
+6. UI shows mark-sent summary counts when Edge response includes them
+
+### Phase 43 constraints
+
+- Delivered + persisted outcomes only — skipped/failed/unpersisted never marked
+- Test mode only — production `EMAIL_MODE` unchanged
+- Uses existing `mark_reminder_sent` RPC (notes + history behaviour unchanged)
+- Browser displays counts only — server-side RPC via Edge Function
+
+**Phase 43 gate:** `npm run verify-edge-delivery-mark-sent` must pass.
+
+**Next slice:** TBD — scheduled execution (out of Phase 43 scope).
 
 ---
 

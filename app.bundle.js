@@ -26295,6 +26295,7 @@ ${suffix}`;
       recipientEmail: record.recipientEmail,
       subject: record.subject,
       bodyText: record.bodyText,
+      complianceRecordId: record.complianceRecordId ?? null,
       metadata: record.metadata
     }));
   }
@@ -26515,12 +26516,14 @@ ${suffix}`;
         source: template.metadata.source,
         emailMissing
       };
+      const complianceRecordId = String(queueItem.complianceRecordId ?? "").trim() || null;
       if (emailMissing) {
         return {
           id: createDeliveryRecordId(),
           organisationId: resolvedOrganisationId,
           automationRunId: resolvedAutomationRunId,
           queueItemId,
+          complianceRecordId,
           recipientEmail: null,
           subject: template.subject,
           bodyText: template.bodyText,
@@ -26538,6 +26541,7 @@ ${suffix}`;
         organisationId: resolvedOrganisationId,
         automationRunId: resolvedAutomationRunId,
         queueItemId,
+        complianceRecordId,
         recipientEmail: String(queueItem.email ?? "").trim(),
         subject: template.subject,
         bodyText: template.bodyText,
@@ -26574,13 +26578,19 @@ ${suffix}`;
       /** @type {Record<string, unknown>} */
       edgeResponse.summary
     ) : {};
-    return {
+    const result = {
       total: Number(summary.total ?? recordCount),
       attempted: Number(summary.attempted ?? 0),
       delivered: Number(summary.delivered ?? 0),
       failed: Number(summary.failed ?? 0),
       skipped: Number(summary.skipped ?? 0)
     };
+    if (Object.prototype.hasOwnProperty.call(summary, "markSent") || Object.prototype.hasOwnProperty.call(summary, "markSentFailed") || Object.prototype.hasOwnProperty.call(summary, "markSentSkipped")) {
+      result.markSent = Number(summary.markSent ?? 0);
+      result.markSentFailed = Number(summary.markSentFailed ?? 0);
+      result.markSentSkipped = Number(summary.markSentSkipped ?? 0);
+    }
+    return result;
   }
   async function executeManualDeliveryTest({
     queueItems,
@@ -26678,12 +26688,18 @@ ${suffix}`;
     };
   }
   function buildManualDeliveryResultSummary(executionSummary) {
-    return {
+    const summary = {
       attempted: Number(executionSummary?.attempted ?? 0),
       delivered: Number(executionSummary?.delivered ?? 0),
       failed: Number(executionSummary?.failed ?? 0),
       skipped: Number(executionSummary?.skipped ?? 0)
     };
+    if (executionSummary && (Object.prototype.hasOwnProperty.call(executionSummary, "markSent") || Object.prototype.hasOwnProperty.call(executionSummary, "markSentFailed") || Object.prototype.hasOwnProperty.call(executionSummary, "markSentSkipped"))) {
+      summary.markSent = Number(executionSummary.markSent ?? 0);
+      summary.markSentFailed = Number(executionSummary.markSentFailed ?? 0);
+      summary.markSentSkipped = Number(executionSummary.markSentSkipped ?? 0);
+    }
+    return summary;
   }
 
   // js/app/automation/automation-dry-run.js
@@ -26852,6 +26868,7 @@ ${suffix}`;
           reminderType,
           email,
           emailMissing,
+          complianceRecordId: String(row.recordId ?? "").trim() || null,
           status: REMINDER_QUEUE_STATUS,
           source: REMINDER_QUEUE_SOURCE,
           asOfDate: resolvedAsOfDate
@@ -27448,6 +27465,18 @@ ${template.bodyText}`;
   var manualDeliveryTestResultFailed = document.getElementById("manual-delivery-test-result-failed");
   var manualDeliveryTestResultSkipped = document.getElementById(
     "manual-delivery-test-result-skipped"
+  );
+  var manualDeliveryTestResultMarkSent = document.getElementById(
+    "manual-delivery-test-result-mark-sent"
+  );
+  var manualDeliveryTestResultMarkSentFailed = document.getElementById(
+    "manual-delivery-test-result-mark-sent-failed"
+  );
+  var manualDeliveryTestResultMarkSentSkipped = document.getElementById(
+    "manual-delivery-test-result-mark-sent-skipped"
+  );
+  var manualDeliveryTestResultMarkSentSection = document.getElementById(
+    "manual-delivery-test-result-mark-sent-section"
   );
   var manualDeliveryTestRunBtn = document.getElementById("manual-delivery-test-run-btn");
   var insightStaleEvidence = document.getElementById("insight-stale-evidence");
@@ -32226,6 +32255,14 @@ This cannot be undone.`
       manualDeliveryTestResultDelivered.textContent = String(summary.delivered);
       manualDeliveryTestResultFailed.textContent = String(summary.failed);
       manualDeliveryTestResultSkipped.textContent = String(summary.skipped);
+      if (manualDeliveryTestResultMarkSentSection && Object.prototype.hasOwnProperty.call(summary, "markSent")) {
+        manualDeliveryTestResultMarkSentSection.classList.remove("hidden");
+        manualDeliveryTestResultMarkSent.textContent = String(summary.markSent ?? 0);
+        manualDeliveryTestResultMarkSentFailed.textContent = String(summary.markSentFailed ?? 0);
+        manualDeliveryTestResultMarkSentSkipped.textContent = String(summary.markSentSkipped ?? 0);
+      } else if (manualDeliveryTestResultMarkSentSection) {
+        manualDeliveryTestResultMarkSentSection.classList.add("hidden");
+      }
       manualDeliveryTestResult.classList.remove("hidden");
       await loadDeliveryOperationsLog();
     } catch (error) {

@@ -82,15 +82,8 @@ assertContains(functionSource, "validateRequestBody", "index.ts has validateRequ
 assertContains(functionSource, "Access-Control-Allow-Origin", "index.ts sets CORS headers");
 assertContains(functionSource, "127.0.0.1:8877", "index.ts allows local dev origin");
 
-const forbiddenNeedles = [
-  "mark_reminder_sent",
-  "markReminderSent",
-  "mark-as-sent",
-];
-
-for (const needle of forbiddenNeedles) {
-  assertNotContains(functionSource, needle, `index.ts has no ${needle}`);
-}
+console.log("--- server-side mark-as-sent (Phase 43+) ---");
+console.log("  mark-as-sent checks: npm run verify-edge-delivery-mark-sent");
 
 assertNotContains(
   manualDeliveryExecutionJs,

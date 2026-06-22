@@ -74,14 +74,38 @@ export function computeManualDeliveryQueueSummary(queueItems) {
  *   delivered?: number;
  *   failed?: number;
  *   skipped?: number;
+ *   markSent?: number;
+ *   markSentFailed?: number;
+ *   markSentSkipped?: number;
  * }} [executionSummary]
- * @returns {{ attempted: number; delivered: number; failed: number; skipped: number }}
+ * @returns {{
+ *   attempted: number;
+ *   delivered: number;
+ *   failed: number;
+ *   skipped: number;
+ *   markSent?: number;
+ *   markSentFailed?: number;
+ *   markSentSkipped?: number;
+ * }}
  */
 export function buildManualDeliveryResultSummary(executionSummary) {
-  return {
+  const summary = {
     attempted: Number(executionSummary?.attempted ?? 0),
     delivered: Number(executionSummary?.delivered ?? 0),
     failed: Number(executionSummary?.failed ?? 0),
     skipped: Number(executionSummary?.skipped ?? 0),
   };
+
+  if (
+    executionSummary &&
+    (Object.prototype.hasOwnProperty.call(executionSummary, "markSent") ||
+      Object.prototype.hasOwnProperty.call(executionSummary, "markSentFailed") ||
+      Object.prototype.hasOwnProperty.call(executionSummary, "markSentSkipped"))
+  ) {
+    summary.markSent = Number(executionSummary.markSent ?? 0);
+    summary.markSentFailed = Number(executionSummary.markSentFailed ?? 0);
+    summary.markSentSkipped = Number(executionSummary.markSentSkipped ?? 0);
+  }
+
+  return summary;
 }

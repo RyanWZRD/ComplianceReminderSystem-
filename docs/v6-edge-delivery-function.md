@@ -520,7 +520,41 @@ The Supabase JS client attaches the signed-in user's JWT (`Authorization: Bearer
 
 **Verification:** `npm run verify-edge-delivery-log-persistence`
 
-**Next slice:** TBD — mark-as-sent automation or scheduled execution (out of Phase 42 scope).
+**Next slice:** TBD (mark-as-sent automation or scheduled execution — not in Phase 42 scope)
+
+---
+
+## Phase 43 — Mark reminders sent after Edge delivery
+
+**Module:** `supabase/functions/send-reminder-deliveries/index.ts`  
+**RPC:** `public.mark_reminder_sent` (existing migration `20260203000001`)
+
+**Status:** After successful Resend delivery and delivery log persistence, the Edge Function marks the compliance record reminder sent in **test mode only**.
+
+### Phase 43 scope
+
+| Item | Detail |
+|------|--------|
+| Trigger | `deliveryStatus === "delivered"` **and** `persisted === true` |
+| RPC | `mark_reminder_sent(p_record_id, p_reminder_type)` via caller JWT |
+| Test mode gate | `EMAIL_MODE=test` only — no production mark-as-sent |
+| Record linkage | `complianceRecordId` on queue items → delivery records → Edge invoke payload |
+| Reminder type | Mapped from `metadata.reminderWindow` (`30-day` → `30`, etc.) |
+| Skipped/failed | No mark-as-sent call |
+| Unpersisted delivery | No mark-as-sent call |
+| Response | `summary.markSent`, `markSentFailed`, `markSentSkipped`; per-result `markSent`, `markSentStatus`, `markSentError`, `markSentSkippedReason` |
+| UI | Manual Delivery Test result shows mark-sent counts when Edge summary includes them |
+
+### Phase 43 non-goals
+
+- Scheduled or automatic delivery execution
+- `EMAIL_MODE=production` mark-as-sent
+- Browser-side `mark_reminder_sent` RPC calls
+- New schema/RPC migrations
+
+**Verification:** `npm run verify-edge-delivery-mark-sent`
+
+**Next slice:** TBD — scheduled execution (out of Phase 43 scope).
 
 
 ---

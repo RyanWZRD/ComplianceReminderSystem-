@@ -1,7 +1,7 @@
 /**
- * V6 Phase 42: send-reminder-deliveries Edge Function with Resend integration
- * and delivery log persistence via create_reminder_delivery_log RPC.
- * Server-side Resend sends + audit rows only — no reminder mark-sent hooks.
+ * V6 Phase 43: send-reminder-deliveries Edge Function with Resend integration,
+ * delivery log persistence via create_reminder_delivery_log RPC, and test-mode
+ * mark-as-sent via mark_reminder_sent after successful delivered+log writes.
  */
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
@@ -9,6 +9,7 @@ import { createClient, type SupabaseClient } from "jsr:@supabase/supabase-js@2";
 
 const RESEND_EMAILS_URL = "https://api.resend.com/emails";
 const DELIVERY_LOG_RPC = "create_reminder_delivery_log";
+const MARK_SENT_RPC = "mark_reminder_sent";
 const SKIPPED_BODY_PLACEHOLDER = "[delivery skipped]";
 const SKIPPED_SUBJECT_PLACEHOLDER = "[delivery skipped]";
 
@@ -623,6 +624,175 @@ async function persistDeliveryLog(
 }
 
 /**
+ * @param {string} reminderWindow
+ * @returns {string | null}
+ */
+function mapReminderWindowToRpcCode(reminderWindow: string): string | null {
+  switch (reminderWindow) {
+    case "expired":
+      return "expired";
+    case "30-day":
+      return "30";
+    case "14-day":
+      return "14";
+    case "7-day":
+      return "7";
+    default:
+      return null;
+  }
+}
+
+/**
+ * @param {DeliveryRecordInput} record
+ * @returns {string | null}
+ */
+function resolveMarkSentReminderType(record: DeliveryRecordInput): string | null {
+  const metadata =
+    record.metadata && typeof record.metadata === "object" && !Array.isArray(record.metadata)
+      ? record.metadata
+      : {};
+
+  const reminderWindow = String(metadata.reminderWindow ?? "").trim();
+  return mapReminderWindowToRpcCode(reminderWindow);
+}
+
+/**
+ * @param {SupabaseClient} supabase
+ * @param {string} complianceRecordId
+ * @param {string} reminderType
+ */
+async function markReminderSentAfterDelivery(
+  supabase: SupabaseClient,
+  complianceRecordId: string,
+  reminderType: string,
+): Promise<{
+  marked: boolean;
+  status: string;
+  error?: string;
+  reason?: string;
+}> {
+  const { data, error } = await supabase.rpc(MARK_SENT_RPC, {
+    p_record_id: complianceRecordId,
+    p_reminder_type: reminderType,
+  });
+
+  if (error) {
+    return {
+      marked: false,
+      status: "failed",
+      error: error.message,
+    };
+  }
+
+  const row =
+    data && typeof data === "object" && !Array.isArray(data)
+      ? /** @type {Record<string, unknown>} */ (data)
+      : {};
+  const status = typeof row.status === "string" ? row.status : "unknown";
+
+  if (status === "marked") {
+    return { marked: true, status: "marked" };
+  }
+
+  if (status === "skipped") {
+    return {
+      marked: false,
+      status: "skipped",
+      reason: typeof row.reason === "string" ? row.reason : "already_sent",
+    };
+  }
+
+  if (status === "not_found") {
+    return { marked: false, status: "not_found" };
+  }
+
+  return {
+    marked: false,
+    status: "failed",
+    error: `unexpected_mark_sent_status:${status}`,
+  };
+}
+
+/**
+ * @param {ProviderConfig} config
+ * @param {DeliveryRecordInput} record
+ * @param {SupabaseClient} supabase
+ * @param {boolean} logPersisted
+ */
+async function maybeMarkReminderSentAfterDelivery(
+  config: ProviderConfig,
+  record: DeliveryRecordInput,
+  supabase: SupabaseClient,
+  logPersisted: boolean,
+): Promise<{
+  markSent: boolean;
+  markSentStatus: string;
+  markSentError?: string;
+  markSentSkippedReason?: string;
+  summaryBucket: "marked" | "failed" | "skipped" | "none";
+}> {
+  if (!logPersisted || config.emailMode !== "test") {
+    return {
+      markSent: false,
+      markSentStatus: "not_applicable",
+      summaryBucket: "none",
+    };
+  }
+
+  const { complianceRecordId } = extractRecordIds(record);
+
+  if (!complianceRecordId) {
+    return {
+      markSent: false,
+      markSentStatus: "skipped",
+      markSentSkippedReason: "missing_compliance_record_id",
+      summaryBucket: "skipped",
+    };
+  }
+
+  const reminderType = resolveMarkSentReminderType(record);
+
+  if (!reminderType) {
+    return {
+      markSent: false,
+      markSentStatus: "skipped",
+      markSentSkippedReason: "invalid_reminder_window",
+      summaryBucket: "skipped",
+    };
+  }
+
+  const markResult = await markReminderSentAfterDelivery(
+    supabase,
+    complianceRecordId,
+    reminderType,
+  );
+
+  if (markResult.marked) {
+    return {
+      markSent: true,
+      markSentStatus: "marked",
+      summaryBucket: "marked",
+    };
+  }
+
+  if (markResult.status === "skipped") {
+    return {
+      markSent: false,
+      markSentStatus: "skipped",
+      markSentSkippedReason: markResult.reason ?? "already_sent",
+      summaryBucket: "skipped",
+    };
+  }
+
+  return {
+    markSent: false,
+    markSentStatus: markResult.status,
+    ...(markResult.error ? { markSentError: markResult.error } : {}),
+    summaryBucket: "failed",
+  };
+}
+
+/**
  * @param {ProviderConfig} config
  * @param {DeliveryRecordInput[]} deliveryRecords
  * @param {{
@@ -648,6 +818,9 @@ async function processDeliveryRecords(
   let skipped = 0;
   let persisted = 0;
   let persistFailed = 0;
+  let markSent = 0;
+  let markSentFailed = 0;
+  let markSentSkipped = 0;
 
   for (const record of deliveryRecords) {
     const queueItemId = String(record.queueItemId ?? "").trim() || "unknown";
@@ -738,7 +911,8 @@ async function processDeliveryRecords(
         persistFailed += 1;
       }
 
-      results.push({
+      /** @type {Record<string, unknown>} */
+      const deliveredResult = {
         queueItemId,
         deliveryStatus: "delivered",
         providerMessageId: outcome.providerMessageId,
@@ -747,7 +921,39 @@ async function processDeliveryRecords(
         ...(persistResult.persistError
           ? { persistError: persistResult.persistError }
           : {}),
-      });
+      };
+
+      if (persistResult.persisted) {
+        const markSentResult = await maybeMarkReminderSentAfterDelivery(
+          config,
+          record,
+          context.supabase,
+          true,
+        );
+
+        if (markSentResult.summaryBucket === "marked") {
+          markSent += 1;
+        } else if (markSentResult.summaryBucket === "failed") {
+          markSentFailed += 1;
+        } else if (markSentResult.summaryBucket === "skipped") {
+          markSentSkipped += 1;
+        }
+
+        if (markSentResult.summaryBucket !== "none") {
+          deliveredResult.markSent = markSentResult.markSent;
+          deliveredResult.markSentStatus = markSentResult.markSentStatus;
+
+          if (markSentResult.markSentError) {
+            deliveredResult.markSentError = markSentResult.markSentError;
+          }
+
+          if (markSentResult.markSentSkippedReason) {
+            deliveredResult.markSentSkippedReason = markSentResult.markSentSkippedReason;
+          }
+        }
+      }
+
+      results.push(deliveredResult);
       continue;
     }
 
@@ -792,6 +998,9 @@ async function processDeliveryRecords(
       skipped,
       persisted,
       persistFailed,
+      markSent,
+      markSentFailed,
+      markSentSkipped,
     },
     results,
   };

@@ -97,6 +97,7 @@
     "verify-edge-delivery-resend": "node scripts/verify-edge-delivery-resend.mjs",
     "verify-edge-delivery-browser-invoke": "node scripts/verify-edge-delivery-browser-invoke.mjs",
     "verify-edge-delivery-log-persistence": "node scripts/verify-edge-delivery-log-persistence.mjs",
+    "verify-edge-delivery-mark-sent": "node scripts/verify-edge-delivery-mark-sent.mjs",
     "verify-edge-delivery-test-deployment": "node scripts/verify-edge-delivery-test-deployment.mjs",
     "verify-edge-delivery-test-smoke-plan": "node scripts/verify-edge-delivery-test-smoke-plan.mjs",
     "verify:phase2": "node scripts/verify-phase2.mjs"

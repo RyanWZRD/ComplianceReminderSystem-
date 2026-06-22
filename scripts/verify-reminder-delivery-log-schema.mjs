@@ -1,8 +1,8 @@
 /**
- * V6 Phase 3: Reminder delivery log schema verification.
+ * V6 Phase 49: Reminder delivery log schema verification (scheduled email sends).
  * Static checks for reminder_delivery_logs migration: table, columns, constraints,
- * dedup index, RLS policies, and absence of delivery execution hooks.
- * No Supabase smoke, browser, email provider, or app wiring.
+ * indexes, RLS select policy, and safety gates for scheduled-reminder-runner.
+ * Schema and verification only — no Supabase smoke, browser, or live sends.
  */
 
 import { existsSync, readFileSync, readdirSync } from "node:fs";
@@ -12,6 +12,15 @@ import { fileURLToPath } from "node:url";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, "..");
 const migrationsDir = join(root, "supabase", "migrations");
+
+const PHASE_49_MIGRATION = "20260401000009_reminder_delivery_logs_scheduled_send_schema.sql";
+const SCHEDULED_RUNNER_PATH = join(
+  root,
+  "supabase",
+  "functions",
+  "scheduled-reminder-runner",
+  "index.ts",
+);
 
 /** @type {string[]} */
 const failures = [];
@@ -38,57 +47,40 @@ function assertNotContains(source, needle, label) {
   }
 }
 
-/**
- * @returns {{ filename: string, content: string }}
- */
-function findDeliveryLogMigration() {
-  const matches = readdirSync(migrationsDir)
-    .filter((filename) => filename.endsWith("_create_reminder_delivery_logs.sql"))
-    .sort();
-
-  if (matches.length === 0) {
-    fail("missing migration matching *_create_reminder_delivery_logs.sql");
-    return { filename: "", content: "" };
-  }
-
-  const filename = matches[matches.length - 1];
-  const content = readFileSync(join(migrationsDir, filename), "utf8");
-
-  return { filename, content };
-}
-
 console.log(
-  "V6 Phase 3 reminder delivery log schema verification (verify-reminder-delivery-log-schema)\n"
+  "V6 Phase 49 reminder delivery log schema verification (verify-reminder-delivery-log-schema)\n",
 );
 
-const { filename: migrationFilename, content: migration } = findDeliveryLogMigration();
+const migrationPath = join(migrationsDir, PHASE_49_MIGRATION);
+assert(existsSync(migrationPath), `Phase 49 migration exists: ${PHASE_49_MIGRATION}`);
 
-assert(migrationFilename.length > 0, "delivery log migration file exists");
+const migration = existsSync(migrationPath)
+  ? readFileSync(migrationPath, "utf8")
+  : "";
+
+assertContains(migration, "create table public.reminder_delivery_logs", "reminder_delivery_logs table");
 
 /** @type {readonly string[]} */
 const REQUIRED_COLUMNS = [
   "id uuid primary key default gen_random_uuid()",
   "organisation_id uuid not null references public.organisations",
-  "automation_run_id uuid references public.automation_runs",
-  "queue_item_id text not null",
-  "compliance_record_id uuid",
-  "person_id uuid",
+  "automation_run_id uuid references public.automation_runs (automation_run_id)",
+  "compliance_record_id uuid references public.compliance_records",
+  "person_id uuid references public.people",
   "recipient_email text",
-  "subject text not null",
-  "body_text text not null",
-  "delivery_status text not null",
-  "prepared_at timestamptz",
-  "sent_at timestamptz",
-  "delivered_at timestamptz",
-  "failed_at timestamptz",
-  "failure_reason text",
-  "metadata jsonb not null default '{}'::jsonb",
-  "created_by uuid",
+  "recipient_name text",
+  "compliance_type text",
+  "reminder_type text",
+  "due_date date",
+  "delivery_status text not null default 'pending'",
+  "provider text",
+  "provider_message_id text",
+  "error_code text",
+  "error_message text",
+  "payload jsonb not null default '{}'::jsonb",
   "created_at timestamptz not null default now()",
-  "updated_at timestamptz not null default now()",
+  "sent_at timestamptz",
 ];
-
-assertContains(migration, "create table public.reminder_delivery_logs", "reminder_delivery_logs table");
 
 for (const column of REQUIRED_COLUMNS) {
   assertContains(migration, column, `column definition ${column.split(" ")[0]}`);
@@ -96,135 +88,119 @@ for (const column of REQUIRED_COLUMNS) {
 
 assertContains(
   migration,
-  "delivery_status in ('queued', 'prepared', 'sending', 'delivered', 'failed', 'cancelled')",
-  "delivery_status lifecycle constraint"
+  "delivery_status in ('pending', 'sent', 'skipped', 'failed')",
+  "delivery_status constraint",
 );
 
-assertContains(migration, "create unique index reminder_delivery_logs_dedup_idx", "dedup unique index");
-assertContains(migration, "organisation_id", "dedup index organisation_id");
-assertContains(migration, "compliance_record_id", "dedup index compliance_record_id");
-assertContains(migration, "metadata->>'reminderWindow'", "dedup index reminderWindow metadata");
+const REQUIRED_INDEXES = [
+  "reminder_delivery_logs_organisation_id_idx",
+  "reminder_delivery_logs_automation_run_id_idx",
+  "reminder_delivery_logs_compliance_record_id_idx",
+  "reminder_delivery_logs_delivery_status_idx",
+  "reminder_delivery_logs_created_at_desc_idx",
+  "reminder_delivery_logs_provider_message_id_idx",
+];
+
+for (const indexName of REQUIRED_INDEXES) {
+  assertContains(migration, indexName, `index ${indexName}`);
+}
+
 assertContains(
   migration,
-  "((prepared_at at time zone 'UTC')::date)",
-  "dedup index prepared_at UTC date"
+  "where provider_message_id is not null",
+  "partial provider_message_id index predicate",
 );
-assertContains(migration, "where compliance_record_id is not null", "dedup partial index predicate");
 
 assertContains(
   migration,
   "alter table public.reminder_delivery_logs enable row level security",
-  "RLS enabled"
+  "RLS enabled",
 );
 
+assertContains(migration, "reminder_delivery_logs_org_select", "organisation select policy");
+assertContains(migration, "for select", "select policy present");
 assertContains(
   migration,
-  "reminder_delivery_logs_member_select",
-  "admin/editor select policy"
-);
-assertContains(
-  migration,
-  "for select",
-  "select policy present"
-);
-assertContains(
-  migration,
-  "has_org_role(array['admin', 'editor'])",
-  "select policy admin+editor"
+  "organisation_id = public.current_organisation_id()",
+  "select policy scoped to organisation",
 );
 
+assertNotContains(migration, "for insert", "no authenticated insert policy");
+assertNotContains(migration, "for update", "no authenticated update policy");
+assertNotContains(migration, "for delete", "no authenticated delete policy");
+
+console.log("--- scheduled-reminder-runner safety gates (required) ---");
+
+assert(existsSync(SCHEDULED_RUNNER_PATH), "scheduled-reminder-runner/index.ts exists");
+
+const scheduledRunnerSource = readFileSync(SCHEDULED_RUNNER_PATH, "utf8");
+
 assertContains(
-  migration,
-  "reminder_delivery_logs_admin_insert",
-  "admin insert policy"
+  scheduledRunnerSource,
+  "SCHEDULED_RUNNER_DRY_RUN_MODE",
+  "scheduled-reminder-runner dry_run mode constant",
 );
+assertContains(scheduledRunnerSource, '"dry_run"', "scheduled-reminder-runner dry_run mode value");
+
+const scheduledRunnerForbidden = [
+  "create_reminder_delivery_log",
+  "api.resend.com",
+  "RESEND_API_KEY",
+  "sendViaResend",
+  "send-reminder-deliveries",
+  "mark_reminder_sent",
+];
+
+for (const needle of scheduledRunnerForbidden) {
+  assertNotContains(
+    scheduledRunnerSource,
+    needle,
+    `scheduled-reminder-runner/index.ts has no ${needle}`,
+  );
+}
+
 assertContains(
-  migration,
-  "for insert",
-  "insert policy present"
+  scheduledRunnerSource,
+  '.from("reminder_delivery_logs")',
+  "scheduled-reminder-runner writes dry-run delivery logs (Phase 51)",
 );
-assertContains(
-  migration,
-  "reminder_delivery_logs_admin_update",
-  "admin update policy"
-);
-assertContains(
-  migration,
-  "for update",
-  "update policy present"
+assertNotContains(scheduledRunnerSource, "sent_at:", "scheduled-reminder-runner does not assign sent_at");
+assertNotContains(
+  scheduledRunnerSource,
+  'delivery_status: "sent"',
+  "scheduled-reminder-runner does not set sent delivery_status",
 );
 
-const insertPolicyStart = migration.indexOf("reminder_delivery_logs_admin_insert");
-const updatePolicyStart = migration.indexOf("reminder_delivery_logs_admin_update");
-const insertPolicySection =
-  insertPolicyStart >= 0 ? migration.slice(insertPolicyStart, insertPolicyStart + 500) : "";
-const updatePolicySection =
-  updatePolicyStart >= 0 ? migration.slice(updatePolicyStart, updatePolicyStart + 500) : "";
-
-assertContains(insertPolicySection, "has_org_role(array['admin'])", "insert policy admin-only");
-assertContains(updatePolicySection, "has_org_role(array['admin'])", "update policy admin-only");
-assertNotContains(insertPolicySection, "'viewer'", "insert policy excludes viewer");
-assertNotContains(updatePolicySection, "'viewer'", "update policy excludes viewer");
-assertNotContains(insertPolicySection, "'editor'", "insert policy excludes editor");
-assertNotContains(updatePolicySection, "'editor'", "update policy excludes editor");
-
-assertNotContains(migration, "for delete", "no delete policy yet");
-assertNotContains(migration, "create or replace function", "migration has no RPCs");
-
-assertContains(migration, "reminder_delivery_logs_set_updated_at", "updated_at trigger");
-assertContains(migration, "execute function public.set_updated_at()", "shared set_updated_at trigger");
+console.log("--- npm script and documentation (required) ---");
 
 const packageJson = readFileSync(join(root, "package.json"), "utf8");
 assertContains(
   packageJson,
   '"verify-reminder-delivery-log-schema"',
-  "package.json verify script"
+  "package.json verify script",
 );
 
-const appJs = readFileSync(join(root, "app.js"), "utf8");
-const forbiddenExecutionNeedles = [
-  "buildReminderDeliveryRecords",
-  "sendReminder",
-  "process_notification_queue",
-  "enqueue_reminder_notifications",
-  "EmailProvider",
-  "createResendEmailProvider",
-  "executeMockReminderDelivery",
+const docPaths = [
+  join(root, "docs", "v6-delivery-architecture.md"),
+  join(root, "docs", "v6-automated-email-reminders.md"),
+  join(root, "ROADMAP.md"),
 ];
 
-for (const needle of forbiddenExecutionNeedles) {
-  assertNotContains(appJs, needle, `app.js has no ${needle}`);
+for (const docPath of docPaths) {
+  const docName = docPath.split(/[/\\]/).pop();
+  assert(existsSync(docPath), `${docName} exists`);
+  if (existsSync(docPath)) {
+    const doc = readFileSync(docPath, "utf8");
+    assertContains(doc, "Phase 49", `${docName} references Phase 49`);
+    assertContains(doc, "verify-reminder-delivery-log-schema", `${docName} references verification script`);
+  }
 }
 
-assertContains(appJs, "loadDeliveryOperationsLog", "app.js loads delivery operations log (read-only)");
-assertNotContains(appJs, "create_reminder_delivery_log", "app.js does not create delivery logs");
-
-const cloudAutomationStoreJs = readFileSync(
-  join(root, "js", "data", "cloud-automation-store.js"),
-  "utf8"
+const migrationFiles = readdirSync(migrationsDir).filter((name) => name.endsWith(".sql"));
+assert(
+  migrationFiles.includes(PHASE_49_MIGRATION),
+  `migration file ${PHASE_49_MIGRATION} listed in migrations directory`,
 );
-assertContains(
-  cloudAutomationStoreJs,
-  "get_reminder_delivery_logs",
-  "cloud-automation-store loads delivery logs via get_reminder_delivery_logs"
-);
-assertContains(
-  cloudAutomationStoreJs,
-  "createReminderDeliveryLog",
-  "cloud-automation-store exposes createReminderDeliveryLog repository method"
-);
-assertNotContains(
-  appJs,
-  "createReminderDeliveryLog",
-  "app.js does not call createReminderDeliveryLog"
-);
-
-const repositoryJs = readFileSync(join(root, "js", "data", "repository.js"), "utf8");
-assertNotContains(repositoryJs, "reminder_delivery_logs", "repository has no direct delivery log wiring");
-
-const migrationFiles = readdirSync(migrationsDir).join("\n");
-assertNotContains(migrationFiles, "process_notification_queue", "no queue processor migration");
-assertNotContains(migrationFiles, "send_reminder", "no send_reminder migration");
 
 if (failures.length > 0) {
   console.error("Failures:");
@@ -234,13 +210,12 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-console.log(`  Migration: ${migrationFilename}`);
+console.log(`  Migration: ${PHASE_49_MIGRATION}`);
 console.log("  Table: public.reminder_delivery_logs");
 console.log(`  Columns (${REQUIRED_COLUMNS.length}): verified`);
-console.log("  Lifecycle status constraint: verified");
-console.log("  Dedup unique index: verified");
-console.log("  RLS: enabled");
-console.log("  Policies: admin+editor select, admin insert/update, no delete");
-console.log("  updated_at trigger: public.set_updated_at()");
-console.log("  No app/provider/execution hooks wired");
-console.log("\nV6 reminder delivery log schema verification: OK");
+console.log("  delivery_status constraint: pending | sent | skipped | failed");
+console.log(`  Indexes (${REQUIRED_INDEXES.length}): verified`);
+console.log("  RLS: enabled — org-scoped select only");
+console.log("  Write policies: none (server-side only)");
+console.log("  scheduled-reminder-runner: dry-run delivery logs only (Phase 51), no Resend / mark-as-sent / sent_at");
+console.log("\nV6 Phase 49 reminder delivery log schema verification: OK");

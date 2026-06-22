@@ -2,7 +2,7 @@
  * V6 Phase 45: Scheduled automation runner dry-run verification.
  * Static checks for scheduled-reminder-runner Edge Function structure,
  * candidate parity with Manual Delivery Test queue preview, and safety gates
- * (no Resend, no delivery log writes, no mark-as-sent, no send-reminder-deliveries).
+ * (no Resend, no mark-as-sent, no send-reminder-deliveries; delivery logs are Phase 51 scope).
  */
 
 import { existsSync, readFileSync } from "node:fs";
@@ -112,6 +112,8 @@ assertContains(functionSource, "SCHEDULED_RUNNER_DRY_RUN_MODE", "index.ts expose
 assertContains(functionSource, "totalCandidates", "index.ts returns totalCandidates summary");
 assertContains(functionSource, "wouldSend", "index.ts returns wouldSend summary");
 assertContains(functionSource, "wouldSkip", "index.ts returns wouldSkip summary");
+assertContains(functionSource, "automationRunId", "index.ts returns automationRunId");
+assertContains(functionSource, "insertScheduledDryRunAutomationRun", "index.ts persists automation run audit row");
 assertContains(functionSource, "getActiveReminderType", "index.ts reuses reminder window detection");
 assertContains(functionSource, "loadComplianceRows", "index.ts loads compliance rows read-only");
 assertContains(functionSource, "loadReminderSettings", "index.ts loads reminder settings read-only");
@@ -126,7 +128,6 @@ const forbiddenNeedles = [
   "create_reminder_delivery_log",
   "mark_reminder_sent",
   "createAutomationRun",
-  "automation_runs",
   ".rpc(",
   "EMAIL_MODE",
   "production",
@@ -246,7 +247,8 @@ if (failures.length > 0) {
 console.log("\nverify-scheduled-runner-dry-run: all checks OK");
 console.log("  mode: dry_run — candidate scan only");
 console.log("  parity: same reminder window rules as Manual Delivery Test queue preview");
-console.log("  safety: no Resend, no delivery log writes, no mark-as-sent, no send-reminder-deliveries");
+console.log("  safety: no Resend, no mark-as-sent, no send-reminder-deliveries");
+console.log("  audit: automation_runs insert via service role (Phase 47)");
 
 /**
  * @param {unknown} actual

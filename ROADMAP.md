@@ -6,6 +6,169 @@ A local-first safeguarding compliance tracker. Runs in the browser with localSto
 
 # Current Release
 
+## V6 Phase 52 — Staging Verification for Scheduled Runner Dry-Run Delivery Logs
+
+**Date:** June 2026
+
+### Summary
+
+V6 Phase 52 adds a **live staging verification** script that invokes deployed `scheduled-reminder-runner` in dry-run mode and confirms `reminder_delivery_logs` rows are created and linked to the returned `automationRunId`. **Verification only** — no Resend, no email sends, no `mark_reminder_sent`, and no `sent_at` writes.
+
+**Documentation:**
+
+- [`docs/v6-scheduled-runner.md`](docs/v6-scheduled-runner.md) — Phase 52 staging verification
+- [`docs/v6-automated-email-reminders.md`](docs/v6-automated-email-reminders.md) — Phase 52 cross-reference
+- [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md) — Phase 52 cross-reference
+
+**Prerequisites:**
+
+- Phase 51 `scheduled-reminder-runner` deployed to staging
+- Phase 49 migration applied on staging (`20260401000009_reminder_delivery_logs_scheduled_send_schema.sql`)
+- `.env` with `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_TEST_PASSWORD`
+
+**Verification (required):**
+
+```powershell
+npm run verify-scheduled-runner-delivery-log-dry-run-staging
+```
+
+**Next slice:** TBD (live scheduled email sends — not in Phase 52 scope)
+
+---
+
+## V6 Phase 51 — Dry-Run Delivery Log Creation for Scheduled Runner
+
+**Date:** June 2026
+
+### Summary
+
+V6 Phase 51 extends `scheduled-reminder-runner` dry-runs to persist one `reminder_delivery_logs` row per dry-run candidate, linked to the `automation_runs` audit row via `automation_run_id`. **Dry-run only** — `delivery_status` is `pending` or `skipped` only; no Resend, no email sends, no `mark_reminder_sent`, and no `sent_at` writes. Phase 51 is **not transactional** with the automation run insert — an `automation_runs` row may exist if delivery log insert fails.
+
+**Documentation:**
+
+- [`docs/v6-scheduled-runner.md`](docs/v6-scheduled-runner.md) — Phase 51 delivery log contract
+- [`docs/v6-automated-email-reminders.md`](docs/v6-automated-email-reminders.md) — Phase 51 cross-reference
+- [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md) — Phase 51 cross-reference
+
+**Verification (required):**
+
+```powershell
+npm run verify-scheduled-runner-delivery-log-dry-run
+npm run build
+```
+
+**Next slice:** V6 Phase 52 — staging verification for dry-run delivery logs (complete).
+
+---
+
+## V6 Phase 51 — Dry-Run Delivery Log Creation for Scheduled Runner
+
+**Date:** June 2026
+
+### Summary
+
+V6 Phase 50 adds a **live staging verification** script that confirms the Phase 49 `reminder_delivery_logs` migration is applied on staging: table, columns, `delivery_status` constraint, indexes, RLS posture, and `automation_run_id` FK to `automation_runs.automation_run_id`. **Verification only** — no Edge Function writes, Resend, mark-as-sent, or app behaviour changes.
+
+**Documentation:**
+
+- [`docs/v6-automated-email-reminders.md`](docs/v6-automated-email-reminders.md) — Phase 50 staging verification
+- [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md) — Phase 50 cross-reference
+
+**Prerequisites:**
+
+- Phase 49 migration applied on staging (`20260401000009_reminder_delivery_logs_scheduled_send_schema.sql`)
+- `.env` with `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`
+- Supabase CLI login (`supabase login`) or `SUPABASE_ACCESS_TOKEN` for catalog introspection queries
+
+**Verification (required):**
+
+```powershell
+npm run verify-reminder-delivery-log-schema-staging
+```
+
+**Next slice:** V6 Phase 51 — dry-run delivery log creation from `scheduled-reminder-runner` (complete).
+
+---
+
+## V6 Phase 49 — Delivery Log Schema for Future Email Sends
+
+**Date:** June 2026
+
+### Summary
+
+V6 Phase 49 adds the **Postgres schema** for `reminder_delivery_logs` — the future per-recipient audit table for scheduled email sends. **Schema and verification only** — no Edge Function writes, no Resend, no mark-as-sent, and `scheduled-reminder-runner` remains dry-run only.
+
+**Documentation:**
+
+- [`docs/v6-automated-email-reminders.md`](docs/v6-automated-email-reminders.md) — Phase 49 columns, RLS, constraints
+- [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md) — Phase 49 cross-reference
+
+**Verification (required):**
+
+```powershell
+npm run verify-reminder-delivery-log-schema
+npm run build
+```
+
+**Next slice:** V6 Phase 50 — staging verification for `reminder_delivery_logs` schema (complete).
+
+---
+
+## V6 Phase 48 — Staging Verification for Scheduled Runner automation_runs Persistence
+
+**Date:** June 2026
+
+### Summary
+
+V6 Phase 48 adds a **live staging verification** script that invokes deployed `scheduled-reminder-runner`, then confirms the HTTP `automationRunId` matches exactly one `automation_runs` audit row with matching summary counters. **Verification only** — no Resend, no delivery logs, no mark-as-sent.
+
+**Documentation:**
+
+- [`docs/v6-scheduled-runner.md`](docs/v6-scheduled-runner.md) — Phase 48 staging verification
+- [`docs/v6-automated-email-reminders.md`](docs/v6-automated-email-reminders.md) — Phase 48 cross-reference
+
+**Prerequisites:**
+
+- Phase 47 migration applied on staging (`automation_runs` dry-run columns)
+- `scheduled-reminder-runner` deployed to staging (`vmrotpztwoeifbdjwdis`)
+- `.env` with `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_TEST_PASSWORD`
+
+**Verification (required):**
+
+```powershell
+npm run verify-scheduled-runner-automation-run-staging
+```
+
+**Next slice:** TBD (scheduled delivery execution — not in Phase 48 scope)
+
+---
+
+## V6 Phase 47 — Automation Run Records for Scheduled Runner Dry-Runs
+
+**Date:** June 2026
+
+### Summary
+
+V6 Phase 47 adds a read-only **audit layer** for `scheduled-reminder-runner` dry runs. Each successful invoke inserts one `automation_runs` row (service role) capturing candidate summary counts — **no Resend**, no delivery log writes, no mark-as-sent, and no compliance/history mutation.
+
+**Documentation:**
+
+- [`docs/v6-automated-email-reminders.md`](docs/v6-automated-email-reminders.md) — Phase 47 schema, insert path, response contract
+- [`docs/v6-scheduled-runner.md`](docs/v6-scheduled-runner.md) — updated dry-run response with `automationRunId`
+- [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md) — Phase 47 cross-reference
+- [`docs/v5-automated-compliance-operations.md`](docs/v5-automated-compliance-operations.md) — Phase 47 summary
+
+**Verification (required):**
+
+```powershell
+npm run verify-automation-run-records
+npm run build
+```
+
+**Next slice:** TBD (scheduled delivery execution — not in Phase 47 scope)
+
+---
+
 ## V6 Phase 46 — Deploy and Smoke-Test Scheduled Runner Dry Run
 
 **Date:** June 2026

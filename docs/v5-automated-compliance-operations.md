@@ -812,7 +812,40 @@ The Reminder Queue Preview section includes a **Digest preview** area wired to `
 |-------|-------------|--------|
 | 45 | Scheduled automation runner dry run (`verify-scheduled-runner-dry-run`) | **Complete** |
 
-**Next slice:** V6 Phase 46 — deploy and smoke-test scheduled runner dry run.
+**Next slice:** V6 Phase 47 — automation run records for scheduled runner dry-runs.
+
+---
+
+## V6 — Reminder delivery · Phase 47 complete
+
+**Goal:** Persist `automation_runs` audit rows when `scheduled-reminder-runner` completes a valid dry-run scan — audit only, no side effects.
+
+**Status:** Scheduled runner automation run records complete. V6 Phase 47 complete on **v6.0.0-beta.1** baseline.
+
+**Deliverables:**
+
+- `supabase/migrations/20260401000008_automation_runs_scheduled_dry_run.sql` — dry-run audit columns on `automation_runs`
+- `supabase/functions/scheduled-reminder-runner/index.ts` — service-role insert + `automationRunId` in response
+- [`docs/v6-automated-email-reminders.md`](v6-automated-email-reminders.md) — Phase 47 contract
+- `scripts/verify-automation-run-records.mjs` — automation run records verification gate
+- `npm run verify-automation-run-records`
+
+| Item | Detail |
+|------|--------|
+| Insert path | Service role in Edge Function — bypasses RLS |
+| Response | `automationRunId` from `automation_runs.automation_run_id` |
+| Summary | `{ totalCandidates, withEmail, missingEmail, wouldSend, wouldSkip }` in row + JSONB |
+| Phase 47 scope | `automation_runs` audit only — no emails, delivery logs, or mark-as-sent |
+
+**Constraints:** No Resend calls, no `send-reminder-deliveries` invoke, no delivery log writes, no mark-as-sent, no compliance/history mutation.
+
+**Verification:** `npm run verify-automation-run-records`
+
+| Phase | Deliverable | Status |
+|-------|-------------|--------|
+| 47 | Automation run records for scheduled runner dry-runs (`verify-automation-run-records`) | **Complete** |
+
+**Next slice:** TBD — scheduled delivery execution (out of Phase 47 scope).
 
 ---
 

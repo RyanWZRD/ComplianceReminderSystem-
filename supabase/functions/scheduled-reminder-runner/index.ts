@@ -1,14 +1,15 @@
 /**
- * V6 Phase 45: scheduled-reminder-runner Edge Function — dry run only.
- * Computes reminder candidates for an organisation using the same rules as
- * Manual Delivery Test preview. No Resend calls, delivery log writes,
- * mark-as-sent, or delivery Edge Function invocation.
+ * V6 Phase 45–47, 51: scheduled-reminder-runner Edge Function — dry run only.
+ * Phase 47: persists one automation_runs audit row per successful dry run (service role).
+ * Phase 51: persists reminder_delivery_logs rows per dry-run candidate (pending/skipped only).
+ * No Resend calls, email sends, mark-as-sent, sent_at writes, or delivery Edge Function invocation.
  */
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient, type SupabaseClient } from "jsr:@supabase/supabase-js@2";
 
 const SCHEDULED_RUNNER_DRY_RUN_MODE = "dry_run";
+const SCHEDULED_RUNNER_RUN_TYPE = "scheduled_reminder_dry_run";
 
 const REMINDER_UI_LABELS = {
   30: "30 Day Reminder",
@@ -111,6 +112,25 @@ function createUserSupabaseClient(req: Request): SupabaseClient | null {
         Authorization: authorization,
       },
     },
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+  });
+}
+
+/**
+ * Service-role client for automation_runs audit inserts only (bypasses RLS).
+ */
+function createServiceSupabaseClient(): SupabaseClient | null {
+  const supabaseUrl = (Deno.env.get("SUPABASE_URL") ?? "").trim();
+  const serviceRoleKey = (Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "").trim();
+
+  if (!supabaseUrl || !serviceRoleKey) {
+    return null;
+  }
+
+  return createClient(supabaseUrl, serviceRoleKey, {
     auth: {
       persistSession: false,
       autoRefreshToken: false,
@@ -320,18 +340,25 @@ function mapQueueSummaryToScheduledRunnerSummary(queueSummary: {
 }
 
 /**
+ * @typedef {ComplianceRow & {
+ *   reminderType: string;
+ *   hasEmail: boolean;
+ * }} DryRunCandidate
+ */
+
+/**
  * @param {ComplianceRow[]} rows
  * @param {ReminderSettings} settings
  * @param {Date} asOfDate
+ * @returns {DryRunCandidate[]}
  */
-function computeReminderCandidateSummary(
+function computeDryRunCandidates(
   rows: ComplianceRow[],
   settings: ReminderSettings,
   asOfDate: Date,
-) {
-  let total = 0;
-  let withEmail = 0;
-  let missingEmail = 0;
+): Array<ComplianceRow & { reminderType: string; hasEmail: boolean }> {
+  /** @type {DryRunCandidate[]} */
+  const candidates = [];
 
   for (const row of rows) {
     const reminderType = getActiveReminderType(row.expiryDate, settings, asOfDate);
@@ -340,9 +367,27 @@ function computeReminderCandidateSummary(
       continue;
     }
 
-    total += 1;
+    candidates.push({
+      ...row,
+      reminderType,
+      hasEmail: personRowHasEmail(row),
+    });
+  }
 
-    if (personRowHasEmail(row)) {
+  return candidates;
+}
+
+/**
+ * @param {DryRunCandidate[]} candidates
+ */
+function buildSummaryFromDryRunCandidates(
+  candidates: Array<ComplianceRow & { reminderType: string; hasEmail: boolean }>,
+) {
+  let withEmail = 0;
+  let missingEmail = 0;
+
+  for (const candidate of candidates) {
+    if (candidate.hasEmail) {
       withEmail += 1;
     } else {
       missingEmail += 1;
@@ -350,9 +395,84 @@ function computeReminderCandidateSummary(
   }
 
   return mapQueueSummaryToScheduledRunnerSummary({
-    total,
+    total: candidates.length,
     withEmail,
     missingEmail,
+  });
+}
+
+/**
+ * @param {DryRunCandidate[]} candidates
+ */
+function buildDryRunDeliveryLogSummary(
+  candidates: Array<ComplianceRow & { reminderType: string; hasEmail: boolean }>,
+) {
+  let pending = 0;
+  let skipped = 0;
+
+  for (const candidate of candidates) {
+    if (candidate.hasEmail) {
+      pending += 1;
+    } else {
+      skipped += 1;
+    }
+  }
+
+  return {
+    total: candidates.length,
+    pending,
+    skipped,
+    failed: 0,
+    sent: 0,
+  };
+}
+
+/**
+ * @param {DryRunCandidate[]} candidates
+ * @param {string} organisationId
+ * @param {string} automationRunId
+ * @param {string} asOfDateIso
+ */
+function buildDryRunDeliveryLogRows(
+  candidates: Array<ComplianceRow & { reminderType: string; hasEmail: boolean }>,
+  organisationId: string,
+  automationRunId: string,
+  asOfDateIso: string,
+) {
+  return candidates.map((candidate) => {
+    const hasEmail = candidate.hasEmail;
+    const deliveryStatus = hasEmail ? "pending" : "skipped";
+    const reason = hasEmail ? "would_send" : "missing_email";
+    const recipientEmail = hasEmail ? normalizeEmail(candidate.email) : null;
+
+    return {
+      organisation_id: organisationId,
+      automation_run_id: automationRunId,
+      compliance_record_id: candidate.recordId,
+      person_id: candidate.personId,
+      recipient_email: recipientEmail,
+      recipient_name: candidate.name || null,
+      compliance_type: candidate.complianceType || null,
+      reminder_type: candidate.reminderType,
+      due_date: candidate.expiryDate || null,
+      delivery_status: deliveryStatus,
+      provider: null,
+      provider_message_id: null,
+      payload: {
+        mode: SCHEDULED_RUNNER_DRY_RUN_MODE,
+        reason,
+        asOfDate: asOfDateIso,
+        personId: candidate.personId,
+        recordId: candidate.recordId,
+        name: candidate.name,
+        role: candidate.role,
+        email: recipientEmail ?? "",
+        complianceType: candidate.complianceType,
+        reminderType: candidate.reminderType,
+        expiryDate: candidate.expiryDate,
+        hasEmail,
+      },
+    };
   });
 }
 
@@ -452,6 +572,118 @@ async function loadComplianceRows(
   return { ok: true, rows };
 }
 
+/**
+ * @param {SupabaseClient} serviceSupabase
+ * @param {string} organisationId
+ * @param {string} asOfDateIso
+ * @param {{
+ *   totalCandidates: number;
+ *   withEmail: number;
+ *   missingEmail: number;
+ *   wouldSend: number;
+ *   wouldSkip: number;
+ * }} summary
+ */
+async function insertScheduledDryRunAutomationRun(
+  serviceSupabase: SupabaseClient,
+  organisationId: string,
+  asOfDateIso: string,
+  summary: {
+    totalCandidates: number;
+    withEmail: number;
+    missingEmail: number;
+    wouldSend: number;
+    wouldSkip: number;
+  },
+): Promise<{ ok: true; automationRunId: string } | { ok: false; error: string }> {
+  const summaryPayload = {
+    totalCandidates: summary.totalCandidates,
+    withEmail: summary.withEmail,
+    missingEmail: summary.missingEmail,
+    wouldSend: summary.wouldSend,
+    wouldSkip: summary.wouldSkip,
+  };
+
+  const { data, error } = await serviceSupabase
+    .from("automation_runs")
+    .insert({
+      organisation_id: organisationId,
+      run_type: SCHEDULED_RUNNER_RUN_TYPE,
+      mode: SCHEDULED_RUNNER_DRY_RUN_MODE,
+      status: "completed",
+      as_of_date: asOfDateIso,
+      total_candidates: summary.totalCandidates,
+      with_email: summary.withEmail,
+      missing_email: summary.missingEmail,
+      would_send: summary.wouldSend,
+      would_skip: summary.wouldSkip,
+      summary: summaryPayload,
+      completed_at: new Date().toISOString(),
+    })
+    .select("automation_run_id")
+    .single();
+
+  if (error || !data?.automation_run_id) {
+    return {
+      ok: false,
+      error: error?.message ?? "automation_run_insert_failed",
+    };
+  }
+
+  return {
+    ok: true,
+    automationRunId: String(data.automation_run_id),
+  };
+}
+
+/**
+ * Phase 51: one reminder_delivery_logs row per dry-run candidate (after automation_runs insert).
+ * Not transactional with automation_runs — partial persistence is possible on failure.
+ *
+ * @param {SupabaseClient} serviceSupabase
+ * @param {string} organisationId
+ * @param {string} automationRunId
+ * @param {DryRunCandidate[]} candidates
+ * @param {string} asOfDateIso
+ */
+async function insertScheduledDryRunDeliveryLogs(
+  serviceSupabase: SupabaseClient,
+  organisationId: string,
+  automationRunId: string,
+  candidates: Array<ComplianceRow & { reminderType: string; hasEmail: boolean }>,
+  asOfDateIso: string,
+): Promise<
+  | {
+      ok: true;
+      deliveryLogSummary: ReturnType<typeof buildDryRunDeliveryLogSummary>;
+    }
+  | { ok: false; error: string }
+> {
+  const deliveryLogSummary = buildDryRunDeliveryLogSummary(candidates);
+
+  if (candidates.length === 0) {
+    return { ok: true, deliveryLogSummary };
+  }
+
+  const rows = buildDryRunDeliveryLogRows(
+    candidates,
+    organisationId,
+    automationRunId,
+    asOfDateIso,
+  );
+
+  const { error } = await serviceSupabase.from("reminder_delivery_logs").insert(rows);
+
+  if (error) {
+    return {
+      ok: false,
+      error: error.message ?? "delivery_log_insert_failed",
+    };
+  }
+
+  return { ok: true, deliveryLogSummary };
+}
+
 Deno.serve(async (req) => {
   const origin = req.headers.get("Origin");
   const corsHeaders = buildCorsHeaders(origin);
@@ -507,19 +739,67 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: "compliance_load_failed" }, 500, corsHeaders);
   }
 
-  const summary = computeReminderCandidateSummary(
+  const candidates = computeDryRunCandidates(
     rowsResult.rows,
     settingsResult.settings,
     asOfDate,
   );
+  const summary = buildSummaryFromDryRunCandidates(candidates);
+
+  const asOfDateIso = formatAsOfDateISO(asOfDate);
+  const serviceSupabase = createServiceSupabaseClient();
+
+  if (!serviceSupabase) {
+    return jsonResponse({ error: "service_unavailable" }, 500, corsHeaders);
+  }
+
+  const insertResult = await insertScheduledDryRunAutomationRun(
+    serviceSupabase,
+    organisationId,
+    asOfDateIso,
+    summary,
+  );
+
+  if (!insertResult.ok) {
+    return jsonResponse(
+      {
+        error: "automation_run_persist_failed",
+        message: insertResult.error,
+      },
+      500,
+      corsHeaders,
+    );
+  }
+
+  const deliveryLogResult = await insertScheduledDryRunDeliveryLogs(
+    serviceSupabase,
+    organisationId,
+    insertResult.automationRunId,
+    candidates,
+    asOfDateIso,
+  );
+
+  if (!deliveryLogResult.ok) {
+    return jsonResponse(
+      {
+        error: "delivery_log_persist_failed",
+        message: deliveryLogResult.error,
+        automationRunId: insertResult.automationRunId,
+      },
+      500,
+      corsHeaders,
+    );
+  }
 
   return jsonResponse(
     {
       status: "ok",
       mode: SCHEDULED_RUNNER_DRY_RUN_MODE,
-      asOfDate: formatAsOfDateISO(asOfDate),
+      asOfDate: asOfDateIso,
       organisationId,
+      automationRunId: insertResult.automationRunId,
       summary,
+      deliveryLogSummary: deliveryLogResult.deliveryLogSummary,
     },
     200,
     corsHeaders,

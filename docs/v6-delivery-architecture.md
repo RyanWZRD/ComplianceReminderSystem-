@@ -1588,7 +1588,7 @@ Browser Manual Delivery UI
 ### Phase 45 constraints
 
 - Read-only server scan — `people`, `compliance_records`, `reminder_settings` SELECT only
-- No `automation_runs` writes in Phase 45 (deferred)
+- No `automation_runs` writes in Phase 45 (added in Phase 47)
 - No cron schedule deployed — documented only
 - Production `EMAIL_MODE` unchanged
 
@@ -1633,7 +1633,188 @@ supabase functions deploy scheduled-reminder-runner --project-ref vmrotpztwoeifb
 
 **Phase 46 gate:** `npm run verify-scheduled-runner-deploy-smoke` must pass.
 
-**Next slice:** TBD — scheduled delivery execution (invoke `send-reminder-deliveries` from scheduler).
+**Next slice:** V6 Phase 47 — automation run records for scheduled runner dry-runs.
+
+---
+
+## Phase 47 — Automation run records for scheduled runner dry-runs
+
+**Scope:** Persist one `automation_runs` audit row when `scheduled-reminder-runner` completes a valid dry-run scan. **No Resend, no delivery logs, no mark-as-sent, no compliance/history mutation.**
+
+### Phase 47 deliverables
+
+| Item | Location |
+|------|----------|
+| Schema extension | `supabase/migrations/20260401000008_automation_runs_scheduled_dry_run.sql` |
+| Edge Function insert | `supabase/functions/scheduled-reminder-runner/index.ts` |
+| Verification gate | `scripts/verify-automation-run-records.mjs` |
+| Contract reference | [`docs/v6-automated-email-reminders.md`](v6-automated-email-reminders.md) |
+
+**Script:** `scripts/verify-automation-run-records.mjs`
+
+`npm run verify-automation-run-records` verifies:
+
+1. Phase 47 migration extends `automation_runs` with dry-run audit columns
+2. RLS enabled on `automation_runs` (foundation migration)
+3. Service-role insert path in `scheduled-reminder-runner`
+4. Response includes `automationRunId` from inserted row
+5. Static safety gates — no Resend, delivery logs, mark-as-sent, or reminder mutation
+
+### Phase 47 constraints
+
+- `automation_runs` insert only — service role, dry-run audit
+- Insert failure returns HTTP 500 — no partial success
+- Response `automationRunId` matches `automation_runs.automation_run_id`
+- `summary` JSON mirrors response summary counts
+
+**Phase 47 gate:** `npm run verify-automation-run-records` must pass.
+
+**Next slice:** V6 Phase 49 — delivery log schema for future email sends.
+
+---
+
+## Phase 49 — Delivery log schema for future email sends
+
+**Scope:** Create `public.reminder_delivery_logs` for future scheduled email delivery auditing. **Schema and verification only** — no Edge Function writes, no Resend, no mark-as-sent, and no connection from `scheduled-reminder-runner` to delivery logs.
+
+### Phase 49 deliverables
+
+| Item | Location |
+|------|----------|
+| Schema migration | `supabase/migrations/20260401000009_reminder_delivery_logs_scheduled_send_schema.sql` |
+| Verification gate | `scripts/verify-reminder-delivery-log-schema.mjs` |
+| Contract reference | [`docs/v6-automated-email-reminders.md`](v6-automated-email-reminders.md) |
+
+**Migration:** Replaces the Phase 3 foundation table shape with scheduled-send audit columns: org/run/compliance/person linkage, recipient fields, `delivery_status` (`pending` \| `sent` \| `skipped` \| `failed`), provider fields, `payload` jsonb, `created_at`, and nullable `sent_at`.
+
+**Indexes:** `organisation_id`, `automation_run_id`, `compliance_record_id`, `delivery_status`, `created_at desc`, partial `provider_message_id`.
+
+**RLS:** Org-scoped `select` for authenticated users. No authenticated insert/update/delete policies — writes remain server-side only.
+
+**Script:** `scripts/verify-reminder-delivery-log-schema.mjs`
+
+`npm run verify-reminder-delivery-log-schema` verifies:
+
+1. Phase 49 migration exists with table, columns, constraint, and indexes
+2. RLS enabled — select policy only, no client write policies
+3. `scheduled-reminder-runner` remains dry-run only with no delivery log / Resend / mark-as-sent usage
+
+### Phase 49 constraints
+
+- Schema migration only — no Edge Function or app wiring
+- `automation_run_id` FK references `automation_runs.automation_run_id` (Phase 47 column)
+- `recipient_email` and `provider` nullable for skipped / not-yet-sent rows
+- No `sent_at` writes from functions yet
+
+**Phase 49 gate:** `npm run verify-reminder-delivery-log-schema` must pass.
+
+**Next slice:** V6 Phase 50 — staging verification for `reminder_delivery_logs` schema.
+
+---
+
+## Phase 50 — Staging verification for reminder_delivery_logs schema
+
+**Scope:** Confirm the Phase 49 `reminder_delivery_logs` migration is applied on live staging. **Verification only** — no Edge Function writes, Resend, mark-as-sent, or app behaviour changes.
+
+### Phase 50 deliverables
+
+| Item | Location |
+|------|----------|
+| Staging verification gate | `scripts/verify-reminder-delivery-log-schema-staging.mjs` |
+| Contract reference | [`docs/v6-automated-email-reminders.md`](v6-automated-email-reminders.md) |
+
+**Prerequisites:** Phase 49 migration applied on staging; `.env` with `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`; Supabase CLI login or `SUPABASE_ACCESS_TOKEN` for catalog introspection.
+
+**Script:** `scripts/verify-reminder-delivery-log-schema-staging.mjs`
+
+`npm run verify-reminder-delivery-log-schema-staging` verifies against the live staging database:
+
+1. `public.reminder_delivery_logs` exists with Phase 49 columns (Phase 3 shape absent)
+2. `delivery_status` check constraint: `pending` \| `sent` \| `skipped` \| `failed`
+3. Expected indexes, including partial `provider_message_id`
+4. RLS enabled — `reminder_delivery_logs_org_select` only; no authenticated write policies
+5. `automation_run_id` FK → `automation_runs.automation_run_id`
+6. PostgREST column/FK relationship checks; optional authenticated RLS posture when anon key + test password are configured
+
+Catalog/introspection queries are preferred; the script does not insert test delivery logs.
+
+### Phase 50 constraints
+
+- Staging schema verification only — no delivery log writes or email sends
+- No `scheduled-reminder-runner` behaviour changes
+- No app wiring
+
+**Phase 50 gate:** `npm run verify-reminder-delivery-log-schema-staging` must pass against staging.
+
+**Next slice:** V6 Phase 51 — dry-run delivery log creation from `scheduled-reminder-runner` (complete).
+
+---
+
+## Phase 51 — Dry-run delivery log creation for scheduled runner
+
+**Scope:** `scheduled-reminder-runner` inserts one `reminder_delivery_logs` row per dry-run candidate after `automation_runs` insert. **Dry-run only** — `delivery_status` is `pending` or `skipped`; no Resend, no email sends, no `mark_reminder_sent`, no `sent_at` writes. **Not transactional** with automation run insert.
+
+### Phase 51 deliverables
+
+| Item | Location |
+|------|----------|
+| Edge Function insert path | `supabase/functions/scheduled-reminder-runner/index.ts` |
+| Verification gate | `scripts/verify-scheduled-runner-delivery-log-dry-run.mjs` |
+| Contract reference | [`docs/v6-automated-email-reminders.md`](v6-automated-email-reminders.md) |
+
+**Script:** `scripts/verify-scheduled-runner-delivery-log-dry-run.mjs`
+
+`npm run verify-scheduled-runner-delivery-log-dry-run` verifies:
+
+1. `reminder_delivery_logs` insert after `automation_runs` insert
+2. `delivery_status` uses `pending` / `skipped` only
+3. Response includes `deliveryLogSummary`
+4. No Resend, email send, `mark_reminder_sent`, or `sent_at` assignment
+5. `scheduled-reminder-runner` remains `dry_run` mode only
+
+### Phase 51 constraints
+
+- Dry-run delivery log rows only — no live sends
+- `provider` and `provider_message_id` null; `sent_at` not set
+- No app UI changes
+- Automation run row may exist if delivery log insert fails (no transaction yet)
+
+**Phase 51 gate:** `npm run verify-scheduled-runner-delivery-log-dry-run` must pass.
+
+**Next slice:** V6 Phase 52 — staging verification for dry-run delivery logs (complete).
+
+---
+
+## Phase 52 — Staging verification for dry-run delivery logs
+
+**Scope:** Live staging invoke of `scheduled-reminder-runner` dry-run; confirm `reminder_delivery_logs` rows linked to `automationRunId`. **Verification only** — no Resend, no email sends, no `mark_reminder_sent`, no `sent_at` writes.
+
+### Phase 52 deliverables
+
+| Item | Location |
+|------|----------|
+| Staging verification gate | `scripts/verify-scheduled-runner-delivery-log-dry-run-staging.mjs` |
+| Contract reference | [`docs/v6-automated-email-reminders.md`](v6-automated-email-reminders.md) |
+
+**Script:** `scripts/verify-scheduled-runner-delivery-log-dry-run-staging.mjs`
+
+`npm run verify-scheduled-runner-delivery-log-dry-run-staging` verifies:
+
+1. Deployed dry-run invoke returns `automationRunId` and `deliveryLogSummary`
+2. `reminder_delivery_logs` row count matches `deliveryLogSummary.total`
+3. `pending` / `skipped` counts match summary; `sent` and `failed` are `0`
+4. No row has `sent_at` or `provider_message_id`; `provider` is null; `payload.mode` is `dry_run`
+5. Every row `organisation_id` matches request; matching `automation_runs` row exists
+
+### Phase 52 constraints
+
+- Staging verification only — no schema or Edge Function changes
+- No real email delivery checks
+- No app UI changes
+
+**Phase 52 gate:** `npm run verify-scheduled-runner-delivery-log-dry-run-staging` must pass against staging.
+
+**Next slice:** TBD — live scheduled email sends.
 
 ---
 

@@ -103,6 +103,11 @@
     "verify-edge-delivery-test-smoke-plan": "node scripts/verify-edge-delivery-test-smoke-plan.mjs",
     "verify-scheduled-runner-dry-run": "node scripts/verify-scheduled-runner-dry-run.mjs",
     "verify-scheduled-runner-deploy-smoke": "node scripts/verify-scheduled-runner-deploy-smoke.mjs",
+    "verify-automation-run-records": "node scripts/verify-automation-run-records.mjs",
+    "verify-scheduled-runner-automation-run-staging": "node scripts/verify-scheduled-runner-automation-run-staging.mjs",
+    "verify-scheduled-runner-delivery-log-dry-run": "node scripts/verify-scheduled-runner-delivery-log-dry-run.mjs",
+    "verify-scheduled-runner-delivery-log-dry-run-staging": "node scripts/verify-scheduled-runner-delivery-log-dry-run-staging.mjs",
+    "verify-reminder-delivery-log-schema-staging": "node scripts/verify-reminder-delivery-log-schema-staging.mjs",
     "verify:phase2": "node scripts/verify-phase2.mjs"
   },
   "dependencies": {

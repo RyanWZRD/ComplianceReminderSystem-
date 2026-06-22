@@ -31,6 +31,7 @@ const packageJsonPath = join(root, "package.json");
 const REQUIRED_RESPONSE_FIELDS = [
   '"status": "ok"',
   '"mode": "dry_run"',
+  "automationRunId",
   "summary.totalCandidates",
   "summary.withEmail",
   "summary.missingEmail",
@@ -58,7 +59,6 @@ const FORBIDDEN_FUNCTION_NEEDLES = [
   "send-reminder-deliveries",
   "create_reminder_delivery_log",
   "mark_reminder_sent",
-  "automation_runs",
 ];
 
 /** @type {string[]} */
@@ -189,8 +189,8 @@ assertContains(
 );
 assertContains(
   scheduledRunnerDoc,
-  "No delivery log writes",
-  "document states no delivery log writes",
+  "Dry-run delivery log rows only",
+  "document states dry-run delivery log scope (Phase 51)",
 );
 assertContains(
   scheduledRunnerDoc,

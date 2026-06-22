@@ -778,7 +778,41 @@ The Reminder Queue Preview section includes a **Digest preview** area wired to `
 |-------|-------------|--------|
 | 43 | Mark-as-sent after Edge delivery (`verify-edge-delivery-mark-sent`) | **Complete** |
 
-**Next slice:** TBD — scheduled execution (out of Phase 43 scope).
+**Next slice:** V6 Phase 45 — scheduled automation runner dry run.
+
+---
+
+## V6 — Reminder delivery · Phase 45 complete
+
+**Goal:** Add server-side structure for scheduled reminder automation — candidate identification only, matching Manual Delivery Test queue preview rules.
+
+**Status:** Scheduled automation runner dry run complete. V6 Phase 45 complete on **v6.0.0-beta.1** baseline.
+
+**Deliverables:**
+
+- `supabase/functions/scheduled-reminder-runner/index.ts` — authenticated dry-run candidate scan
+- `js/app/automation/scheduled-runner-candidates.js` — client parity helper
+- `docs/v6-scheduled-runner.md` — request/response contract and safety constraints
+- `scripts/verify-scheduled-runner-dry-run.mjs` — dry-run verification gate
+- `npm run verify-scheduled-runner-dry-run`
+
+| Item | Detail |
+|------|--------|
+| Auth | Caller JWT required — same pattern as `send-reminder-deliveries` |
+| Input | `organisationId` (+ optional `asOfDate`) |
+| Output | `summary.totalCandidates`, `withEmail`, `missingEmail`, `wouldSend`, `wouldSkip` |
+| Parity | Same window rules as Manual Delivery Test queue preview |
+| Phase 45 scope | Dry run only — no automatic sends, no cron, no production mode |
+
+**Constraints:** No Resend calls, no delivery log writes, no mark-as-sent, no `send-reminder-deliveries` invoke, no compliance/history mutation, no `automation_runs` writes.
+
+**Verification:** `npm run verify-scheduled-runner-dry-run`
+
+| Phase | Deliverable | Status |
+|-------|-------------|--------|
+| 45 | Scheduled automation runner dry run (`verify-scheduled-runner-dry-run`) | **Complete** |
+
+**Next slice:** TBD — scheduled delivery execution (out of Phase 45 scope).
 
 ---
 

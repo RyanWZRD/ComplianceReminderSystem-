@@ -1559,7 +1559,42 @@ Browser Manual Delivery UI
 
 **Phase 43 gate:** `npm run verify-edge-delivery-mark-sent` must pass.
 
-**Next slice:** TBD — scheduled execution (out of Phase 43 scope).
+**Next slice:** V6 Phase 45 — scheduled automation runner dry run.
+
+---
+
+## Phase 45 — Scheduled automation runner dry run
+
+**Scope:** Add `scheduled-reminder-runner` Edge Function that computes reminder candidates for an organisation using the same rules as Manual Delivery Test queue preview. **Dry run only** — no Resend, no `send-reminder-deliveries`, no delivery log writes, no mark-as-sent, no cron deployment.
+
+### Phase 45 deliverables
+
+| Item | Location |
+|------|----------|
+| Edge Function dry run | `supabase/functions/scheduled-reminder-runner/index.ts` |
+| Client candidate helper | `js/app/automation/scheduled-runner-candidates.js` |
+| Verification gate | `scripts/verify-scheduled-runner-dry-run.mjs` |
+| Contract reference | [`docs/v6-scheduled-runner.md`](v6-scheduled-runner.md) |
+
+**Script:** `scripts/verify-scheduled-runner-dry-run.mjs`
+
+`npm run verify-scheduled-runner-dry-run` verifies:
+
+1. Edge Function requires Authorization and validates `organisationId`
+2. Response includes `mode: "dry_run"` and summary (`totalCandidates`, `withEmail`, `missingEmail`, `wouldSend`, `wouldSkip`)
+3. Fixture parity with Manual Delivery Test queue preview (`buildReminderQueueFromDryRun`)
+4. No Resend, delivery log RPCs, mark-as-sent, or `send-reminder-deliveries` in the runner
+
+### Phase 45 constraints
+
+- Read-only server scan — `people`, `compliance_records`, `reminder_settings` SELECT only
+- No `automation_runs` writes in Phase 45 (deferred)
+- No cron schedule deployed — documented only
+- Production `EMAIL_MODE` unchanged
+
+**Phase 45 gate:** `npm run verify-scheduled-runner-dry-run` must pass.
+
+**Next slice:** TBD — scheduled delivery execution (invoke `send-reminder-deliveries` from scheduler).
 
 ---
 

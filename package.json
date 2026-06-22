@@ -101,6 +101,7 @@
     "verify-edge-delivery-idempotency": "node scripts/verify-edge-delivery-idempotency.mjs",
     "verify-edge-delivery-test-deployment": "node scripts/verify-edge-delivery-test-deployment.mjs",
     "verify-edge-delivery-test-smoke-plan": "node scripts/verify-edge-delivery-test-smoke-plan.mjs",
+    "verify-scheduled-runner-dry-run": "node scripts/verify-scheduled-runner-dry-run.mjs",
     "verify:phase2": "node scripts/verify-phase2.mjs"
   },
   "dependencies": {

@@ -6,6 +6,33 @@ A local-first safeguarding compliance tracker. Runs in the browser with localSto
 
 # Current Release
 
+## V6 Phase 45 — Scheduled Automation Runner Dry Run
+
+**Date:** June 2026
+
+### Summary
+
+V6 Phase 45 adds `scheduled-reminder-runner`, a Supabase Edge Function that scans an organisation and returns reminder candidate summary counts using the same rules as the Manual Delivery Test queue preview. **Dry run only** — no Resend, no `send-reminder-deliveries`, no delivery log writes, no mark-as-sent, no cron deployment, and no production mode changes.
+
+**Documentation:**
+
+- [`docs/v6-scheduled-runner.md`](docs/v6-scheduled-runner.md) — request/response contract and safety constraints
+- [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md) — Phase 45 cross-reference
+- [`docs/v5-automated-compliance-operations.md`](docs/v5-automated-compliance-operations.md) — Phase 45 summary
+
+**Verification (required):**
+
+```powershell
+npm run build
+npm run verify-scheduled-runner-dry-run
+npm run verify-edge-delivery-idempotency
+npm run verify-edge-delivery-mark-sent
+```
+
+**Next slice:** TBD (scheduled delivery execution — not in Phase 45 scope)
+
+---
+
 ## V6 Phase 43 — Mark Reminders Sent After Edge Delivery
 
 **Date:** June 2026

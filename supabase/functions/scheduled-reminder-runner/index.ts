@@ -6,6 +6,7 @@
  * Phase 60: live_send_preview — email subject/body preview metadata only; still no sends.
  * Phase 61: live_send — allowlisted recipients only; delivery log audit.
  * Phase 62: live_send — mark reminders sent via mark_reminder_sent after successful send + log.
+ * Phase 63: live_send — duplicate prevention via reminder_delivery_logs idempotency check.
  */
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
@@ -1173,6 +1174,7 @@ function buildSendSummary(counts: {
   failed: number;
   skippedMissingEmail: number;
   skippedNotAllowlisted: number;
+  skippedDuplicate: number;
 }) {
   return {
     attempted: counts.attempted,
@@ -1180,7 +1182,62 @@ function buildSendSummary(counts: {
     failed: counts.failed,
     skippedMissingEmail: counts.skippedMissingEmail,
     skippedNotAllowlisted: counts.skippedNotAllowlisted,
+    skippedDuplicate: counts.skippedDuplicate,
   };
+}
+
+/**
+ * @param {{ checked: number; duplicatesPrevented: number }} counts
+ */
+function buildDuplicatePreventionSummary(counts: {
+  checked: number;
+  duplicatesPrevented: number;
+}) {
+  return {
+    checked: counts.checked,
+    duplicatesPrevented: counts.duplicatesPrevented,
+  };
+}
+
+type LiveSendCandidate = ComplianceRow & { reminderType: string; hasEmail: boolean };
+
+/**
+ * Phase 63: find an existing sent delivery log for the same scheduled reminder identity.
+ *
+ * @param {SupabaseClient} client Service role — bypasses RLS for idempotency lookup.
+ * @param {LiveSendCandidate} candidate
+ * @param {string} organisationId
+ * @param {string} asOfDateIso
+ */
+async function findExistingSentDeliveryLog(
+  client: SupabaseClient,
+  candidate: LiveSendCandidate,
+  organisationId: string,
+  asOfDateIso: string,
+): Promise<{ id: string } | null> {
+  const recipientEmail = normalizeEmail(candidate.email);
+
+  const { data, error } = await client
+    .from("reminder_delivery_logs")
+    .select("id")
+    .eq("organisation_id", organisationId)
+    .eq("compliance_record_id", candidate.recordId)
+    .eq("reminder_type", candidate.reminderType)
+    .eq("recipient_email", recipientEmail)
+    .eq("due_date", candidate.expiryDate || null)
+    .eq("delivery_status", "sent")
+    .filter("payload->>asOfDate", "eq", asOfDateIso)
+    .limit(1);
+
+  if (error) {
+    console.error("duplicate_check_failed", error.message);
+    return null;
+  }
+
+  const row = Array.isArray(data) ? data[0] : null;
+  const id = row?.id != null ? String(row.id).trim() : "";
+
+  return id ? { id } : null;
 }
 
 /**
@@ -1384,8 +1441,9 @@ function buildLiveSendCandidateBasePayload(
 }
 
 /**
- * Phase 61–62: one reminder_delivery_logs row per candidate — send allowlisted only;
- * Phase 62 marks sent via mark_reminder_sent after successful send + delivery log.
+ * Phase 61–63: one reminder_delivery_logs row per candidate — send allowlisted only;
+ * Phase 62 marks sent via mark_reminder_sent after successful send + delivery log;
+ * Phase 63 skips duplicate sends when an equivalent sent log already exists.
  *
  * @param {SupabaseClient} serviceSupabase
  * @param {SupabaseClient} userSupabase Caller JWT for mark_reminder_sent
@@ -1413,6 +1471,7 @@ async function processAndInsertLiveSendDeliveryLogs(
       deliveryLogSummary: ReturnType<typeof buildLiveSendDeliveryLogSummary>;
       sendSummary: ReturnType<typeof buildSendSummary>;
       markSentSummary: ReturnType<typeof buildMarkSentSummary>;
+      duplicatePreventionSummary: ReturnType<typeof buildDuplicatePreventionSummary>;
       hasMarkSentErrors: boolean;
     }
   | { ok: false; error: string }
@@ -1423,6 +1482,9 @@ async function processAndInsertLiveSendDeliveryLogs(
   let attempted = 0;
   let skippedMissingEmail = 0;
   let skippedNotAllowlisted = 0;
+  let skippedDuplicate = 0;
+  let duplicateChecked = 0;
+  let duplicatesPrevented = 0;
   let markSentAttempted = 0;
   let markSentMarked = 0;
   let markSentFailed = 0;
@@ -1492,6 +1554,45 @@ async function processAndInsertLiveSendDeliveryLogs(
 
       skipped += 1;
       skippedNotAllowlisted += 1;
+      continue;
+    }
+
+    duplicateChecked += 1;
+    const existingSentLog = await findExistingSentDeliveryLog(
+      serviceSupabase,
+      candidate,
+      organisationId,
+      asOfDateIso,
+    );
+
+    if (existingSentLog) {
+      const { error } = await serviceSupabase.from("reminder_delivery_logs").insert({
+        organisation_id: organisationId,
+        automation_run_id: automationRunId,
+        compliance_record_id: candidate.recordId,
+        person_id: candidate.personId,
+        recipient_email: recipientEmail,
+        recipient_name: candidate.name || null,
+        compliance_type: candidate.complianceType || null,
+        reminder_type: candidate.reminderType,
+        due_date: candidate.expiryDate || null,
+        delivery_status: "skipped",
+        provider: null,
+        provider_message_id: null,
+        payload: {
+          ...basePayload,
+          reason: "duplicate_prevented",
+          duplicateOfDeliveryLogId: existingSentLog.id,
+        },
+      });
+
+      if (error) {
+        return { ok: false, error: error.message ?? "delivery_log_insert_failed" };
+      }
+
+      skipped += 1;
+      skippedDuplicate += 1;
+      duplicatesPrevented += 1;
       continue;
     }
 
@@ -1632,12 +1733,17 @@ async function processAndInsertLiveSendDeliveryLogs(
       failed,
       skippedMissingEmail,
       skippedNotAllowlisted,
+      skippedDuplicate,
     }),
     markSentSummary: buildMarkSentSummary({
       attempted: markSentAttempted,
       markedSent: markSentMarked,
       failed: markSentFailed,
       skipped: markSentSkipped,
+    }),
+    duplicatePreventionSummary: buildDuplicatePreventionSummary({
+      checked: duplicateChecked,
+      duplicatesPrevented,
     }),
     hasMarkSentErrors: markSentFailed > 0,
   };
@@ -1804,8 +1910,13 @@ Deno.serve(async (req) => {
       );
     }
 
-    const { deliveryLogSummary, sendSummary, markSentSummary, hasMarkSentErrors } =
-      liveSendDeliveryResult;
+    const {
+      deliveryLogSummary,
+      sendSummary,
+      markSentSummary,
+      duplicatePreventionSummary,
+      hasMarkSentErrors,
+    } = liveSendDeliveryResult;
     const automationStatus =
       deliveryLogSummary.skipped > 0 ||
       deliveryLogSummary.failed > 0 ||
@@ -1830,6 +1941,7 @@ Deno.serve(async (req) => {
         deliveryLogSummary,
         sendSummary,
         markSentSummary,
+        duplicatePreventionSummary,
       },
       200,
       corsHeaders,

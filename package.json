@@ -124,6 +124,8 @@
     "verify-scheduled-runner-controlled-live-send-staging": "node scripts/verify-scheduled-runner-controlled-live-send-staging.mjs",
     "verify-scheduled-runner-mark-sent-after-delivery": "node scripts/verify-scheduled-runner-mark-sent-after-delivery.mjs",
     "verify-scheduled-runner-mark-sent-after-delivery-staging": "node scripts/verify-scheduled-runner-mark-sent-after-delivery-staging.mjs",
+    "verify-scheduled-runner-duplicate-prevention": "node scripts/verify-scheduled-runner-duplicate-prevention.mjs",
+    "verify-scheduled-runner-duplicate-prevention-staging": "node scripts/verify-scheduled-runner-duplicate-prevention-staging.mjs",
     "verify:phase2": "node scripts/verify-phase2.mjs"
   },
   "dependencies": {

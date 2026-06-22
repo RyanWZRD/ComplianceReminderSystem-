@@ -722,7 +722,85 @@ supabase functions deploy scheduled-reminder-runner --project-ref vmrotpztwoeifb
 
 ---
 
-**Next slice:** V6 Phase 62 — mark-as-sent after successful scheduled delivery (complete).
+**Next slice:** V6 Phase 63 — duplicate prevention for live scheduled sends (complete).
+
+---
+
+## Phase 63 — Scheduled runner duplicate prevention and idempotency
+
+**Goal:** Prevent **`live_send`** from sending the same reminder twice for the same organisation, compliance record, reminder type, recipient, due date, and **`asOfDate`**. Duplicates are skipped with audit rows — no provider call, no **`mark_reminder_sent`**.
+
+### Success response (`live_send` — duplicate prevented on repeat run)
+
+```json
+{
+  "status": "ok",
+  "mode": "live_send",
+  "organisationId": "uuid",
+  "automationRunId": "uuid",
+  "summary": { "totalCandidates": 5, "withEmail": 3, "missingEmail": 2, "wouldSend": 3, "wouldSkip": 2 },
+  "deliveryLogSummary": { "total": 5, "sent": 0, "skipped": 5, "failed": 0, "pending": 0 },
+  "sendSummary": {
+    "attempted": 0,
+    "sent": 0,
+    "failed": 0,
+    "skippedMissingEmail": 2,
+    "skippedNotAllowlisted": 2,
+    "skippedDuplicate": 1
+  },
+  "markSentSummary": {
+    "attempted": 0,
+    "markedSent": 0,
+    "failed": 0,
+    "skipped": 0
+  },
+  "duplicatePreventionSummary": {
+    "checked": 1,
+    "duplicatesPrevented": 1
+  }
+}
+```
+
+### Ordering (live_send only)
+
+1. Missing email → skipped (`missing_email`)
+2. Not allowlisted → skipped (`not_allowlisted`)
+3. Existing sent delivery log for same keys + `payload.asOfDate` → skipped (`duplicate_prevented`)
+4. `sendReminderEmail` succeeds
+5. `reminder_delivery_logs` row persisted with `delivery_status=sent`, `payload.asOfDate`, `provider_message_id`, `sent_at`
+6. `mark_reminder_sent(p_record_id, p_reminder_type)` via caller JWT
+
+### Duplicate skip delivery log payload
+
+| Field | Value |
+|-------|-------|
+| `delivery_status` | `skipped` |
+| `payload.reason` | `duplicate_prevented` |
+| `payload.duplicateOfDeliveryLogId` | Id of existing `sent` row |
+| `payload.asOfDate` | Run date used for idempotency |
+
+### Verification
+
+```powershell
+npm run verify-scheduled-runner-duplicate-prevention
+npm run verify-scheduled-runner-duplicate-prevention-staging
+npm run build
+```
+
+**Deploy Phase 63 to staging:**
+
+```powershell
+supabase functions deploy scheduled-reminder-runner --project-ref vmrotpztwoeifbdjwdis
+```
+
+---
+
+## Next slice (out of scope)
+
+- Wire scheduler (cron / external job) to invoke dry run or full delivery path
+- Invoke `send-reminder-deliveries` after operational sign-off
+
+See [`docs/v6-automated-email-reminders.md`](v6-automated-email-reminders.md), [`docs/v6-delivery-architecture.md`](v6-delivery-architecture.md) § Phase 63, and [`docs/v5-automated-compliance-operations.md`](v5-automated-compliance-operations.md).
 
 ---
 
@@ -788,13 +866,3 @@ npm run build
 ```powershell
 supabase functions deploy scheduled-reminder-runner --project-ref vmrotpztwoeifbdjwdis
 ```
-
----
-
-## Next slice (out of scope)
-
-- Wire scheduler (cron / external job) to invoke dry run or full delivery path
-- Idempotency for scheduled path
-- Invoke `send-reminder-deliveries` after operational sign-off
-
-See [`docs/v6-automated-email-reminders.md`](v6-automated-email-reminders.md), [`docs/v6-delivery-architecture.md`](v6-delivery-architecture.md) § Phase 62, and [`docs/v5-automated-compliance-operations.md`](v5-automated-compliance-operations.md).

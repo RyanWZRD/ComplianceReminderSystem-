@@ -30,6 +30,64 @@ V6 automated email reminders progress in safe, auditable slices. Phase 45–46 e
 | 60 | Scheduled runner live-send preview | Preview metadata only (`emailPreview` in delivery logs); no emails |
 | 61 | Scheduled runner controlled live send | `reminder_delivery_logs` (`sent` / `skipped` / `failed`); allowlisted sends only; no mark-as-sent |
 | 62 | Scheduled runner mark sent after delivery | `mark_reminder_sent` after successful `live_send` only; compliance notes + history |
+| 63 | Scheduled runner duplicate prevention | Idempotent `live_send` via `reminder_delivery_logs` lookup; `duplicate_prevented` skip rows |
+
+---
+
+## Phase 63 — Scheduled runner duplicate prevention and idempotency
+
+**Status:** Complete when `npm run verify-scheduled-runner-duplicate-prevention` and `npm run verify-scheduled-runner-duplicate-prevention-staging` pass.
+
+**Goal:** Prevent **`live_send`** from sending the same reminder twice for the same organisation, compliance record, reminder type, recipient, due date, and **`asOfDate`**. Duplicates are skipped with audit rows — no provider call, no **`mark_reminder_sent`**.
+
+### Deliverables
+
+| Item | Location |
+|------|----------|
+| Duplicate prevention on live_send | `supabase/functions/scheduled-reminder-runner/index.ts` |
+| Static verification gate | `scripts/verify-scheduled-runner-duplicate-prevention.mjs` |
+| Staging verification gate | `scripts/verify-scheduled-runner-duplicate-prevention-staging.mjs` |
+| Runner documentation | [`docs/v6-scheduled-runner.md`](v6-scheduled-runner.md) |
+
+### Behaviour
+
+| Step | Action |
+|------|--------|
+| 1 | Allowlisted candidate passes email + allowlist gates |
+| 2 | Query `reminder_delivery_logs` for existing `sent` row matching org, record, type, recipient, due date, `payload.asOfDate` |
+| 3 | If duplicate → insert `skipped` log with `duplicate_prevented`; do not send or mark sent |
+| 4 | Otherwise → `sendReminderEmail` → `sent` log with `payload.asOfDate` → `mark_reminder_sent` |
+
+### Response (`duplicatePreventionSummary`)
+
+```json
+{
+  "duplicatePreventionSummary": {
+    "checked": 1,
+    "duplicatesPrevented": 1
+  },
+  "sendSummary": {
+    "skippedDuplicate": 1
+  }
+}
+```
+
+### Verification
+
+`npm run verify-scheduled-runner-duplicate-prevention` verifies:
+
+1. `findExistingSentDeliveryLog` runs before `sendReminderEmail`
+2. Duplicate branch uses `duplicate_prevented`; no send or mark-sent
+3. Sent delivery logs include `payload.asOfDate`
+4. Response includes `duplicatePreventionSummary`
+5. `dry_run` and `live_send_preview` unchanged; allowlist gate preserved
+
+`npm run verify-scheduled-runner-duplicate-prevention-staging` verifies on Alpha staging:
+
+1. **Phase 63 Duplicate Test Person** fixture with `SCHEDULED_TEST_EMAIL_TO`
+2. First `live_send` for `asOfDate` — one email sent and marked sent
+3. Second `live_send` for same `asOfDate` — zero additional sends; `duplicate_prevented` skip log
+4. `duplicatePreventionSummary.duplicatesPrevented >= 1`; history and provider message counts unchanged
 
 ---
 

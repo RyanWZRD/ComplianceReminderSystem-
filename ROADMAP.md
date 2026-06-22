@@ -6,6 +6,46 @@ A local-first safeguarding compliance tracker. Runs in the browser with localSto
 
 # Current Release
 
+## V6 Phase 63 — Scheduled Runner Duplicate Prevention and Idempotency
+
+**Date:** June 2026
+
+### Summary
+
+V6 Phase 63 prevents the **`live_send`** path from sending the same scheduled reminder twice for the same organisation, compliance record, reminder type, recipient, due date, and **`asOfDate`**. Before **`sendReminderEmail`**, the runner queries **`reminder_delivery_logs`** for an existing **`sent`** row matching those keys (including **`payload.asOfDate`**). Duplicates are skipped with **`delivery_status: skipped`**, **`reason: duplicate_prevented`**, and **`duplicateOfDeliveryLogId`** — no provider call and no **`mark_reminder_sent`**. Response includes **`duplicatePreventionSummary`** and **`sendSummary.skippedDuplicate`**. **`dry_run`**, **`live_send_preview`**, allowlist gates, and Phase 62 mark-sent ordering are unchanged.
+
+**Documentation:**
+
+- [`docs/v6-scheduled-runner.md`](docs/v6-scheduled-runner.md) — Phase 63 duplicate prevention
+- [`docs/v6-automated-email-reminders.md`](docs/v6-automated-email-reminders.md) — Phase 63 cross-reference
+- [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md) — Phase 63 cross-reference
+
+**Deliverables:**
+
+| Item | Location |
+|------|----------|
+| Duplicate prevention on live_send | `supabase/functions/scheduled-reminder-runner/index.ts` |
+| Static verification gate | `scripts/verify-scheduled-runner-duplicate-prevention.mjs` |
+| Staging verification gate | `scripts/verify-scheduled-runner-duplicate-prevention-staging.mjs` |
+
+**Prerequisites:**
+
+1. Phase 62 `scheduled-reminder-runner` deployed to staging with live-send gates enabled
+2. Staging Edge secrets: `SCHEDULED_EMAIL_SENDING_ENABLED=true`, `EMAIL_SENDING_ENABLED=true`, `RESEND_API_KEY`, `EMAIL_FROM_ADDRESS`, `SCHEDULED_EMAIL_ALLOWLIST` (must include `SCHEDULED_TEST_EMAIL_TO`)
+3. Local `.env`: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_TEST_PASSWORD`, `SCHEDULED_TEST_EMAIL_TO`
+
+**Verification (required):**
+
+```powershell
+npm run verify-scheduled-runner-duplicate-prevention
+npm run verify-scheduled-runner-duplicate-prevention-staging
+npm run build
+```
+
+**Next slice:** TBD — scheduler wiring (cron / external job)
+
+---
+
 ## V6 Phase 62 — Scheduled Runner Mark Sent After Successful Delivery
 
 **Date:** June 2026
@@ -42,11 +82,11 @@ npm run verify-scheduled-runner-mark-sent-after-delivery-staging
 npm run build
 ```
 
-**Next slice:** TBD — scheduler wiring / idempotency for scheduled path
+**Next slice:** V6 Phase 63 — duplicate prevention for live scheduled sends (complete).
 
 ---
 
-## V6 Phase 61 — Scheduled Runner Controlled Live Send (Allowlisted Only)
+## V6 Phase 62 — Scheduled Runner Mark Sent After Successful Delivery
 
 **Date:** June 2026
 

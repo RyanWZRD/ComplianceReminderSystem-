@@ -416,6 +416,8 @@ interface HealthCheckResult {
 | `npm run verify-scheduled-runner-controlled-live-send-staging` | Phase 61 — staging verification of one allowlisted scheduled send + audit |
 | `npm run verify-scheduled-runner-mark-sent-after-delivery` | Phase 62 — mark_reminder_sent after successful live_send static checks |
 | `npm run verify-scheduled-runner-mark-sent-after-delivery-staging` | Phase 62 — staging verification of mark-sent after allowlisted scheduled send |
+| `npm run verify-scheduled-runner-duplicate-prevention` | Phase 63 — duplicate prevention / idempotency static checks for live_send |
+| `npm run verify-scheduled-runner-duplicate-prevention-staging` | Phase 63 — staging verification of duplicate prevention on repeat live_send |
 | `npm run verify-browser-resend-provider-foundation` | Phase 20 — browser orchestrator; runs skeleton foundation + Resend plan + Resend provider in order, stop on first failure |
 | `npm run verify-delivery-operations-log-ui` | Phase 22 — Delivery Operations Log UI, CSV export, no execution hooks |
 | `npm run verify-delivery-worker` | Phase 24 — worker delivery execution engine (in-memory; no app wiring) |
@@ -1999,7 +2001,33 @@ Catalog/introspection queries are preferred; the script does not insert test del
 
 **Phase 61 gate:** `npm run verify-scheduled-runner-controlled-live-send` must pass; `npm run verify-scheduled-runner-controlled-live-send-staging` must pass against staging with sending enabled.
 
-**Next slice:** V6 Phase 62 — mark-as-sent after successful scheduled delivery (complete).
+**Next slice:** V6 Phase 63 — duplicate prevention for live scheduled sends (complete).
+
+---
+
+## Phase 63 — Scheduled runner duplicate prevention and idempotency
+
+**Scope:** `live_send` only. Before `sendReminderEmail`, query `reminder_delivery_logs` for an existing `sent` row matching organisation, compliance record, reminder type, recipient, due date, and `payload.asOfDate`. Duplicates insert `skipped` rows with `reason: duplicate_prevented` and `duplicateOfDeliveryLogId` — no provider call, no `mark_reminder_sent`. Returns `duplicatePreventionSummary` and `sendSummary.skippedDuplicate`. `dry_run`, `live_send_preview`, allowlist gates, and Phase 62 mark-sent ordering unchanged.
+
+### Phase 63 deliverables
+
+| Item | Location |
+|------|----------|
+| Duplicate prevention on live_send | `supabase/functions/scheduled-reminder-runner/index.ts` |
+| Static verification gate | `scripts/verify-scheduled-runner-duplicate-prevention.mjs` |
+| Staging verification gate | `scripts/verify-scheduled-runner-duplicate-prevention-staging.mjs` |
+
+**Script:** `scripts/verify-scheduled-runner-duplicate-prevention.mjs`
+
+`npm run verify-scheduled-runner-duplicate-prevention` verifies duplicate check before send, `duplicate_prevented` skip branch, sent logs include `payload.asOfDate`, `duplicatePreventionSummary` in response, and unchanged dry_run / preview / allowlist behaviour.
+
+**Script:** `scripts/verify-scheduled-runner-duplicate-prevention-staging.mjs`
+
+`npm run verify-scheduled-runner-duplicate-prevention-staging` verifies first `live_send` sends once, second run for same `asOfDate` prevents duplicate send and mark-sent using **Phase 63 Duplicate Test Person** fixture.
+
+**Phase 63 gate:** `npm run verify-scheduled-runner-duplicate-prevention` must pass; `npm run verify-scheduled-runner-duplicate-prevention-staging` must pass against staging with sending enabled.
+
+**Next slice:** TBD — scheduler wiring (cron / external job).
 
 ---
 
@@ -2025,7 +2053,7 @@ Catalog/introspection queries are preferred; the script does not insert test del
 
 **Phase 62 gate:** `npm run verify-scheduled-runner-mark-sent-after-delivery` must pass; `npm run verify-scheduled-runner-mark-sent-after-delivery-staging` must pass against staging with sending enabled.
 
-**Next slice:** TBD — scheduler wiring / idempotency for scheduled path.
+**Next slice:** V6 Phase 63 — duplicate prevention for live scheduled sends (complete).
 
 ---
 

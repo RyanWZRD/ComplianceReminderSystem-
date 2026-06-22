@@ -1,7 +1,8 @@
 /**
- * V6 Phase 43: send-reminder-deliveries Edge Function with Resend integration,
- * delivery log persistence via create_reminder_delivery_log RPC, and test-mode
- * mark-as-sent via mark_reminder_sent after successful delivered+log writes.
+ * V6 Phase 44: send-reminder-deliveries Edge Function with Resend integration,
+ * delivery log persistence via create_reminder_delivery_log RPC, test-mode
+ * mark-as-sent via mark_reminder_sent after successful delivered+log writes,
+ * and delivery idempotency (skip duplicate sends for same record/window/UTC day).
  */
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
@@ -643,17 +644,76 @@ function mapReminderWindowToRpcCode(reminderWindow: string): string | null {
 }
 
 /**
+ * @returns {{ start: string; end: string }}
+ */
+function getUtcDayBounds(): { start: string; end: string } {
+  const now = new Date();
+  const year = now.getUTCFullYear();
+  const month = now.getUTCMonth();
+  const day = now.getUTCDate();
+  const start = new Date(Date.UTC(year, month, day, 0, 0, 0, 0));
+  const end = new Date(Date.UTC(year, month, day + 1, 0, 0, 0, 0));
+
+  return {
+    start: start.toISOString(),
+    end: end.toISOString(),
+  };
+}
+
+/**
  * @param {DeliveryRecordInput} record
  * @returns {string | null}
  */
-function resolveMarkSentReminderType(record: DeliveryRecordInput): string | null {
+function resolveReminderWindow(record: DeliveryRecordInput): string | null {
   const metadata =
     record.metadata && typeof record.metadata === "object" && !Array.isArray(record.metadata)
       ? record.metadata
       : {};
 
   const reminderWindow = String(metadata.reminderWindow ?? "").trim();
-  return mapReminderWindowToRpcCode(reminderWindow);
+  return reminderWindow || null;
+}
+
+/**
+ * @param {SupabaseClient} supabase
+ * @param {string} organisationId
+ * @param {string} complianceRecordId
+ * @param {string} reminderWindow
+ */
+async function hasExistingDeliveredReminderToday(
+  supabase: SupabaseClient,
+  organisationId: string,
+  complianceRecordId: string,
+  reminderWindow: string,
+): Promise<boolean> {
+  const { start, end } = getUtcDayBounds();
+
+  const { data, error } = await supabase
+    .from("reminder_delivery_logs")
+    .select("id")
+    .eq("organisation_id", organisationId)
+    .eq("compliance_record_id", complianceRecordId)
+    .eq("delivery_status", "delivered")
+    .filter("metadata->>reminderWindow", "eq", reminderWindow)
+    .gte("delivered_at", start)
+    .lt("delivered_at", end)
+    .limit(1);
+
+  if (error) {
+    console.error("idempotency_check_failed", error.message);
+    return false;
+  }
+
+  return Array.isArray(data) && data.length > 0;
+}
+
+/**
+ * @param {DeliveryRecordInput} record
+ * @returns {string | null}
+ */
+function resolveMarkSentReminderType(record: DeliveryRecordInput): string | null {
+  const reminderWindow = resolveReminderWindow(record);
+  return reminderWindow ? mapReminderWindowToRpcCode(reminderWindow) : null;
 }
 
 /**
@@ -855,6 +915,30 @@ async function processDeliveryRecords(
           : {}),
       });
       continue;
+    }
+
+    const { complianceRecordId } = extractRecordIds(record);
+    const reminderWindow = resolveReminderWindow(record);
+
+    if (complianceRecordId && reminderWindow) {
+      const alreadyDeliveredToday = await hasExistingDeliveredReminderToday(
+        context.supabase,
+        context.organisationId,
+        complianceRecordId,
+        reminderWindow,
+      );
+
+      if (alreadyDeliveredToday) {
+        skipped += 1;
+
+        results.push({
+          queueItemId,
+          deliveryStatus: "skipped",
+          skipReason: "already_sent",
+          persisted: false,
+        });
+        continue;
+      }
     }
 
     if (attempted >= config.rateLimitPerRun) {

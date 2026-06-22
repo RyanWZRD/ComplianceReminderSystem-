@@ -1594,6 +1594,45 @@ Browser Manual Delivery UI
 
 **Phase 45 gate:** `npm run verify-scheduled-runner-dry-run` must pass.
 
+**Next slice:** V6 Phase 46 — deploy and smoke-test scheduled runner dry run.
+
+---
+
+## Phase 46 — Deploy and smoke-test scheduled runner dry run
+
+**Scope:** Deploy `scheduled-reminder-runner` to staging (`vmrotpztwoeifbdjwdis`) and document manual dry-run invocation. **No automatic emails, no cron, no delivery logs, no mark-as-sent, no compliance/history mutation.**
+
+### Phase 46 deliverables
+
+| Item | Location |
+|------|----------|
+| Deploy + smoke docs | [`docs/v6-scheduled-runner.md`](v6-scheduled-runner.md) § Phase 46 |
+| Dry-run verification gate | `scripts/verify-scheduled-runner-dry-run.mjs` |
+| Deploy smoke gate | `scripts/verify-scheduled-runner-deploy-smoke.mjs` |
+
+**Deploy command (staging):**
+
+```powershell
+supabase functions deploy scheduled-reminder-runner --project-ref vmrotpztwoeifbdjwdis
+```
+
+**Script:** `scripts/verify-scheduled-runner-deploy-smoke.mjs`
+
+`npm run verify-scheduled-runner-deploy-smoke` verifies:
+
+1. Phase 46 deploy command, manual invocation (Dashboard + PowerShell), and expected response shape
+2. Static safety gates — no Resend, `send-reminder-deliveries`, delivery logs, mark-as-sent, or cron
+3. Preflight: `build` + `verify-scheduled-runner-dry-run`
+
+### Phase 46 constraints
+
+- Manual invoke only — no cron schedule deployed
+- Response `status: "ok"`, `mode: "dry_run"`, summary counts only
+- No email secrets required on the function
+- `reminder_delivery_logs` and compliance/history unchanged after smoke test
+
+**Phase 46 gate:** `npm run verify-scheduled-runner-deploy-smoke` must pass.
+
 **Next slice:** TBD — scheduled delivery execution (invoke `send-reminder-deliveries` from scheduler).
 
 ---

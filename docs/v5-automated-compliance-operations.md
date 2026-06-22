@@ -812,7 +812,39 @@ The Reminder Queue Preview section includes a **Digest preview** area wired to `
 |-------|-------------|--------|
 | 45 | Scheduled automation runner dry run (`verify-scheduled-runner-dry-run`) | **Complete** |
 
-**Next slice:** TBD — scheduled delivery execution (out of Phase 45 scope).
+**Next slice:** V6 Phase 46 — deploy and smoke-test scheduled runner dry run.
+
+---
+
+## V6 — Reminder delivery · Phase 46 complete
+
+**Goal:** Deploy `scheduled-reminder-runner` to staging and manually invoke it as dry run only — deployment and smoke-test support, no side effects.
+
+**Status:** Scheduled runner staging deploy smoke plan complete. V6 Phase 46 complete on **v6.0.0-beta.1** baseline.
+
+**Deliverables:**
+
+- [`docs/v6-scheduled-runner.md`](v6-scheduled-runner.md) — exact deploy command, Dashboard/PowerShell invocation, expected response, Supabase checks
+- `scripts/verify-scheduled-runner-deploy-smoke.mjs` — deploy smoke verification gate
+- `npm run verify-scheduled-runner-deploy-smoke`
+
+| Item | Detail |
+|------|--------|
+| Staging project | `vmrotpztwoeifbdjwdis` |
+| Deploy | `supabase functions deploy scheduled-reminder-runner --project-ref vmrotpztwoeifbdjwdis` |
+| Invoke | POST `functions/v1/scheduled-reminder-runner` with admin JWT + `organisationId` |
+| Response | `status: "ok"`, `mode: "dry_run"`, `summary.*` counts |
+| Phase 46 scope | Manual dry run only — no cron, no emails, no writes |
+
+**Constraints:** No Resend calls, no `send-reminder-deliveries` invoke, no delivery log writes, no mark-as-sent, no compliance/history mutation, no cron schedule.
+
+**Verification:** `npm run verify-scheduled-runner-deploy-smoke` (includes `build` + `verify-scheduled-runner-dry-run`)
+
+| Phase | Deliverable | Status |
+|-------|-------------|--------|
+| 46 | Deploy and smoke-test scheduled runner dry run (`verify-scheduled-runner-deploy-smoke`) | **Complete** |
+
+**Next slice:** TBD — scheduled delivery execution (out of Phase 46 scope).
 
 ---
 

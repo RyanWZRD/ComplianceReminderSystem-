@@ -219,7 +219,12 @@ assertContains(
 assertContains(
   scheduledRunnerDoc,
   "verify-scheduled-runner-dry-run",
-  "scheduled runner doc references verification script",
+  "scheduled runner doc references dry-run verification script",
+);
+assertContains(
+  scheduledRunnerDoc,
+  "verify-scheduled-runner-deploy-smoke",
+  "scheduled runner doc references deploy smoke verification script",
 );
 assertContains(
   v5Doc,

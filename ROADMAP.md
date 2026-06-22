@@ -6,6 +6,38 @@ A local-first safeguarding compliance tracker. Runs in the browser with localSto
 
 # Current Release
 
+## V6 Phase 46 — Deploy and Smoke-Test Scheduled Runner Dry Run
+
+**Date:** June 2026
+
+### Summary
+
+V6 Phase 46 deploys `scheduled-reminder-runner` to **staging** and documents a **manual dry-run smoke test**. The function returns candidate summary counts only — **no Resend**, no `send-reminder-deliveries`, no delivery log writes, no mark-as-sent, **no cron**, and no compliance/history mutation.
+
+**Documentation:**
+
+- [`docs/v6-scheduled-runner.md`](docs/v6-scheduled-runner.md) — Phase 46 deploy command, manual invocation, expected response
+- [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md) — Phase 46 cross-reference
+- [`docs/v5-automated-compliance-operations.md`](docs/v5-automated-compliance-operations.md) — Phase 46 summary
+
+**Deploy (staging):**
+
+```powershell
+supabase functions deploy scheduled-reminder-runner --project-ref vmrotpztwoeifbdjwdis
+```
+
+**Verification (required):**
+
+```powershell
+npm run build
+npm run verify-scheduled-runner-dry-run
+npm run verify-scheduled-runner-deploy-smoke
+```
+
+**Next slice:** TBD (scheduled delivery execution — not in Phase 46 scope)
+
+---
+
 ## V6 Phase 45 — Scheduled Automation Runner Dry Run
 
 **Date:** June 2026

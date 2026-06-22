@@ -6,6 +6,38 @@ A local-first safeguarding compliance tracker. Runs in the browser with localSto
 
 # Current Release
 
+## V6 Phase 66 — Production Readiness and Safety Verification
+
+**Date:** June 2026
+
+### Summary
+
+V6 Phase 66 adds a **comprehensive production-readiness verification gate** for the automated email reminder system. This phase is **verification and documentation only** — no new sending behaviour, retry behaviour, mutation behaviour, UI write controls, or Resend changes. `verify-v6-production-readiness` runs static safety posture checks and orchestrates the core V6 gates (Phases 61–65).
+
+**Documentation:**
+
+- [`docs/v6-production-readiness.md`](docs/v6-production-readiness.md) — production readiness checklist, secrets, safety gates, rollback, limitations
+- [`docs/v6-automated-email-reminders.md`](docs/v6-automated-email-reminders.md) — Phase 66 cross-reference
+- [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md) — Phase 66 cross-reference
+
+**Deliverables:**
+
+| Item | Location |
+|------|----------|
+| Production readiness orchestrator | `scripts/verify-v6-production-readiness.mjs` |
+| Production readiness documentation | `docs/v6-production-readiness.md` |
+
+**Verification (required):**
+
+```powershell
+npm run verify-v6-production-readiness
+npm run build
+```
+
+**Next slice:** TBD — scheduler wiring (cron / external job)
+
+---
+
 ## V6 Phase 65 — Read-Only Admin Visibility for Automation Runs and Delivery Logs
 
 **Date:** June 2026
@@ -37,7 +69,7 @@ npm run verify-automation-visibility-cloud-load
 npm run build
 ```
 
-**Next slice:** TBD — scheduler wiring (cron / external job)
+**Next slice:** V6 Phase 66 — production readiness and safety verification (complete).
 
 ---
 

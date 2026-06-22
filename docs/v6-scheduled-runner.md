@@ -878,7 +878,34 @@ supabase functions deploy scheduled-reminder-runner --project-ref vmrotpztwoeifb
 - Wire scheduler (cron / external job) to invoke dry run or full delivery path
 - Invoke `send-reminder-deliveries` after operational sign-off
 
-See [`docs/v6-automated-email-reminders.md`](v6-automated-email-reminders.md), [`docs/v6-delivery-architecture.md`](v6-delivery-architecture.md) § Phase 63, and [`docs/v5-automated-compliance-operations.md`](v5-automated-compliance-operations.md).
+See [`docs/v6-automated-email-reminders.md`](v6-automated-email-reminders.md), [`docs/v6-production-readiness.md`](v6-production-readiness.md), [`docs/v6-delivery-architecture.md`](v6-delivery-architecture.md) § Phase 66, and [`docs/v5-automated-compliance-operations.md`](v5-automated-compliance-operations.md).
+
+---
+
+## Phase 66 — Production readiness and safety verification
+
+**Goal:** Confirm all critical safety, security, and operational controls are in place before wider use. **Verification only** — no runner behaviour changes.
+
+### Verification
+
+```powershell
+npm run verify-v6-production-readiness
+npm run build
+```
+
+**Staging acceptance (run separately against Alpha staging):**
+
+```powershell
+npm run verify-scheduled-runner-controlled-live-send-staging
+npm run verify-scheduled-runner-mark-sent-after-delivery-staging
+npm run verify-scheduled-runner-duplicate-prevention-staging
+npm run verify-scheduled-runner-failure-handling-staging
+npm run verify-automation-visibility-cloud-load
+```
+
+See [`docs/v6-production-readiness.md`](v6-production-readiness.md) for secrets, safety gates, rollback tags, and known limitations.
+
+**Phase 66 gate:** `npm run verify-v6-production-readiness` must pass.
 
 ---
 

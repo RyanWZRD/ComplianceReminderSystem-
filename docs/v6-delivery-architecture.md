@@ -422,6 +422,7 @@ interface HealthCheckResult {
 | `npm run verify-scheduled-runner-failure-handling-staging` | Phase 64 — staging verification of forced provider failure, retry, and duplicate prevention |
 | `npm run verify-automation-visibility-ui` | Phase 65 — Email Automation read-only UI, cloud SELECT helpers, no execution hooks |
 | `npm run verify-automation-visibility-cloud-load` | Phase 65 — staging admin read smoke for automation_runs and reminder_delivery_logs |
+| `npm run verify-v6-production-readiness` | Phase 66 — production readiness orchestrator; static safety posture + core V6 gates (61–65) |
 | `npm run verify-browser-resend-provider-foundation` | Phase 20 — browser orchestrator; runs skeleton foundation + Resend plan + Resend provider in order, stop on first failure |
 | `npm run verify-delivery-operations-log-ui` | Phase 22 — Delivery Operations Log UI, CSV export, no execution hooks |
 | `npm run verify-delivery-worker` | Phase 24 — worker delivery execution engine (in-memory; no app wiring) |
@@ -2032,7 +2033,47 @@ Catalog/introspection queries are preferred; the script does not insert test del
 
 **Phase 64 gate:** `npm run verify-scheduled-runner-failure-handling` must pass; `npm run verify-scheduled-runner-failure-handling-staging` must pass against staging with sending enabled.
 
-**Next slice:** V6 Phase 65 — read-only admin visibility for automation runs and delivery logs (complete).
+**Next slice:** V6 Phase 66 — production readiness and safety verification (complete).
+
+---
+
+## Phase 66 — Production readiness and safety verification
+
+**Status:** Complete when `npm run verify-v6-production-readiness` passes.
+
+**Goal:** Comprehensive production-readiness gate confirming safety, security, and operational controls before wider use. **Verification and documentation only** — no new sending, retry, mutation, UI write controls, or Resend behaviour changes.
+
+### Phase 66 deliverables
+
+| Item | Location |
+|------|----------|
+| Production readiness orchestrator | `scripts/verify-v6-production-readiness.mjs` |
+| Production readiness documentation | [`docs/v6-production-readiness.md`](v6-production-readiness.md) |
+
+### Phase 66 safety posture (verified statically)
+
+- `dry_run` default; `live_send` requires explicit mode + `SCHEDULED_EMAIL_SENDING_ENABLED` + `EMAIL_SENDING_ENABLED` + `SCHEDULED_EMAIL_ALLOWLIST`
+- `sendReminderEmail` not called from `dry_run` or `live_send_preview`
+- `mark_reminder_sent` only after successful send + `sent` delivery log
+- Duplicate prevention checks `sent` only; `failed`/`skipped` do not block retry
+- Delivery log field rules: `sent` has `provider_message_id`/`sent_at`; `failed` has errors without sent fields; `skipped` has no sent fields
+- Payloads omit secrets; `normalizeProviderError` redacts provider errors
+- Email Automation UI read-only; no retry/send/mark-sent controls; shortened message IDs; sanitised payload display
+- Required secrets documented; `RESEND_API_KEY` must not be committed; from-address must be verified with Resend
+
+### Staging acceptance commands (documented)
+
+`verify-scheduled-runner-controlled-live-send-staging`, `verify-scheduled-runner-mark-sent-after-delivery-staging`, `verify-scheduled-runner-duplicate-prevention-staging`, `verify-scheduled-runner-failure-handling-staging`, `verify-automation-visibility-cloud-load`
+
+**Phase 66 gate:** `npm run verify-v6-production-readiness` must pass; `npm run build` must pass.
+
+### Known limitations (documented)
+
+- No automatic retries yet
+- Allowlist still required/recommended for `live_send`
+- Domain/from-address must be properly verified
+- Admin visibility is read-only
+- No retry UI yet
 
 ---
 

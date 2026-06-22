@@ -1,7 +1,7 @@
 # V6 Automated Email Reminders
 
 **Theme:** Server-side scheduled reminder automation — audit and dry-run foundations before live sends.  
-**Phases:** 45 (dry run) · 46 (staging deploy smoke) · 47 (automation run records) · 48 (staging persistence verification) · 49 (delivery log schema) · 50 (staging schema verification) · 51 (dry-run delivery log rows) · 52 (staging delivery log verification) · 53 (email template framework) · 54 (Edge Resend provider foundation) · 55 (provider disabled-mode staging verification) · 56 (controlled manual test-send) · 57 (one real allowlisted staging test email) · 58 (manual test-send delivery log audit) · 59 (scheduled runner live-send gate) · 60 (live-send preview) · 61 (controlled live send) · 62 (mark sent after delivery) · 63 (duplicate prevention) · 64 (failure handling) · 65 (read-only admin visibility)  
+**Phases:** 45 (dry run) · 46 (staging deploy smoke) · 47 (automation run records) · 48 (staging persistence verification) · 49 (delivery log schema) · 50 (staging schema verification) · 51 (dry-run delivery log rows) · 52 (staging delivery log verification) · 53 (email template framework) · 54 (Edge Resend provider foundation) · 55 (provider disabled-mode staging verification) · 56 (controlled manual test-send) · 57 (one real allowlisted staging test email) · 58 (manual test-send delivery log audit) · 59 (scheduled runner live-send gate) · 60 (live-send preview) · 61 (controlled live send) · 62 (mark sent after delivery) · 63 (duplicate prevention) · 64 (failure handling) · 65 (read-only admin visibility) · 66 (production readiness verification)  
 **Date:** June 2026
 
 ---
@@ -33,6 +33,44 @@ V6 automated email reminders progress in safe, auditable slices. Phase 45–46 e
 | 63 | Scheduled runner duplicate prevention | Idempotent `live_send` via `reminder_delivery_logs` lookup; `duplicate_prevented` skip rows |
 | 64 | Scheduled runner failure handling | Failed delivery logs without mark-sent; retry-safe posture; no automatic retries |
 | 65 | Read-only admin visibility | Client SELECT only; Email Automation UI; no sends or mutations |
+| 66 | Production readiness verification | Verification orchestrator + docs only; no behaviour changes |
+
+---
+
+## Phase 66 — Production readiness and safety verification
+
+**Status:** Complete when `npm run verify-v6-production-readiness` passes.
+
+**Goal:** Confirm all critical safety, security, and operational controls are in place before wider use of automated email reminders. **Verification and documentation only** — no new sending, retry, mutation, UI write controls, or Resend behaviour changes.
+
+### Deliverables
+
+| Item | Location |
+|------|----------|
+| Production readiness orchestrator | `scripts/verify-v6-production-readiness.mjs` |
+| Production readiness documentation | [`docs/v6-production-readiness.md`](v6-production-readiness.md) |
+
+### Behaviour
+
+- Static safety posture checks across scheduled runner, delivery logs, UI, and secrets documentation
+- Orchestrates core gates: `verify-scheduled-runner-controlled-live-send`, `verify-scheduled-runner-mark-sent-after-delivery`, `verify-scheduled-runner-duplicate-prevention`, `verify-scheduled-runner-failure-handling`, `verify-automation-visibility-ui`
+- Documents required Edge secrets, safety gates, expected modes (`dry_run`, `live_send_preview`, `live_send`), staging acceptance commands, rollback tags, and known limitations
+
+### Verification
+
+`npm run verify-v6-production-readiness` — static checks + core script orchestration.
+
+`npm run build` — bundle must not expose `RESEND_API_KEY`.
+
+**Staging acceptance (documented, run separately):**
+
+```powershell
+npm run verify-scheduled-runner-controlled-live-send-staging
+npm run verify-scheduled-runner-mark-sent-after-delivery-staging
+npm run verify-scheduled-runner-duplicate-prevention-staging
+npm run verify-scheduled-runner-failure-handling-staging
+npm run verify-automation-visibility-cloud-load
+```
 
 ---
 

@@ -1,14 +1,14 @@
 # V6 Automated Email Reminders
 
 **Theme:** Server-side scheduled reminder automation — audit and dry-run foundations before live sends.  
-**Phases:** 45 (dry run) · 46 (staging deploy smoke) · 47 (automation run records) · 48 (staging persistence verification) · 49 (delivery log schema) · 50 (staging schema verification) · 51 (dry-run delivery log rows) · 52 (staging delivery log verification) · 53 (email template framework) · 54 (Edge Resend provider foundation) · 55 (provider disabled-mode staging verification) · 56 (controlled manual test-send)  
+**Phases:** 45 (dry run) · 46 (staging deploy smoke) · 47 (automation run records) · 48 (staging persistence verification) · 49 (delivery log schema) · 50 (staging schema verification) · 51 (dry-run delivery log rows) · 52 (staging delivery log verification) · 53 (email template framework) · 54 (Edge Resend provider foundation) · 55 (provider disabled-mode staging verification) · 56 (controlled manual test-send) · 57 (one real allowlisted staging test email)  
 **Date:** June 2026
 
 ---
 
 ## Executive summary
 
-V6 automated email reminders progress in safe, auditable slices. Phase 45–46 established `scheduled-reminder-runner` as a **dry-run-only** Edge Function that returns candidate summary counts. Phase 47 adds a **read-only audit layer**: each successful dry-run invoke persists one `automation_runs` row via service role — still **no emails** and **no mark-as-sent**. Phase 49 adds the **Postgres schema** for per-recipient delivery logging. Phase 50 confirms that schema on live staging via catalog introspection. Phase 51 persists **dry-run delivery log rows** (`pending` / `skipped` only) linked to each automation run — still **no Resend**, **no email sends**, and **no mark-as-sent**. Phase 52 verifies on live staging that those delivery log rows are created and linked to the returned `automationRunId`. Phase 53 adds a **plain-text email template framework** (subject, body, token replacement, preview) for future scheduled sends — **template/preview only**, still no Resend or delivery. Phase 54 adds a **shared Edge email provider module** (configuration, provider abstraction, safety gates) — **disabled by default**, still no scheduled-runner send path or delivery writes. Phase 55 verifies on live staging that the deployed provider remains disabled — **no real email sends**, still no scheduled-runner wiring. Phase 56 adds a **manual only** `send-test-email` Edge Function — one allowlisted test send when explicitly enabled, still no scheduled-runner wiring and **no delivery log writes**.
+V6 automated email reminders progress in safe, auditable slices. Phase 45–46 established `scheduled-reminder-runner` as a **dry-run-only** Edge Function that returns candidate summary counts. Phase 47 adds a **read-only audit layer**: each successful dry-run invoke persists one `automation_runs` row via service role — still **no emails** and **no mark-as-sent**. Phase 49 adds the **Postgres schema** for per-recipient delivery logging. Phase 50 confirms that schema on live staging via catalog introspection. Phase 51 persists **dry-run delivery log rows** (`pending` / `skipped` only) linked to each automation run — still **no Resend**, **no email sends**, and **no mark-as-sent**. Phase 52 verifies on live staging that those delivery log rows are created and linked to the returned `automationRunId`. Phase 53 adds a **plain-text email template framework** (subject, body, token replacement, preview) for future scheduled sends — **template/preview only**, still no Resend or delivery. Phase 54 adds a **shared Edge email provider module** (configuration, provider abstraction, safety gates) — **disabled by default**, still no scheduled-runner send path or delivery writes. Phase 55 verifies on live staging that the deployed provider remains disabled — **no real email sends**, still no scheduled-runner wiring. Phase 56 adds a **manual only** `send-test-email` Edge Function — one allowlisted test send when explicitly enabled, still no scheduled-runner wiring and **no delivery log writes**. Phase 57 verifies on live staging that **one real** allowlisted manual test email is sent — still no scheduled-runner invoke, no compliance sends, and **no delivery log or automation run writes**.
 
 | Phase | Scope | Writes |
 |-------|-------|--------|
@@ -24,6 +24,57 @@ V6 automated email reminders progress in safe, auditable slices. Phase 45–46 e
 | 54 | Edge Resend provider foundation (disabled by default) | None (provider module only) |
 | 55 | Provider disabled-mode staging verification | None (live verify script) |
 | 56 | Controlled manual test-send (`send-test-email`) | None (manual invoke only; no delivery logs) |
+| 57 | One real allowlisted manual test email on staging | None (live verify script; one real send) |
+
+---
+
+## Phase 57 — One real allowlisted manual test email on staging
+
+**Status:** Complete when `npm run verify-send-test-email-live-staging` passes against staging with sending enabled.
+
+**Goal:** Verify the manual `send-test-email` function can send **exactly one** real test email to a single **allowlisted** recipient on staging. **Manual test-send only** — no `scheduled-reminder-runner` invoke, no compliance reminder sends, no `mark_reminder_sent`, and no `reminder_delivery_logs` or `automation_runs` writes.
+
+### Deliverables
+
+| Item | Location |
+|------|----------|
+| Live staging verification gate | `scripts/verify-send-test-email-live-staging.mjs` |
+| Architecture cross-reference | [`docs/v6-delivery-architecture.md`](v6-delivery-architecture.md) |
+
+### Prerequisites
+
+1. Deploy `send-test-email` to staging (Phase 56)
+2. Edge secrets on staging: `EMAIL_SENDING_ENABLED=true`, `RESEND_API_KEY`, `EMAIL_FROM_ADDRESS`, `TEST_EMAIL_ALLOWLIST` (must include `TEST_EMAIL_TO`)
+3. Local `.env`: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_TEST_PASSWORD`, `TEST_EMAIL_TO` (single recipient)
+
+### Verification flow (live staging)
+
+1. Refuses to run unless `TEST_EMAIL_TO` is set (single recipient; no comma-separated addresses)
+2. Signs in as staging admin (JWT for Edge Function invoke)
+3. Records `reminder_delivery_logs` and `automation_runs` row count baselines
+4. POSTs to `send-test-email` with controlled subject/body and one `TEST_EMAIL_TO` recipient
+5. Asserts HTTP 200 with `status: sent` and exactly one `providerResult` with `status: sent`
+6. Asserts `providerMessageId` when returned by provider
+7. Asserts no `sent_at` in response
+8. Asserts row counts unchanged
+9. Does not invoke `scheduled-reminder-runner`
+
+### Hard constraints
+
+- One recipient only — script does not loop or accept comma-separated `TEST_EMAIL_TO`
+- Manual test function only — no scheduled-runner email sending
+- No delivery log or automation run writes
+- No app UI changes
+
+### Verification
+
+```powershell
+npm run verify-send-test-email-live-staging
+```
+
+**Phase 57 gate:** `npm run verify-send-test-email-live-staging` must pass against staging with sending enabled and allowlist configured.
+
+**Next slice:** TBD — wire provider into scheduled-reminder-runner send path (out of Phase 57 scope).
 
 ---
 
@@ -98,7 +149,7 @@ npm run build
 
 **Phase 56 gate:** `npm run verify-send-test-email-function` must pass; `npm run verify-send-test-email-disabled-staging` must pass against staging.
 
-**Next slice:** TBD — wire provider into scheduled-reminder-runner send path (out of Phase 56 scope).
+**Next slice:** V6 Phase 57 — one real allowlisted manual test email on staging (complete).
 
 ---
 

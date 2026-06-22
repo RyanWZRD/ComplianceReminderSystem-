@@ -405,6 +405,7 @@ interface HealthCheckResult {
 | `npm run verify-email-provider-disabled-staging` | Phase 55 — staging verification that provider is disabled by default (no live sends) |
 | `npm run verify-send-test-email-function` | Phase 56 — manual test-send function static/config checks (no live sends) |
 | `npm run verify-send-test-email-disabled-staging` | Phase 56 — staging verification that send-test-email refuses when sending disabled |
+| `npm run verify-send-test-email-live-staging` | Phase 57 — staging verification of one real allowlisted manual test email |
 | `npm run verify-browser-resend-provider-foundation` | Phase 20 — browser orchestrator; runs skeleton foundation + Resend plan + Resend provider in order, stop on first failure |
 | `npm run verify-delivery-operations-log-ui` | Phase 22 — Delivery Operations Log UI, CSV export, no execution hooks |
 | `npm run verify-delivery-worker` | Phase 24 — worker delivery execution engine (in-memory; no app wiring) |
@@ -1906,6 +1907,59 @@ Catalog/introspection queries are preferred; the script does not insert test del
 
 ---
 
+## Phase 57 — One real allowlisted manual test email on staging
+
+**Scope:** Live staging verification that `send-test-email` sends **exactly one** real test email to a single **allowlisted** recipient when `EMAIL_SENDING_ENABLED=true`. **Manual test-send only** — no `scheduled-reminder-runner` invoke, no compliance reminder sends, no `mark_reminder_sent`, and **no `reminder_delivery_logs` or `automation_runs` writes**.
+
+### Phase 57 deliverables
+
+| Item | Location |
+|------|----------|
+| Live staging verification gate | `scripts/verify-send-test-email-live-staging.mjs` |
+| Contract reference | [`docs/v6-automated-email-reminders.md`](v6-automated-email-reminders.md) |
+
+**Prerequisites before live staging verification:**
+
+1. Deploy `send-test-email` to staging (see Phase 56)
+2. Set Edge secrets on staging: `EMAIL_SENDING_ENABLED=true`, `RESEND_API_KEY`, `EMAIL_FROM_ADDRESS`, `TEST_EMAIL_ALLOWLIST` (must include `TEST_EMAIL_TO`)
+3. Set local `.env`: `TEST_EMAIL_TO` (single allowlisted recipient — no comma-separated list)
+
+**Script:** `scripts/verify-send-test-email-live-staging.mjs`
+
+`npm run verify-send-test-email-live-staging` verifies:
+
+1. Signs in as staging admin (JWT for Edge Function invoke)
+2. Records `reminder_delivery_logs` and `automation_runs` row count baselines
+3. POSTs to `send-test-email` with one `TEST_EMAIL_TO` recipient
+4. Asserts HTTP 200 with `status: sent` and exactly one `providerResult` with `status: sent`
+5. Asserts `providerMessageId` when returned by provider
+6. Asserts no `sent_at` in response
+7. Asserts row counts unchanged
+8. Asserts `scheduled-reminder-runner` not invoked (static safety checks only)
+
+### Phase 57 configuration
+
+| Variable | Location | Notes |
+|----------|----------|-------|
+| `TEST_EMAIL_TO` | Local `.env` | Single allowlisted recipient; script refuses if unset or comma-separated |
+| `TEST_EMAIL_ALLOWLIST` | Edge secret | Must include `TEST_EMAIL_TO` |
+| `EMAIL_SENDING_ENABLED` | Edge secret | Must be `true` for live send |
+| `RESEND_API_KEY` | Edge secret | Required for live send |
+| `EMAIL_FROM_ADDRESS` | Edge secret | Required for live send |
+
+### Phase 57 constraints
+
+- One recipient only — script does not loop or accept comma-separated `TEST_EMAIL_TO`
+- Manual test function only — no scheduled-runner email sending
+- No delivery log or automation run writes
+- No app UI changes
+
+**Phase 57 gate:** `npm run verify-send-test-email-live-staging` must pass against staging with sending enabled and allowlist configured.
+
+**Next slice:** TBD — wire provider into scheduled-reminder-runner send path.
+
+---
+
 ## Phase 56 — Controlled manual test-send function
 
 **Scope:** Dedicated manual `send-test-email` Edge Function that sends exactly one controlled test email through the Resend provider to an **allowlisted** recipient when `EMAIL_SENDING_ENABLED=true`. **Manual only** — `scheduled-reminder-runner` remains disconnected, no bulk sends, no reminder candidate sends, no `mark_reminder_sent`, no compliance mutation, and **no `reminder_delivery_logs` or `automation_runs` writes** in this phase.
@@ -1964,7 +2018,7 @@ supabase functions deploy send-test-email --project-ref vmrotpztwoeifbdjwdis
 
 **Phase 56 gate:** `npm run verify-send-test-email-function` must pass; `npm run verify-send-test-email-disabled-staging` must pass against staging.
 
-**Next slice:** TBD — wire provider into scheduled-reminder-runner send path.
+**Next slice:** V6 Phase 57 — one real allowlisted manual test email on staging (complete).
 
 ---
 

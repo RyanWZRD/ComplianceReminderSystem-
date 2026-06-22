@@ -6,6 +6,41 @@ A local-first safeguarding compliance tracker. Runs in the browser with localSto
 
 # Current Release
 
+## V6 Phase 57 — One Real Allowlisted Manual Test Email on Staging
+
+**Date:** June 2026
+
+### Summary
+
+V6 Phase 57 adds **live staging verification** that the manual `send-test-email` Edge Function can send **exactly one** real test email to a single **allowlisted** recipient when sending is explicitly enabled. **Manual test-send only** — no `scheduled-reminder-runner` invoke, no compliance reminder sends, no `mark_reminder_sent`, and no `reminder_delivery_logs` or `automation_runs` writes.
+
+**Documentation:**
+
+- [`docs/v6-automated-email-reminders.md`](docs/v6-automated-email-reminders.md) — Phase 57 live staging test email verification
+- [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md) — Phase 57 cross-reference
+
+**Deliverables:**
+
+| Item | Location |
+|------|----------|
+| Live staging verification gate | `scripts/verify-send-test-email-live-staging.mjs` |
+
+**Prerequisites:**
+
+1. Phase 56 `send-test-email` deployed to staging
+2. Staging Edge secrets: `EMAIL_SENDING_ENABLED=true`, `RESEND_API_KEY`, `EMAIL_FROM_ADDRESS`, `TEST_EMAIL_ALLOWLIST` (must include `TEST_EMAIL_TO`)
+3. Local `.env`: `TEST_EMAIL_TO` set to one allowlisted recipient
+
+**Verification (required):**
+
+```powershell
+npm run verify-send-test-email-live-staging
+```
+
+**Next slice:** TBD — wire provider into scheduled-reminder-runner send path (not in Phase 57 scope)
+
+---
+
 ## V6 Phase 56 — Controlled Manual Test-Send Function
 
 **Date:** June 2026

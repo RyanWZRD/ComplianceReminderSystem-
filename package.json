@@ -113,6 +113,7 @@
     "verify-email-provider-disabled-staging": "node scripts/verify-email-provider-disabled-staging.mjs",
     "verify-send-test-email-function": "node scripts/verify-send-test-email-function.mjs",
     "verify-send-test-email-disabled-staging": "node scripts/verify-send-test-email-disabled-staging.mjs",
+    "verify-send-test-email-live-staging": "node scripts/verify-send-test-email-live-staging.mjs",
     "verify:phase2": "node scripts/verify-phase2.mjs"
   },
   "dependencies": {

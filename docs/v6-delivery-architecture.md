@@ -1486,11 +1486,49 @@ Browser Manual Delivery UI
 
 **Phase 41 gate:** `npm run verify-edge-delivery-test-smoke-plan` must pass.
 
-**Next slice after Phase 41:** Delivery log persistence from Edge Function outcomes (planned).
+**Next slice after Phase 41:** V6 Phase 42 — delivery log persistence from Edge Function outcomes.
 
 ---
 
-**Constraints (Phase 35):** Documentation and version bump only. Admin-only manual delivery UI and E2E verification gate complete. No scheduled execution, automatic execution, or mark-as-sent automation yet.
+## Phase 42 — Delivery log persistence
+
+**Scope:** Persist `send-reminder-deliveries` outcomes to `reminder_delivery_logs` via `create_reminder_delivery_log` inside the Edge Function. One row per `deliveryRecords` item (delivered, failed, skipped). Caller JWT RPC path — no browser service-role key, no mark-as-sent, no compliance/history mutation.
+
+### Phase 42 deliverables
+
+| Item | Location |
+|------|----------|
+| Edge Function persistence | `supabase/functions/send-reminder-deliveries/index.ts` — `persistDeliveryLog` + `create_reminder_delivery_log` |
+| Browser summary mapping | `manual-delivery-execution.js` — `mapEdgeResponseToPersistenceSummary` |
+| Verification gate | `scripts/verify-edge-delivery-log-persistence.mjs` |
+| Contract cross-reference | [`docs/v6-edge-delivery-function.md`](v6-edge-delivery-function.md) § Phase 42 |
+
+**Script:** `scripts/verify-edge-delivery-log-persistence.mjs`
+
+`npm run verify-edge-delivery-log-persistence` verifies:
+
+1. Edge Function calls `create_reminder_delivery_log` with delivered/failed/skipped outcome mapping
+2. Test-mode redirect stored in metadata (`redirectedToEmail`, `originalRecipientEmail`)
+3. No `SUPABASE_SERVICE_ROLE_KEY` in Edge Function or browser invoke path
+4. No mark-as-sent, compliance, or history mutation hooks
+5. Existing RPC/table migrations — no new migration in Phase 42
+
+### Phase 42 constraints
+
+- Delivery log writes only — no mark-as-sent automation
+- `EMAIL_MODE=test` safe — test redirect + `[TEST]` subject preserved in audit rows
+- Browser UI continues to show execution summary; Delivery Operations Log loads persisted rows via `get_reminder_delivery_logs`
+
+**Phase 42 gate:** `npm run verify-edge-delivery-log-persistence` must pass.
+
+**Next slice:** TBD — mark-as-sent automation or scheduled execution (out of Phase 42 scope).
+
+---
+
+**Constraints (Phase 41):** Test-mode smoke sign-off only. No production sends, mark-as-sent, or compliance/history mutation in Phase 41 scope.
+
+**Next slice after Phase 41:** V6 Phase 42 — delivery log persistence (complete).
+
 
 **Next slice after Phase 35:** V6.1 Phase 1 — Beta validation.
 

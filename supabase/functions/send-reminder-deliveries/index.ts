@@ -1,12 +1,16 @@
 /**
- * V6 Phase 38: send-reminder-deliveries Edge Function with Resend integration.
- * Server-side Resend sends only — no delivery log writes, no reminder mark-sent hooks,
- * no browser invoke wiring in this phase.
+ * V6 Phase 42: send-reminder-deliveries Edge Function with Resend integration
+ * and delivery log persistence via create_reminder_delivery_log RPC.
+ * Server-side Resend sends + audit rows only — no reminder mark-sent hooks.
  */
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createClient, type SupabaseClient } from "jsr:@supabase/supabase-js@2";
 
 const RESEND_EMAILS_URL = "https://api.resend.com/emails";
+const DELIVERY_LOG_RPC = "create_reminder_delivery_log";
+const SKIPPED_BODY_PLACEHOLDER = "[delivery skipped]";
+const SKIPPED_SUBJECT_PLACEHOLDER = "[delivery skipped]";
 
 /** @type {ReadonlySet<number>} */
 const TRANSIENT_HTTP_STATUS_CODES = new Set([429, 500, 502, 503, 504]);
@@ -30,6 +34,8 @@ const DEFAULT_ALLOWED_ORIGINS = [
  * @property {string} [subject]
  * @property {string} [bodyText]
  * @property {string} [bodyHtml]
+ * @property {string} [complianceRecordId]
+ * @property {string} [personId]
  * @property {Record<string, unknown>} [metadata]
  */
 
@@ -41,6 +47,10 @@ const DEFAULT_ALLOWED_ORIGINS = [
  * @property {string} replyToEmail
  * @property {string} testRedirectTo
  * @property {number} rateLimitPerRun
+ */
+
+/**
+ * @typedef {"delivered" | "failed" | "skipped"} DeliveryOutcomeStatus
  */
 
 /**
@@ -85,6 +95,32 @@ function jsonResponse(
 function hasAuthorizationHeader(req: Request): boolean {
   const authorization = req.headers.get("Authorization");
   return Boolean(authorization && authorization.trim());
+}
+
+/**
+ * @param {Request} req
+ * @returns {SupabaseClient | null}
+ */
+function createUserSupabaseClient(req: Request): SupabaseClient | null {
+  const supabaseUrl = (Deno.env.get("SUPABASE_URL") ?? "").trim();
+  const supabaseAnonKey = (Deno.env.get("SUPABASE_ANON_KEY") ?? "").trim();
+  const authorization = req.headers.get("Authorization")?.trim() ?? "";
+
+  if (!supabaseUrl || !supabaseAnonKey || !authorization) {
+    return null;
+  }
+
+  return createClient(supabaseUrl, supabaseAnonKey, {
+    global: {
+      headers: {
+        Authorization: authorization,
+      },
+    },
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+  });
 }
 
 /**
@@ -199,6 +235,39 @@ function mapResendHttpFailure(status: number): {
 }
 
 /**
+ * @param {unknown} value
+ * @returns {string | null}
+ */
+function resolveOptionalId(value: unknown): string | null {
+  const trimmed = String(value ?? "").trim();
+  return trimmed || null;
+}
+
+/**
+ * @param {DeliveryRecordInput} record
+ */
+function extractRecordIds(record: DeliveryRecordInput): {
+  complianceRecordId: string | null;
+  personId: string | null;
+} {
+  const metadata =
+    record.metadata && typeof record.metadata === "object" && !Array.isArray(record.metadata)
+      ? record.metadata
+      : {};
+
+  return {
+    complianceRecordId:
+      resolveOptionalId(record.complianceRecordId) ??
+      resolveOptionalId(metadata.complianceRecordId) ??
+      resolveOptionalId(metadata.compliance_record_id),
+    personId:
+      resolveOptionalId(record.personId) ??
+      resolveOptionalId(metadata.personId) ??
+      resolveOptionalId(metadata.person_id),
+  };
+}
+
+/**
  * @param {DeliveryRecordInput} record
  */
 function getSkipReason(record: DeliveryRecordInput): string | null {
@@ -232,7 +301,7 @@ function getSkipReason(record: DeliveryRecordInput): string | null {
 function resolveOutboundEmail(
   config: ProviderConfig,
   record: DeliveryRecordInput,
-): { to: string; subject: string; bodyText: string } {
+): { to: string; subject: string; bodyText: string; originalRecipient: string } {
   const recipient = String(record.recipientEmail ?? "").trim();
   const subject = String(record.subject ?? "").trim();
   const bodyText = String(record.bodyText ?? "").trim();
@@ -242,6 +311,7 @@ function resolveOutboundEmail(
       to: config.testRedirectTo,
       subject: `[TEST] ${subject}`,
       bodyText,
+      originalRecipient: recipient,
     };
   }
 
@@ -249,6 +319,57 @@ function resolveOutboundEmail(
     to: recipient,
     subject,
     bodyText,
+    originalRecipient: recipient,
+  };
+}
+
+/**
+ * @param {ProviderConfig} config
+ * @param {DeliveryRecordInput} record
+ */
+function resolveLogSubject(
+  config: ProviderConfig,
+  record: DeliveryRecordInput,
+): string {
+  const subject = String(record.subject ?? "").trim();
+
+  if (!subject) {
+    return SKIPPED_SUBJECT_PLACEHOLDER;
+  }
+
+  if (config.emailMode === "test") {
+    return `[TEST] ${subject}`;
+  }
+
+  return subject;
+}
+
+/**
+ * @param {DeliveryRecordInput} record
+ */
+function resolveLogBodyText(record: DeliveryRecordInput): string {
+  const bodyText = String(record.bodyText ?? "").trim();
+  return bodyText || SKIPPED_BODY_PLACEHOLDER;
+}
+
+/**
+ * @param {ProviderConfig} config
+ * @param {Record<string, unknown>} metadata
+ */
+function buildTestModeMetadata(
+  config: ProviderConfig,
+  metadata: Record<string, unknown>,
+  originalRecipient: string | null,
+): Record<string, unknown> {
+  if (config.emailMode !== "test") {
+    return metadata;
+  }
+
+  return {
+    ...metadata,
+    emailMode: "test",
+    redirectedToEmail: config.testRedirectTo,
+    originalRecipientEmail: originalRecipient,
   };
 }
 
@@ -263,11 +384,14 @@ async function sendViaResend(
   | {
       deliveryStatus: "delivered";
       providerMessageId: string;
+      outbound: ReturnType<typeof resolveOutboundEmail>;
     }
   | {
       deliveryStatus: "failed";
       failureType: "transient" | "permanent";
       failureReason: string;
+      providerStatusCode?: number;
+      outbound: ReturnType<typeof resolveOutboundEmail>;
     }
 > {
   const outbound = resolveOutboundEmail(config, record);
@@ -306,6 +430,7 @@ async function sendViaResend(
       deliveryStatus: "failed",
       failureType: "transient",
       failureReason: "resend_network_error",
+      outbound,
     };
   }
 
@@ -326,6 +451,7 @@ async function sendViaResend(
     return {
       deliveryStatus: "delivered",
       providerMessageId,
+      outbound,
     };
   }
 
@@ -335,16 +461,184 @@ async function sendViaResend(
     deliveryStatus: "failed",
     failureType: failure.failureType,
     failureReason: failure.failureReason,
+    providerStatusCode: response.status,
+    outbound,
+  };
+}
+
+/**
+ * @param {Record<string, unknown>} metadata
+ */
+function preserveRecordMetadata(metadata: Record<string, unknown>): Record<string, unknown> {
+  const preservedKeys = [
+    "providerMessageId",
+    "provider",
+    "failureType",
+    "reminderWindow",
+    "complianceType",
+    "expiryDate",
+    "source",
+    "emailMissing",
+  ];
+
+  /** @type {Record<string, unknown>} */
+  const preserved: Record<string, unknown> = {};
+
+  for (const key of preservedKeys) {
+    if (Object.prototype.hasOwnProperty.call(metadata, key)) {
+      preserved[key] = metadata[key];
+    }
+  }
+
+  return preserved;
+}
+
+/**
+ * @param {SupabaseClient} supabase
+ * @param {{
+ *   organisationId: string;
+ *   automationRunId: string;
+ *   record: DeliveryRecordInput;
+ *   config: ProviderConfig;
+ *   outcomeStatus: DeliveryOutcomeStatus;
+ *   skipReason?: string;
+ *   failureType?: "transient" | "permanent";
+ *   failureReason?: string;
+ *   providerMessageId?: string;
+ *   providerStatusCode?: number;
+ *   outbound?: ReturnType<typeof resolveOutboundEmail>;
+ * }} input
+ */
+async function persistDeliveryLog(
+  supabase: SupabaseClient,
+  input: {
+    organisationId: string;
+    automationRunId: string;
+    record: DeliveryRecordInput;
+    config: ProviderConfig;
+    outcomeStatus: DeliveryOutcomeStatus;
+    skipReason?: string;
+    failureType?: "transient" | "permanent";
+    failureReason?: string;
+    providerMessageId?: string;
+    providerStatusCode?: number;
+    outbound?: ReturnType<typeof resolveOutboundEmail>;
+  },
+): Promise<{ logId: string | null; persisted: boolean; persistError?: string }> {
+  const queueItemId = String(input.record.queueItemId ?? "").trim() || "unknown";
+  const now = new Date().toISOString();
+  const baseMetadata =
+    input.record.metadata &&
+    typeof input.record.metadata === "object" &&
+    !Array.isArray(input.record.metadata)
+      ? preserveRecordMetadata(input.record.metadata)
+      : {};
+  const { complianceRecordId, personId } = extractRecordIds(input.record);
+  const outbound =
+    input.outbound ??
+  resolveOutboundEmail(input.config, input.record);
+  const originalRecipient = outbound.originalRecipient || null;
+
+  /** @type {Record<string, unknown>} */
+  const metadata = buildTestModeMetadata(input.config, {
+    ...baseMetadata,
+    provider: "resend",
+    outcomeStatus: input.outcomeStatus,
+  }, originalRecipient);
+
+  if (input.providerMessageId) {
+    metadata.providerMessageId = input.providerMessageId;
+  }
+
+  if (input.failureType) {
+    metadata.failureType = input.failureType;
+  }
+
+  if (input.providerStatusCode != null) {
+    metadata.providerStatusCode = input.providerStatusCode;
+  }
+
+  if (input.skipReason) {
+    metadata.skipReason = input.skipReason;
+  }
+
+  let deliveryStatus = "failed";
+  let sentAt: string | null = null;
+  let deliveredAt: string | null = null;
+  let failedAt: string | null = null;
+  let failureReason: string | null = null;
+  let recipientEmail = outbound.to;
+
+  if (input.outcomeStatus === "delivered") {
+    deliveryStatus = "delivered";
+    sentAt = now;
+    deliveredAt = now;
+  } else if (input.outcomeStatus === "skipped") {
+    deliveryStatus = "cancelled";
+    failedAt = now;
+    failureReason = input.skipReason ?? "skipped";
+    recipientEmail = originalRecipient ?? outbound.to;
+  } else {
+    deliveryStatus = "failed";
+    sentAt = now;
+    failedAt = now;
+    failureReason = input.failureReason ?? "delivery_failed";
+  }
+
+  const { data, error } = await supabase.rpc(DELIVERY_LOG_RPC, {
+    p_organisation_id: input.organisationId,
+    p_automation_run_id: input.automationRunId,
+    p_queue_item_id: queueItemId,
+    p_compliance_record_id: complianceRecordId,
+    p_person_id: personId,
+    p_recipient_email: recipientEmail,
+    p_subject: resolveLogSubject(input.config, input.record),
+    p_body_text: resolveLogBodyText(input.record),
+    p_delivery_status: deliveryStatus,
+    p_sent_at: sentAt,
+    p_delivered_at: deliveredAt,
+    p_failed_at: failedAt,
+    p_failure_reason: failureReason,
+    p_metadata: metadata,
+  });
+
+  if (error) {
+    return {
+      logId: null,
+      persisted: false,
+      persistError: error.message,
+    };
+  }
+
+  const row =
+    data && typeof data === "object" && !Array.isArray(data)
+      ? /** @type {Record<string, unknown>} */ (data)
+      : null;
+  const logId = row && typeof row.id === "string" ? row.id : null;
+
+  return {
+    logId,
+    persisted: Boolean(logId),
   };
 }
 
 /**
  * @param {ProviderConfig} config
  * @param {DeliveryRecordInput[]} deliveryRecords
+ * @param {{
+ *   organisationId: string;
+ *   automationRunId: string;
+ *   supabase: SupabaseClient;
+ * }} context
  */
 async function processDeliveryRecords(
   config: ProviderConfig,
   deliveryRecords: DeliveryRecordInput[],
+  context: {
+    organisationId: string;
+    automationRunId: string;
+    supabase: SupabaseClient;
+  },
 ) {
   /** @type {Array<Record<string, unknown>>} */
   const results = [];
@@ -352,6 +646,8 @@ async function processDeliveryRecords(
   let delivered = 0;
   let failed = 0;
   let skipped = 0;
+  let persisted = 0;
+  let persistFailed = 0;
 
   for (const record of deliveryRecords) {
     const queueItemId = String(record.queueItemId ?? "").trim() || "unknown";
@@ -359,20 +655,62 @@ async function processDeliveryRecords(
 
     if (skipReason) {
       skipped += 1;
+
+      const persistResult = await persistDeliveryLog(context.supabase, {
+        organisationId: context.organisationId,
+        automationRunId: context.automationRunId,
+        record,
+        config,
+        outcomeStatus: "skipped",
+        skipReason,
+      });
+
+      if (persistResult.persisted) {
+        persisted += 1;
+      } else {
+        persistFailed += 1;
+      }
+
       results.push({
         queueItemId,
         deliveryStatus: "skipped",
         skipReason,
+        logId: persistResult.logId,
+        persisted: persistResult.persisted,
+        ...(persistResult.persistError
+          ? { persistError: persistResult.persistError }
+          : {}),
       });
       continue;
     }
 
     if (attempted >= config.rateLimitPerRun) {
       skipped += 1;
+
+      const persistResult = await persistDeliveryLog(context.supabase, {
+        organisationId: context.organisationId,
+        automationRunId: context.automationRunId,
+        record,
+        config,
+        outcomeStatus: "skipped",
+        skipReason: "rate_limit_exceeded",
+      });
+
+      if (persistResult.persisted) {
+        persisted += 1;
+      } else {
+        persistFailed += 1;
+      }
+
       results.push({
         queueItemId,
         deliveryStatus: "skipped",
         skipReason: "rate_limit_exceeded",
+        logId: persistResult.logId,
+        persisted: persistResult.persisted,
+        ...(persistResult.persistError
+          ? { persistError: persistResult.persistError }
+          : {}),
       });
       continue;
     }
@@ -383,20 +721,64 @@ async function processDeliveryRecords(
 
     if (outcome.deliveryStatus === "delivered") {
       delivered += 1;
+
+      const persistResult = await persistDeliveryLog(context.supabase, {
+        organisationId: context.organisationId,
+        automationRunId: context.automationRunId,
+        record,
+        config,
+        outcomeStatus: "delivered",
+        providerMessageId: outcome.providerMessageId,
+        outbound: outcome.outbound,
+      });
+
+      if (persistResult.persisted) {
+        persisted += 1;
+      } else {
+        persistFailed += 1;
+      }
+
       results.push({
         queueItemId,
         deliveryStatus: "delivered",
         providerMessageId: outcome.providerMessageId,
+        logId: persistResult.logId,
+        persisted: persistResult.persisted,
+        ...(persistResult.persistError
+          ? { persistError: persistResult.persistError }
+          : {}),
       });
       continue;
     }
 
     failed += 1;
+
+    const persistResult = await persistDeliveryLog(context.supabase, {
+      organisationId: context.organisationId,
+      automationRunId: context.automationRunId,
+      record,
+      config,
+      outcomeStatus: "failed",
+      failureType: outcome.failureType,
+      failureReason: outcome.failureReason,
+      providerStatusCode: outcome.providerStatusCode,
+      outbound: outcome.outbound,
+    });
+
+    if (persistResult.persisted) {
+      persisted += 1;
+    } else {
+      persistFailed += 1;
+    }
+
     results.push({
       queueItemId,
       deliveryStatus: "failed",
       failureType: outcome.failureType,
       failureReason: outcome.failureReason,
+      logId: persistResult.logId,
+      persisted: persistResult.persisted,
+      ...(persistResult.persistError ? { persistError: persistResult.persistError } : {}),
     });
   }
 
@@ -408,6 +790,8 @@ async function processDeliveryRecords(
       delivered,
       failed,
       skipped,
+      persisted,
+      persistFailed,
     },
     results,
   };
@@ -426,6 +810,12 @@ Deno.serve(async (req) => {
   }
 
   if (!hasAuthorizationHeader(req)) {
+    return jsonResponse({ error: "unauthorized" }, 401, corsHeaders);
+  }
+
+  const supabase = createUserSupabaseClient(req);
+
+  if (!supabase) {
     return jsonResponse({ error: "unauthorized" }, 401, corsHeaders);
   }
 
@@ -449,10 +839,17 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: providerConfig.error }, 503, corsHeaders);
   }
 
+  const organisationId = String(validation.record.organisationId).trim();
+  const automationRunId = String(validation.record.automationRunId).trim();
   const deliveryRecords = validation.record.deliveryRecords as DeliveryRecordInput[];
   const responseBody = await processDeliveryRecords(
     providerConfig.config,
     deliveryRecords,
+    {
+      organisationId,
+      automationRunId,
+      supabase,
+    },
   );
 
   return jsonResponse(responseBody, 200, corsHeaders);

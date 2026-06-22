@@ -26555,11 +26555,20 @@ ${suffix}`;
   // js/app/automation/manual-delivery-execution.js
   var MANUAL_DELIVERY_RUN_TYPE = "manual_delivery_test";
   var MANUAL_DELIVERY_RUN_SOURCE = "admin_manual_delivery_ui";
-  var EMPTY_PERSISTENCE_SUMMARY = {
-    total: 0,
-    persisted: 0,
-    failed: 0
-  };
+  function mapEdgeResponseToPersistenceSummary(edgeResponse, recordCount) {
+    const summary = edgeResponse.summary && typeof edgeResponse.summary === "object" ? (
+      /** @type {Record<string, unknown>} */
+      edgeResponse.summary
+    ) : {};
+    const total = Number(summary.total ?? recordCount);
+    const persisted = Number(summary.persisted ?? 0);
+    const persistFailed = Number(summary.persistFailed ?? Math.max(0, total - persisted));
+    return {
+      total,
+      persisted,
+      failed: persistFailed
+    };
+  }
   function mapEdgeResponseToExecutionSummary(edgeResponse, recordCount) {
     const summary = edgeResponse.summary && typeof edgeResponse.summary === "object" ? (
       /** @type {Record<string, unknown>} */
@@ -26617,11 +26626,15 @@ ${suffix}`;
       automationRunId: runResult.run.id,
       deliveryRecords: edgeRecords
     });
+    const persistenceSummary = mapEdgeResponseToPersistenceSummary(
+      edgeResponse,
+      deliveryRecords.length
+    );
     return {
       deliveryRecords,
       executionSummary: mapEdgeResponseToExecutionSummary(edgeResponse, deliveryRecords.length),
-      persistenceSummary: EMPTY_PERSISTENCE_SUMMARY,
-      persistenceResults: [],
+      persistenceSummary,
+      persistenceResults: Array.isArray(edgeResponse.results) ? edgeResponse.results : [],
       edgeStatus: edgeResponse.status,
       edgeResults: edgeResponse.results
     };
@@ -26636,7 +26649,7 @@ ${suffix}`;
     "",
     "\u2022 Emails may be sent through the configured provider.",
     "\u2022 In test mode, recipients are redirected to the staging inbox.",
-    "\u2022 Delivery outcomes come from the server Edge Function; delivery logs are not written in this phase.",
+    "\u2022 Delivery outcomes and audit logs are written by the server Edge Function.",
     "\u2022 This action cannot be undone."
   ].join("\n");
   function formatManualDeliveryModeLabel(mode) {

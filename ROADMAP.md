@@ -6,6 +6,35 @@ A local-first safeguarding compliance tracker. Runs in the browser with localSto
 
 # Current Release
 
+## V6 Phase 42 — Delivery Log Persistence
+
+**Date:** June 2026
+
+### Summary
+
+V6 Phase 42 persists `send-reminder-deliveries` outcomes to `reminder_delivery_logs` via the existing `create_reminder_delivery_log` RPC. The Edge Function writes one audit row per delivery record outcome (delivered, failed, skipped) using the caller's JWT — **no browser service-role key**, no mark-as-sent, no compliance/history mutation, and no production mode changes.
+
+**Documentation:**
+
+- [`docs/v6-edge-delivery-function.md`](docs/v6-edge-delivery-function.md) — Phase 42 delivery log persistence
+- [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md) — Phase 42 cross-reference
+- [`docs/v5-automated-compliance-operations.md`](docs/v5-automated-compliance-operations.md#v6--reminder-delivery--phase-42-complete) — Phase 42 summary
+
+**Verification (required):**
+
+```powershell
+npm run build
+npm run verify-edge-delivery-function-skeleton
+npm run verify-edge-delivery-resend
+npm run verify-edge-delivery-browser-invoke
+npm run verify-edge-delivery-log-persistence
+npm run verify-manual-delivery-ui
+```
+
+**Next slice:** TBD (mark-as-sent automation or scheduled execution — not in Phase 42 scope)
+
+---
+
 ## V6 Phase 41 — Test-Mode Edge Function Deployment Smoke Test
 
 **Date:** June 2026

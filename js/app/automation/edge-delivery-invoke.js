@@ -153,6 +153,8 @@ async function throwEdgeFunctionHttpError(response) {
  *     delivered?: number;
  *     failed?: number;
  *     skipped?: number;
+ *     persisted?: number;
+ *     persistFailed?: number;
  *   };
  *   results?: Array<Record<string, unknown>>;
  * }>}

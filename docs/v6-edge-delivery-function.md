@@ -487,7 +487,41 @@ The Supabase JS client attaches the signed-in user's JWT (`Authorization: Bearer
 
 **Verification:** `npm run verify-edge-delivery-test-smoke-plan`
 
-**Next slice after Phase 41:** Delivery log persistence from Edge Function outcomes (planned).
+**Next slice after Phase 41:** V6 Phase 42 — delivery log persistence from Edge Function outcomes.
+
+---
+
+## Phase 42 — Delivery log persistence
+
+**Module:** `supabase/functions/send-reminder-deliveries/index.ts`  
+**RPC:** `public.create_reminder_delivery_log` (existing migration `20260401000007`)  
+**Table:** `public.reminder_delivery_logs` (existing migration `20260401000006`)
+
+**Status:** Edge Function persists one delivery log row per `deliveryRecords` outcome after Resend attempts.
+
+### Phase 42 scope
+
+| Item | Detail |
+|------|--------|
+| Outcomes persisted | `delivered`, `failed` (transient/permanent in metadata), `skipped` (stored as `cancelled` + `outcomeStatus: "skipped"`) |
+| RPC auth | Caller JWT via `SUPABASE_ANON_KEY` + `Authorization` header — **no service-role key in Edge Function** |
+| Test mode | `recipient_email` = redirect inbox; `metadata.redirectedToEmail` + `originalRecipientEmail`; `[TEST]` subject prefix |
+| Provider audit | `metadata.provider`, `providerMessageId`, `providerStatusCode`, `failureType` |
+| Response | `summary.persisted`, `summary.persistFailed`, per-result `logId` + `persisted` |
+| Browser | Manual delivery maps `persistenceSummary` from Edge response — no browser RPC writes |
+
+### Phase 42 non-goals
+
+- Mark-as-sent automation
+- Compliance record or history mutation
+- Scheduled or automatic delivery execution
+- `EMAIL_MODE=production` deployment changes
+- New schema/RPC migrations
+
+**Verification:** `npm run verify-edge-delivery-log-persistence`
+
+**Next slice:** TBD — mark-as-sent automation or scheduled execution (out of Phase 42 scope).
+
 
 ---
 

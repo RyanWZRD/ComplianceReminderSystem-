@@ -104,7 +104,11 @@ assertContains(migration, "create unique index reminder_delivery_logs_dedup_idx"
 assertContains(migration, "organisation_id", "dedup index organisation_id");
 assertContains(migration, "compliance_record_id", "dedup index compliance_record_id");
 assertContains(migration, "metadata->>'reminderWindow'", "dedup index reminderWindow metadata");
-assertContains(migration, "(prepared_at::date)", "dedup index prepared_at date");
+assertContains(
+  migration,
+  "((prepared_at at time zone 'UTC')::date)",
+  "dedup index prepared_at UTC date"
+);
 assertContains(migration, "where compliance_record_id is not null", "dedup partial index predicate");
 
 assertContains(

@@ -1,9 +1,9 @@
 /**
- * V6 Phase 39: Manual delivery test execution coordinator.
+ * V6 Phase 42: Manual delivery test execution coordinator.
  * Invokes send-reminder-deliveries Edge Function for admin-initiated tests only.
  *
- * Server-side Resend via authenticated Edge Function invoke — no browser Resend fetch,
- * no Resend API key in the browser, and no delivery log writes in this phase.
+ * Server-side Resend + delivery log persistence via Edge Function — no browser Resend fetch,
+ * no Resend API key in the browser, and no browser-side delivery log RPC writes.
  *
  * No scheduling, reminder mark-sent automation, or compliance/history mutation.
  */
@@ -18,12 +18,27 @@ import { getSupabaseClient } from "../../data/supabase-client.js";
 export const MANUAL_DELIVERY_RUN_TYPE = "manual_delivery_test";
 export const MANUAL_DELIVERY_RUN_SOURCE = "admin_manual_delivery_ui";
 
-/** @type {import("./delivery-log-persistence-service.js").DeliveryLogPersistenceSummary} */
-const EMPTY_PERSISTENCE_SUMMARY = {
-  total: 0,
-  persisted: 0,
-  failed: 0,
-};
+/**
+ * @param {Record<string, unknown>} edgeResponse
+ * @param {number} recordCount
+ * @returns {import("./delivery-log-persistence-service.js").DeliveryLogPersistenceSummary}
+ */
+function mapEdgeResponseToPersistenceSummary(edgeResponse, recordCount) {
+  const summary =
+    edgeResponse.summary && typeof edgeResponse.summary === "object"
+      ? /** @type {Record<string, unknown>} */ (edgeResponse.summary)
+      : {};
+
+  const total = Number(summary.total ?? recordCount);
+  const persisted = Number(summary.persisted ?? 0);
+  const persistFailed = Number(summary.persistFailed ?? Math.max(0, total - persisted));
+
+  return {
+    total,
+    persisted,
+    failed: persistFailed,
+  };
+}
 
 /**
  * @param {Record<string, unknown>} edgeResponse
@@ -110,11 +125,16 @@ export async function executeManualDeliveryTest({
     deliveryRecords: edgeRecords,
   });
 
+  const persistenceSummary = mapEdgeResponseToPersistenceSummary(
+    edgeResponse,
+    deliveryRecords.length,
+  );
+
   return {
     deliveryRecords,
     executionSummary: mapEdgeResponseToExecutionSummary(edgeResponse, deliveryRecords.length),
-    persistenceSummary: EMPTY_PERSISTENCE_SUMMARY,
-    persistenceResults: [],
+    persistenceSummary,
+    persistenceResults: Array.isArray(edgeResponse.results) ? edgeResponse.results : [],
     edgeStatus: edgeResponse.status,
     edgeResults: edgeResponse.results,
   };

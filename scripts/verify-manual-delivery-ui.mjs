@@ -328,6 +328,8 @@ globalThis.fetch = async (_url, init) => {
         delivered: attempted,
         failed: 0,
         skipped: records.length - attempted,
+        persisted: 0,
+        persistFailed: records.length,
       },
       results: records.map((record) => ({
         queueItemId: record.queueItemId,
@@ -373,7 +375,8 @@ try {
   });
 
   assertEqual(executionResult.executionSummary.attempted, 1, "execution coordinator attempted count");
-  assertEqual(executionResult.persistenceSummary.persisted, 0, "execution coordinator skips delivery log writes in Phase 39");
+  assertEqual(executionResult.persistenceSummary.total, 1, "execution coordinator persistence total from Edge summary");
+  assertEqual(executionResult.persistenceSummary.persisted, 0, "mock Edge response reports zero persisted rows");
 } catch (error) {
   fail(`executeManualDeliveryTest smoke: ${error instanceof Error ? error.message : String(error)}`);
 } finally {

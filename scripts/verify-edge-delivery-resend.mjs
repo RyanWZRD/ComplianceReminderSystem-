@@ -162,7 +162,6 @@ assertContains(functionSource, "skipped", "index.ts summary includes skipped");
 assertContains(functionSource, "results", "index.ts returns per-record results");
 
 const forbiddenFunctionNeedles = [
-  "create_reminder_delivery_log",
   "mark_reminder_sent",
   "markReminderSent",
   "mark-as-sent",

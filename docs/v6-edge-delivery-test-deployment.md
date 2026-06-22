@@ -393,7 +393,23 @@ Then execute **Phase 41 — Manual smoke test checklist** above.
 
 ---
 
-**Next slice after Phase 41:** Delivery log persistence from Edge Function outcomes (planned).
+**Next slice after Phase 41:** V6 Phase 42 — delivery log persistence from Edge Function outcomes (complete).
+
+---
+
+## Phase 42 — Delivery log persistence (post-deploy)
+
+After Phase 42, manual delivery test runs **write** `reminder_delivery_logs` rows via the Edge Function. Re-run smoke tests with delivery log checks enabled:
+
+| Check | Expected |
+|-------|----------|
+| M.7 | `reminder_delivery_logs` row count **increases** by one row per delivery record outcome |
+| Delivery Operations Log | New rows visible for delivered/failed/skipped outcomes |
+| Test mode audit | `recipient_email` = `EMAIL_TEST_REDIRECT_TO`; `metadata.redirectedToEmail` set; subject has `[TEST]` prefix |
+
+**Verification:** `npm run verify-edge-delivery-log-persistence`
+
+**Constraints:** Delivery log writes only — no mark-as-sent, compliance/history mutation, or `EMAIL_MODE=production` changes.
 
 ---
 

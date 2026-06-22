@@ -155,7 +155,6 @@ assertContains(functionSource, "invalid_email_mode", "index.ts fails on invalid 
 assertContains(functionSource, "invalid_config", "index.ts fails on missing from/redirect config");
 
 const forbiddenFunctionNeedles = [
-  "create_reminder_delivery_log",
   "mark_reminder_sent",
   "markReminderSent",
   "mark-as-sent",

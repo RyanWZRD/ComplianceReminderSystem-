@@ -83,7 +83,6 @@ assertContains(functionSource, "Access-Control-Allow-Origin", "index.ts sets COR
 assertContains(functionSource, "127.0.0.1:8877", "index.ts allows local dev origin");
 
 const forbiddenNeedles = [
-  "create_reminder_delivery_log",
   "mark_reminder_sent",
   "markReminderSent",
   "mark-as-sent",

@@ -748,6 +748,38 @@ The Reminder Queue Preview section includes a **Digest preview** area wired to `
 
 ---
 
+## V6 — Reminder delivery · Phase 42 complete
+
+**Goal:** Persist `send-reminder-deliveries` outcomes to `reminder_delivery_logs` after Edge Function delivery attempts — delivery log writes only.
+
+**Status:** Edge Function delivery log persistence complete. V6 Phase 42 complete on **v6.0.0-beta.1** baseline.
+
+**Deliverables:**
+
+- `supabase/functions/send-reminder-deliveries/index.ts` — `persistDeliveryLog` → `create_reminder_delivery_log` per outcome
+- `js/app/automation/manual-delivery-execution.js` — maps `persistenceSummary` from Edge Function `summary`
+- `scripts/verify-edge-delivery-log-persistence.mjs` — persistence verification gate
+- `npm run verify-edge-delivery-log-persistence`
+
+| Item | Detail |
+|------|--------|
+| Outcomes | One row per record: delivered, failed (transient/permanent in metadata), skipped (`cancelled` + `outcomeStatus`) |
+| RPC | Existing `create_reminder_delivery_log` — caller JWT, no service-role key in browser |
+| Test mode | `metadata.redirectedToEmail`, `originalRecipientEmail`, `[TEST]` subject on audit row |
+| Phase 42 scope | Delivery logs only — no mark-as-sent, compliance/history mutation, or scheduling |
+
+**Constraints:** No mark-as-sent automation, no compliance/history mutation, no scheduled execution, no production mode changes.
+
+**Verification:** `npm run verify-edge-delivery-log-persistence`
+
+| Phase | Deliverable | Status |
+|-------|-------------|--------|
+| 42 | Delivery log persistence from Edge outcomes (`verify-edge-delivery-log-persistence`) | **Complete** |
+
+**Next slice:** TBD — mark-as-sent automation or scheduled execution (out of Phase 42 scope).
+
+---
+
 ## V6 — Reminder delivery · Phase 41 complete
 
 **Goal:** Guide and verify the first safe staging deployment of `send-reminder-deliveries` with `EMAIL_MODE=test` — manual smoke checklist, inbox/Supabase checks, and automated smoke-plan gate.

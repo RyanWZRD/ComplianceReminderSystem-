@@ -41,7 +41,7 @@ create unique index reminder_delivery_logs_dedup_idx
     organisation_id,
     compliance_record_id,
     (metadata->>'reminderWindow'),
-    (prepared_at::date)
+    ((prepared_at at time zone 'UTC')::date)
   )
   where compliance_record_id is not null;
 

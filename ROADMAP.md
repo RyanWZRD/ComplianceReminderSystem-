@@ -6,6 +6,115 @@ A local-first safeguarding compliance tracker. Runs in the browser with localSto
 
 # Current Release
 
+## V6 Phase 55 — Provider Disabled-Mode Staging Verification
+
+**Date:** June 2026
+
+### Summary
+
+V6 Phase 55 adds **staging verification** that the Edge email provider foundation is safely **disabled by default** on the deployed runtime. A temporary `verify-email-provider-disabled` Edge Function invokes `sendReminderEmail` with harmless fake input and confirms `EMAIL_SENDING_ENABLED` is off — no live Resend calls, no `delivery_status` changes, no `sent_at` or `provider_message_id` writes, no `mark_reminder_sent`, and no `scheduled-reminder-runner` wiring.
+
+**Documentation:**
+
+- [`docs/v6-automated-email-reminders.md`](docs/v6-automated-email-reminders.md) — Phase 55 disabled-mode staging verification
+- [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md) — Phase 55 cross-reference
+
+**Deliverables:**
+
+| Item | Location |
+|------|----------|
+| Staging verification Edge Function | `supabase/functions/verify-email-provider-disabled/index.ts` |
+| Staging verification gate | `scripts/verify-email-provider-disabled-staging.mjs` |
+
+**Deploy before staging verification:**
+
+```powershell
+supabase functions deploy verify-email-provider-disabled --project-ref vmrotpztwoeifbdjwdis
+```
+
+**Verification (required):**
+
+```powershell
+npm run verify-email-provider-disabled-staging
+npm run build
+```
+
+**Next slice:** TBD — wire provider into scheduled-reminder-runner send path (not in Phase 55 scope)
+
+---
+
+## V6 Phase 54 — Edge Resend Provider Foundation (Disabled by Default)
+
+**Date:** June 2026
+
+### Summary
+
+V6 Phase 54 adds a **shared Edge email provider module** for future scheduled sends: configuration parsing, provider abstraction, and safety gates. **Disabled by default** — `EMAIL_SENDING_ENABLED` defaults to `false`, `sendReminderEmail` returns a safe disabled result without calling Resend, and `scheduled-reminder-runner` is unchanged. No live email sending, no delivery status changes, no `mark_reminder_sent`, and no `sent_at` or `provider_message_id` writes.
+
+**Documentation:**
+
+- [`docs/v6-automated-email-reminders.md`](docs/v6-automated-email-reminders.md) — Phase 54 Edge provider foundation
+- [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md) — Phase 54 cross-reference
+
+**Deliverables:**
+
+| Item | Location |
+|------|----------|
+| Edge shared provider module | `supabase/functions/_shared/email-provider.ts` |
+| Verification gate | `scripts/verify-resend-provider-foundation.mjs` |
+| Browser foundation orchestrator (Phase 20) | `scripts/verify-browser-resend-provider-foundation.mjs` |
+
+**Configuration (Edge secrets — optional when sending disabled):**
+
+| Variable | Default | Notes |
+|----------|---------|-------|
+| `EMAIL_SENDING_ENABLED` | `false` | Must be explicitly `true` to allow sends |
+| `EMAIL_PROVIDER` | `resend` | Provider name |
+| `RESEND_API_KEY` | — | Required only when sending enabled |
+| `EMAIL_FROM_ADDRESS` | — | Required only when sending enabled |
+
+**Verification (required):**
+
+```powershell
+npm run verify-resend-provider-foundation
+npm run build
+```
+
+**Next slice:** TBD — wire provider into scheduled-reminder-runner send path (not in Phase 54 scope)
+
+---
+
+## V6 Phase 53 — Reminder Email Template Framework
+
+**Date:** June 2026
+
+### Summary
+
+V6 Phase 53 adds a **plain-text reminder email template framework** for future scheduled sends: subject/body generation, token replacement, and preview helpers. **Template/preview only** — no Resend, no email sending, no delivery status changes, no `mark_reminder_sent`, and no `sent_at` or `provider_message_id` writes.
+
+**Documentation:**
+
+- [`docs/v6-automated-email-reminders.md`](docs/v6-automated-email-reminders.md) — Phase 53 template framework
+- [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md) — Phase 53 cross-reference
+
+**Deliverables:**
+
+| Item | Location |
+|------|----------|
+| Template module | `js/app/automation/reminder-email-template.js` |
+| Verification gate | `scripts/verify-reminder-email-template.mjs` |
+
+**Verification (required):**
+
+```powershell
+npm run verify-reminder-email-template
+npm run build
+```
+
+**Next slice:** TBD — wire templates into scheduled delivery (not in Phase 53 scope)
+
+---
+
 ## V6 Phase 52 — Staging Verification for Scheduled Runner Dry-Run Delivery Logs
 
 **Date:** June 2026

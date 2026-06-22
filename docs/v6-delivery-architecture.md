@@ -401,7 +401,9 @@ interface HealthCheckResult {
 | `npm run verify-email-provider-skeleton-foundation` | Phase 15 — orchestrator; runs phases 12 + 14 in order, stop on first failure |
 | `npm run verify-resend-provider-plan` | Phase 17 — Resend implementation plan documentation |
 | `npm run verify-resend-provider` | Phase 19 — Resend provider network implementation (mocked `fetchImpl`; no app wiring) |
-| `npm run verify-resend-provider-foundation` | Phase 20 — orchestrator; runs skeleton foundation + Resend plan + Resend provider in order, stop on first failure |
+| `npm run verify-resend-provider-foundation` | Phase 54 — Edge shared email provider foundation (disabled by default; no live sends) |
+| `npm run verify-email-provider-disabled-staging` | Phase 55 — staging verification that provider is disabled by default (no live sends) |
+| `npm run verify-browser-resend-provider-foundation` | Phase 20 — browser orchestrator; runs skeleton foundation + Resend plan + Resend provider in order, stop on first failure |
 | `npm run verify-delivery-operations-log-ui` | Phase 22 — Delivery Operations Log UI, CSV export, no execution hooks |
 | `npm run verify-delivery-worker` | Phase 24 — worker delivery execution engine (in-memory; no app wiring) |
 | `npm run verify-delivery-worker-persistence` | Phase 25 — worker persistence adapter (RPC payload mapping; no RPC calls) |
@@ -1814,7 +1816,132 @@ Catalog/introspection queries are preferred; the script does not insert test del
 
 **Phase 52 gate:** `npm run verify-scheduled-runner-delivery-log-dry-run-staging` must pass against staging.
 
-**Next slice:** TBD — live scheduled email sends.
+**Next slice:** V6 Phase 53 — reminder email template framework (complete).
+
+---
+
+## Phase 53 — Reminder email template framework
+
+**Scope:** Plain-text reminder email subject/body generation, token replacement, and preview helpers for future scheduled sends. **Template/preview only** — no Resend, no email sending, no delivery status changes, no `mark_reminder_sent`, and no `sent_at` or `provider_message_id` writes.
+
+### Phase 53 deliverables
+
+| Item | Location |
+|------|----------|
+| Template module | `js/app/automation/reminder-email-template.js` |
+| Verification gate | `scripts/verify-reminder-email-template.mjs` |
+| Contract reference | [`docs/v6-automated-email-reminders.md`](v6-automated-email-reminders.md) |
+
+**Script:** `scripts/verify-reminder-email-template.mjs`
+
+`npm run verify-reminder-email-template` verifies:
+
+1. Subject renders with compliance type and ISO due date
+2. Body renders recipient, person, compliance, and formatted due date fields
+3. Missing fields use fallbacks — no `undefined` or `null` in output
+4. `replaceReminderEmailTokens` replaces all supported `{{token}}` placeholders
+5. `buildReminderEmailPreview` returns `subject` and `bodyText`
+6. Module contains no Resend, fetch, send, database write, or mark-as-sent patterns
+
+### Phase 53 constraints
+
+- Template generation only — no provider or Edge Function wiring
+- Plain text only — no HTML
+- No app UI changes
+- No `scheduled-reminder-runner` behaviour changes
+
+**Phase 53 gate:** `npm run verify-reminder-email-template` must pass.
+
+**Next slice:** V6 Phase 54 — Edge Resend provider foundation (complete).
+
+---
+
+## Phase 54 — Edge Resend provider foundation (disabled by default)
+
+**Scope:** Shared Edge email provider module with configuration parsing, provider abstraction, and safety gates for future scheduled sends. **Disabled by default** — no live email sending, no `scheduled-reminder-runner` send path, no delivery status changes, no `mark_reminder_sent`, and no `sent_at` or `provider_message_id` writes.
+
+### Phase 54 deliverables
+
+| Item | Location |
+|------|----------|
+| Edge shared provider module | `supabase/functions/_shared/email-provider.ts` |
+| Verification gate | `scripts/verify-resend-provider-foundation.mjs` |
+| Browser foundation orchestrator (Phase 20) | `scripts/verify-browser-resend-provider-foundation.mjs` |
+| Contract reference | [`docs/v6-automated-email-reminders.md`](v6-automated-email-reminders.md) |
+
+**Script:** `scripts/verify-resend-provider-foundation.mjs`
+
+`npm run verify-resend-provider-foundation` verifies:
+
+1. `email-provider.ts` exports `getEmailProviderConfig`, `isEmailSendingEnabled`, `createEmailProvider`, `sendReminderEmail`
+2. `EMAIL_SENDING_ENABLED` defaults to `false`; `EMAIL_PROVIDER` defaults to `resend`
+3. Missing `RESEND_API_KEY` is safe when sending is disabled
+4. `scheduled-reminder-runner` does not import Resend or `email-provider`
+5. Only `verify-email-provider-disabled` may call `sendReminderEmail` (Phase 55); `scheduled-reminder-runner` must not
+6. Provider module has no `delivery_status`, `sent_at`, `provider_message_id`, or `mark_reminder_sent` patterns
+7. No live Resend calls; `npm run build` passes without `RESEND_API_KEY`
+
+### Phase 54 configuration
+
+| Variable | Default | Notes |
+|----------|---------|-------|
+| `EMAIL_SENDING_ENABLED` | `false` | Explicit `true` required to reach Resend scaffold |
+| `EMAIL_PROVIDER` | `resend` | Provider name |
+| `RESEND_API_KEY` | — | Required only when sending enabled |
+| `EMAIL_FROM_ADDRESS` | — | Required only when sending enabled |
+
+### Phase 54 constraints
+
+- Provider abstraction and configuration gates only
+- `sendReminderEmail` returns `{ status: "disabled" }` when sending is off — no provider HTTP calls
+- Resend HTTP scaffold exists in `_shared/email-provider.ts` but is unreachable unless `EMAIL_SENDING_ENABLED=true`
+- No `scheduled-reminder-runner` behaviour changes
+- No app UI changes
+
+**Phase 54 gate:** `npm run verify-resend-provider-foundation` must pass.
+
+**Next slice:** V6 Phase 55 — provider disabled-mode staging verification (complete).
+
+---
+
+## Phase 55 — Provider disabled-mode staging verification
+
+**Scope:** Live staging invoke of temporary `verify-email-provider-disabled` Edge Function; confirm `EMAIL_SENDING_ENABLED` is off on the deployed runtime and `sendReminderEmail` returns a safe disabled result. **Verification only** — no real email sends, no `scheduled-reminder-runner` wiring, no delivery status changes, no `mark_reminder_sent`, and no `sent_at` or `provider_message_id` writes.
+
+### Phase 55 deliverables
+
+| Item | Location |
+|------|----------|
+| Staging verification Edge Function | `supabase/functions/verify-email-provider-disabled/index.ts` |
+| Staging verification gate | `scripts/verify-email-provider-disabled-staging.mjs` |
+| Contract reference | [`docs/v6-automated-email-reminders.md`](v6-automated-email-reminders.md) |
+
+**Deploy before staging verification:**
+
+```powershell
+supabase functions deploy verify-email-provider-disabled --project-ref vmrotpztwoeifbdjwdis
+```
+
+**Script:** `scripts/verify-email-provider-disabled-staging.mjs`
+
+`npm run verify-email-provider-disabled-staging` verifies:
+
+1. `scheduled-reminder-runner` does not import `email-provider` or call `sendReminderEmail`
+2. Deployed invoke returns `status: ok`, `mode: provider_disabled_verification`, `emailProviderStatus: disabled`
+3. Response and `providerResult` have no `providerMessageId` or `sent_at`
+4. `reminder_delivery_logs` row count unchanged after invoke
+5. `providerResult.status` is `disabled` with reason `email_sending_disabled`
+
+### Phase 55 constraints
+
+- Staging verification only — no real email delivery
+- `RESEND_API_KEY` not required when sending disabled
+- No `scheduled-reminder-runner` behaviour changes
+- No app UI changes
+
+**Phase 55 gate:** `npm run verify-email-provider-disabled-staging` must pass against staging.
+
+**Next slice:** TBD — wire provider into scheduled-reminder-runner send path.
 
 ---
 
@@ -1865,7 +1992,7 @@ Catalog/introspection queries are preferred; the script does not insert test del
 **Scope:** `scripts/verify-manual-delivery-e2e-foundation.mjs` orchestrator. Runs in order:
 
 1. `npm run verify-manual-delivery-foundation`
-2. `npm run verify-resend-provider-foundation`
+2. `npm run verify-browser-resend-provider-foundation`
 3. `npm run verify-delivery-operations-log-ui`
 4. `npm run verify-manual-delivery-ui`
 
@@ -2057,7 +2184,7 @@ Stops on first failure. Prints `V6 manual delivery foundation verification: OK` 
 
 **Scope:** `scripts/verify-delivery-pipeline-foundation.mjs` orchestrator. Runs in order:
 
-1. `npm run verify-resend-provider-foundation`
+1. `npm run verify-browser-resend-provider-foundation`
 2. `npm run verify-delivery-worker`
 3. `npm run verify-delivery-worker-persistence`
 4. `npm run verify-delivery-log-persistence-service`
@@ -2345,9 +2472,9 @@ Stops on first failure. Prints `V6 delivery pipeline foundation verification: OK
 
 **Documentation:** [`docs/v6-email-provider-configuration.md`](v6-email-provider-configuration.md#phase-20--resend-provider-foundation-verification-orchestrator)
 
-**Script:** `scripts/verify-resend-provider-foundation.mjs`
+**Script:** `scripts/verify-browser-resend-provider-foundation.mjs`
 
-`npm run verify-resend-provider-foundation` runs verification scripts in order:
+`npm run verify-browser-resend-provider-foundation` runs verification scripts in order:
 
 1. `verify-email-provider-skeleton-foundation` — phases 12 + 14–15 orchestrator
 2. `verify-resend-provider-plan` — Resend plan documentation and isolated module checks
@@ -2359,7 +2486,7 @@ Stops on first failure. Prints section headings. Final success: `V6 Resend provi
 
 | Item | Location |
 |------|----------|
-| Resend foundation orchestrator | `scripts/verify-resend-provider-foundation.mjs` |
+| Resend foundation orchestrator | `scripts/verify-browser-resend-provider-foundation.mjs` |
 | Architecture cross-reference | This document § Phase 20 |
 
 ### Phase 20 constraints

@@ -21,7 +21,7 @@ const packageJson = readFileSync(join(root, "package.json"), "utf8");
 /** @type {readonly { label: string; script: string }[]} */
 const STEPS = [
   { label: "verify-manual-delivery-foundation", script: "verify-manual-delivery-foundation" },
-  { label: "verify-resend-provider-foundation", script: "verify-resend-provider-foundation" },
+  { label: "verify-browser-resend-provider-foundation", script: "verify-browser-resend-provider-foundation" },
   { label: "verify-delivery-operations-log-ui", script: "verify-delivery-operations-log-ui" },
   { label: "verify-manual-delivery-ui", script: "verify-manual-delivery-ui" },
 ];

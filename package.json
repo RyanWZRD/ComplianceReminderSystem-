@@ -80,6 +80,7 @@
     "verify-email-provider-skeleton-foundation": "node scripts/verify-email-provider-skeleton-foundation.mjs",
     "verify-resend-provider-plan": "node scripts/verify-resend-provider-plan.mjs",
     "verify-resend-provider": "node scripts/verify-resend-provider.mjs",
+    "verify-browser-resend-provider-foundation": "node scripts/verify-browser-resend-provider-foundation.mjs",
     "verify-resend-provider-foundation": "node scripts/verify-resend-provider-foundation.mjs",
     "verify-delivery-operations-log-ui": "node scripts/verify-delivery-operations-log-ui.mjs",
     "verify-delivery-worker": "node scripts/verify-delivery-worker.mjs",
@@ -108,6 +109,8 @@
     "verify-scheduled-runner-delivery-log-dry-run": "node scripts/verify-scheduled-runner-delivery-log-dry-run.mjs",
     "verify-scheduled-runner-delivery-log-dry-run-staging": "node scripts/verify-scheduled-runner-delivery-log-dry-run-staging.mjs",
     "verify-reminder-delivery-log-schema-staging": "node scripts/verify-reminder-delivery-log-schema-staging.mjs",
+    "verify-reminder-email-template": "node scripts/verify-reminder-email-template.mjs",
+    "verify-email-provider-disabled-staging": "node scripts/verify-email-provider-disabled-staging.mjs",
     "verify:phase2": "node scripts/verify-phase2.mjs"
   },
   "dependencies": {

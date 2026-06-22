@@ -1,14 +1,14 @@
 # V6 Automated Email Reminders
 
 **Theme:** Server-side scheduled reminder automation — audit and dry-run foundations before live sends.  
-**Phases:** 45 (dry run) · 46 (staging deploy smoke) · 47 (automation run records) · 48 (staging persistence verification) · 49 (delivery log schema) · 50 (staging schema verification) · 51 (dry-run delivery log rows) · 52 (staging delivery log verification)  
+**Phases:** 45 (dry run) · 46 (staging deploy smoke) · 47 (automation run records) · 48 (staging persistence verification) · 49 (delivery log schema) · 50 (staging schema verification) · 51 (dry-run delivery log rows) · 52 (staging delivery log verification) · 53 (email template framework) · 54 (Edge Resend provider foundation) · 55 (provider disabled-mode staging verification)  
 **Date:** June 2026
 
 ---
 
 ## Executive summary
 
-V6 automated email reminders progress in safe, auditable slices. Phase 45–46 established `scheduled-reminder-runner` as a **dry-run-only** Edge Function that returns candidate summary counts. Phase 47 adds a **read-only audit layer**: each successful dry-run invoke persists one `automation_runs` row via service role — still **no emails** and **no mark-as-sent**. Phase 49 adds the **Postgres schema** for per-recipient delivery logging. Phase 50 confirms that schema on live staging via catalog introspection. Phase 51 persists **dry-run delivery log rows** (`pending` / `skipped` only) linked to each automation run — still **no Resend**, **no email sends**, and **no mark-as-sent**. Phase 52 verifies on live staging that those delivery log rows are created and linked to the returned `automationRunId`.
+V6 automated email reminders progress in safe, auditable slices. Phase 45–46 established `scheduled-reminder-runner` as a **dry-run-only** Edge Function that returns candidate summary counts. Phase 47 adds a **read-only audit layer**: each successful dry-run invoke persists one `automation_runs` row via service role — still **no emails** and **no mark-as-sent**. Phase 49 adds the **Postgres schema** for per-recipient delivery logging. Phase 50 confirms that schema on live staging via catalog introspection. Phase 51 persists **dry-run delivery log rows** (`pending` / `skipped` only) linked to each automation run — still **no Resend**, **no email sends**, and **no mark-as-sent**. Phase 52 verifies on live staging that those delivery log rows are created and linked to the returned `automationRunId`. Phase 53 adds a **plain-text email template framework** (subject, body, token replacement, preview) for future scheduled sends — **template/preview only**, still no Resend or delivery. Phase 54 adds a **shared Edge email provider module** (configuration, provider abstraction, safety gates) — **disabled by default**, still no scheduled-runner send path or delivery writes. Phase 55 verifies on live staging that the deployed provider remains disabled — **no real email sends**, still no scheduled-runner wiring.
 
 | Phase | Scope | Writes |
 |-------|-------|--------|
@@ -20,6 +20,184 @@ V6 automated email reminders progress in safe, auditable slices. Phase 45–46 e
 | 50 | Staging verification for `reminder_delivery_logs` schema | None (live catalog verify script) |
 | 51 | Dry-run delivery log rows per candidate | `reminder_delivery_logs` insert (`pending` / `skipped` only) |
 | 52 | Staging verification for dry-run delivery logs | None (live verify script) |
+| 53 | Plain-text email template framework | None (template generation only) |
+| 54 | Edge Resend provider foundation (disabled by default) | None (provider module only) |
+| 55 | Provider disabled-mode staging verification | None (live verify script) |
+
+---
+
+## Phase 55 — Provider disabled-mode staging verification
+
+**Status:** Complete when `npm run verify-email-provider-disabled-staging` passes against staging.
+
+**Goal:** Confirm the **deployed** Edge runtime keeps email sending **disabled by default**. A temporary verification Edge Function calls `sendReminderEmail` with harmless fake input and returns a safe disabled result — **no Resend HTTP calls**, no `delivery_status` changes, no `sent_at` or `provider_message_id` writes, no `mark_reminder_sent`, and no `scheduled-reminder-runner` wiring.
+
+### Deliverables
+
+| Item | Location |
+|------|----------|
+| Staging verification Edge Function | `supabase/functions/verify-email-provider-disabled/index.ts` |
+| Staging verification gate | `scripts/verify-email-provider-disabled-staging.mjs` |
+| Architecture cross-reference | [`docs/v6-delivery-architecture.md`](v6-delivery-architecture.md) |
+
+### Deploy before staging verification
+
+```powershell
+supabase functions deploy verify-email-provider-disabled --project-ref vmrotpztwoeifbdjwdis
+```
+
+### Verification flow
+
+1. Signs in as staging admin (JWT for Edge Function invoke)
+2. Records `reminder_delivery_logs` row count baseline
+3. Invokes `verify-email-provider-disabled` (POST, Authorization required)
+4. Asserts `status: ok`, `mode: provider_disabled_verification`, `emailProviderStatus: disabled`
+5. Asserts no `providerMessageId` or `sent_at` in response; `providerResult.status` is `disabled`
+6. Asserts `reminder_delivery_logs` row count unchanged
+7. Asserts `scheduled-reminder-runner` does not import `email-provider` or call `sendReminderEmail`
+
+### Hard constraints
+
+- Staging verification only — no real email sending
+- `RESEND_API_KEY` not required when `EMAIL_SENDING_ENABLED` is false
+- No `scheduled-reminder-runner` behaviour changes
+- No app UI changes
+
+### Verification
+
+```powershell
+npm run verify-email-provider-disabled-staging
+npm run build
+```
+
+**Phase 55 gate:** `npm run verify-email-provider-disabled-staging` must pass against staging.
+
+**Next slice:** TBD — wire provider into scheduled-reminder-runner send path (out of Phase 55 scope).
+
+---
+
+## Phase 54 — Edge Resend provider foundation (disabled by default)
+
+**Status:** Complete when `npm run verify-resend-provider-foundation` passes.
+
+**Goal:** Add the **foundation** for Resend email provider integration on the Edge runtime without sending any emails yet. **Provider abstraction and safety gates only** — no scheduled-runner send path, no delivery status changes, no `mark_reminder_sent`, and no `sent_at` or `provider_message_id` writes.
+
+### Deliverables
+
+| Item | Location |
+|------|----------|
+| Edge shared provider module | `supabase/functions/_shared/email-provider.ts` |
+| Verification gate | `scripts/verify-resend-provider-foundation.mjs` |
+| Browser foundation orchestrator (Phase 20) | `scripts/verify-browser-resend-provider-foundation.mjs` |
+| Architecture cross-reference | [`docs/v6-delivery-architecture.md`](v6-delivery-architecture.md) |
+
+### Exported API
+
+| Function | Purpose |
+|----------|---------|
+| `getEmailProviderConfig(env)` | Parse `RESEND_API_KEY`, `EMAIL_SENDING_ENABLED`, `EMAIL_FROM_ADDRESS`, `EMAIL_PROVIDER` |
+| `isEmailSendingEnabled(config)` | Returns `true` only when `EMAIL_SENDING_ENABLED` is explicitly enabled |
+| `createEmailProvider(config)` | Provider factory (Resend scaffold) |
+| `sendReminderEmail(input, config?)` | Safe send entry point — returns disabled result when sending is off |
+
+### Configuration
+
+| Variable | Default | Required when sending disabled | Required when sending enabled |
+|----------|---------|-------------------------------|------------------------------|
+| `EMAIL_SENDING_ENABLED` | `false` | No | Yes (`true`) |
+| `EMAIL_PROVIDER` | `resend` | No | No |
+| `RESEND_API_KEY` | — | No | Yes |
+| `EMAIL_FROM_ADDRESS` | — | No | Yes |
+
+### Hard constraints
+
+- `RESEND_API_KEY` must not be required for build or local verification
+- Email sending disabled by default — `sendReminderEmail` must not call Resend unless `EMAIL_SENDING_ENABLED=true`
+- `scheduled-reminder-runner` must not import the provider module or call Resend
+- Only `verify-email-provider-disabled` may call `sendReminderEmail` (Phase 55 staging gate); `scheduled-reminder-runner` must not
+- No `delivery_status` `sent` writes, `sent_at`, `provider_message_id` DB writes, or `mark_reminder_sent`
+- No app UI changes
+- No live Resend calls in verification
+
+### Verification
+
+```powershell
+npm run verify-resend-provider-foundation
+npm run build
+```
+
+**Phase 54 gate:** `npm run verify-resend-provider-foundation` must pass.
+
+**Next slice:** TBD — wire provider into scheduled-reminder-runner send path (out of Phase 54 scope).
+
+---
+
+## Phase 53 — Reminder email template framework
+
+**Status:** Complete when `npm run verify-reminder-email-template` passes.
+
+**Goal:** Provide a safe, reusable **plain-text** email template layer for future scheduled reminder sends. **Template/preview only** — no Resend, no email sending, no delivery status changes, no `mark_reminder_sent`, and no `sent_at` or `provider_message_id` writes.
+
+### Deliverables
+
+| Item | Location |
+|------|----------|
+| Template module | `js/app/automation/reminder-email-template.js` |
+| Verification gate | `scripts/verify-reminder-email-template.mjs` |
+| Architecture cross-reference | [`docs/v6-delivery-architecture.md`](v6-delivery-architecture.md) |
+
+### Exported API
+
+| Function | Purpose |
+|----------|---------|
+| `buildReminderEmailSubject(candidate, options)` | Plain-text subject line |
+| `buildReminderEmailBody(candidate, options)` | Plain-text body |
+| `buildReminderEmailPreview(candidate, options)` | `{ subject, bodyText }` |
+| `replaceReminderEmailTokens(template, tokens)` | `{{token}}` replacement helper |
+| `buildReminderEmailTokenMap(candidate, options)` | Resolved token values with fallbacks |
+
+### Supported tokens
+
+`{{recipientName}}` · `{{personName}}` · `{{complianceType}}` · `{{reminderType}}` · `{{dueDate}}` · `{{organisationName}}` · `{{contactName}}`
+
+Missing values use sensible fallbacks (e.g. `there`, `team member`, `compliance item`, `date not set`). Subject `dueDate` uses ISO `YYYY-MM-DD`; body `dueDate` uses en-GB long format (e.g. `22 July 2026`).
+
+### Example output
+
+**Subject:** `Reminder: DBS expires on 2026-07-22`
+
+**Body:**
+
+```text
+Hello Sarah,
+
+This is a reminder that John Smith's DBS is due to expire on 22 July 2026.
+
+Please arrange renewal or update the compliance record once complete.
+
+Thank you,
+Alpha Test Organisation
+```
+
+### Hard constraints
+
+- No Resend or email provider imports
+- No `fetch`, SMTP, or send helpers
+- No database writes or RPC calls
+- No `mark_reminder_sent`, `sent_at`, or `provider_message_id` logic
+- No HTML templates yet
+- No Edge Function or scheduled-runner wiring in this phase
+
+### Verification
+
+```powershell
+npm run verify-reminder-email-template
+npm run build
+```
+
+**Phase 53 gate:** `npm run verify-reminder-email-template` must pass.
+
+**Next slice:** V6 Phase 54 — Edge Resend provider foundation (complete).
 
 ---
 

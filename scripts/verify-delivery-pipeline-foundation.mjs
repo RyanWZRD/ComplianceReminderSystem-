@@ -14,7 +14,7 @@ const root = join(__dirname, "..");
 
 /** @type {readonly { label: string; script: string }[]} */
 const STEPS = [
-  { label: "verify-resend-provider-foundation", script: "verify-resend-provider-foundation" },
+  { label: "verify-browser-resend-provider-foundation", script: "verify-browser-resend-provider-foundation" },
   { label: "verify-delivery-worker", script: "verify-delivery-worker" },
   { label: "verify-delivery-worker-persistence", script: "verify-delivery-worker-persistence" },
   { label: "verify-delivery-log-persistence-service", script: "verify-delivery-log-persistence-service" },

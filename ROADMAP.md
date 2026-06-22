@@ -6,6 +6,46 @@ A local-first safeguarding compliance tracker. Runs in the browser with localSto
 
 # Current Release
 
+## V6 Phase 59 — Scheduled Runner Live-Send Gate
+
+**Date:** June 2026
+
+### Summary
+
+V6 Phase 59 adds an explicit **`mode` gate** on `scheduled-reminder-runner` (`dry_run` default; `live_send` refused) and a **`SCHEDULED_EMAIL_SENDING_ENABLED`** config gate (defaults `false`). **Gate only** — no scheduled reminder emails, no Resend calls, no `sendReminderEmail`, no `mark_reminder_sent`, no compliance record mutation, and no `sent_at` or `provider_message_id` writes from the runner. Existing **dry-run behaviour is unchanged**.
+
+**Documentation:**
+
+- [`docs/v6-scheduled-runner.md`](docs/v6-scheduled-runner.md) — Phase 59 live-send gate
+- [`docs/v6-automated-email-reminders.md`](docs/v6-automated-email-reminders.md) — Phase 59 cross-reference
+- [`docs/v6-delivery-architecture.md`](docs/v6-delivery-architecture.md) — Phase 59 cross-reference
+
+**Deliverables:**
+
+| Item | Location |
+|------|----------|
+| Mode + config gate | `supabase/functions/scheduled-reminder-runner/index.ts` |
+| Static verification gate | `scripts/verify-scheduled-runner-live-send-gate.mjs` |
+| Staging verification gate | `scripts/verify-scheduled-runner-live-send-gate-staging.mjs` |
+
+**Prerequisites:**
+
+1. Phase 52 `scheduled-reminder-runner` deployed to staging (dry-run delivery logs)
+2. Local `.env`: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_TEST_PASSWORD`
+3. Redeploy `scheduled-reminder-runner` with Phase 59 gate before staging verification
+
+**Verification (required):**
+
+```powershell
+npm run verify-scheduled-runner-live-send-gate
+npm run verify-scheduled-runner-live-send-gate-staging
+npm run build
+```
+
+**Next slice:** TBD — implement scheduled `live_send` send path (not in Phase 59 scope)
+
+---
+
 ## V6 Phase 58 — Manual Test-Send Delivery Log Audit
 
 **Date:** June 2026

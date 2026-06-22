@@ -1,7 +1,8 @@
 /**
- * V6 Phase 45–47, 51: scheduled-reminder-runner Edge Function — dry run only.
+ * V6 Phase 45–47, 51, 59: scheduled-reminder-runner Edge Function — dry run only.
  * Phase 47: persists one automation_runs audit row per successful dry run (service role).
  * Phase 51: persists reminder_delivery_logs rows per dry-run candidate (pending/skipped only).
+ * Phase 59: explicit mode gate (dry_run default; live_send refused — no scheduled sends yet).
  * No Resend calls, email sends, mark-as-sent, sent_at writes, or delivery Edge Function invocation.
  */
 
@@ -9,7 +10,36 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient, type SupabaseClient } from "jsr:@supabase/supabase-js@2";
 
 const SCHEDULED_RUNNER_DRY_RUN_MODE = "dry_run";
+const SCHEDULED_RUNNER_LIVE_SEND_MODE = "live_send";
 const SCHEDULED_RUNNER_RUN_TYPE = "scheduled_reminder_dry_run";
+
+/**
+ * SCHEDULED_EMAIL_SENDING_ENABLED defaults to false when unset or empty.
+ * Only explicit true / 1 / yes enables the gate (live send still refused in Phase 59).
+ */
+function parseScheduledEmailSendingEnabled(raw: string | undefined): boolean {
+  const value = (raw ?? "").trim().toLowerCase();
+  return value === "true" || value === "1" || value === "yes";
+}
+
+function isScheduledEmailSendingEnabled(): boolean {
+  return parseScheduledEmailSendingEnabled(
+    Deno.env.get("SCHEDULED_EMAIL_SENDING_ENABLED"),
+  );
+}
+
+/**
+ * @returns Refusal reason for live_send mode (Phase 59 — gate only, no sends).
+ */
+function resolveLiveSendRefusalReason():
+  | "scheduled_live_send_not_enabled"
+  | "scheduled_live_send_not_implemented" {
+  if (!isScheduledEmailSendingEnabled()) {
+    return "scheduled_live_send_not_enabled";
+  }
+
+  return "scheduled_live_send_not_implemented";
+}
 
 const REMINDER_UI_LABELS = {
   30: "30 Day Reminder",
@@ -165,6 +195,35 @@ function validateRequestBody(
   }
 
   return { ok: true, record };
+}
+
+/**
+ * @param {unknown} raw
+ */
+function normalizeRequestMode(
+  raw: unknown,
+):
+  | { ok: true; mode: typeof SCHEDULED_RUNNER_DRY_RUN_MODE | typeof SCHEDULED_RUNNER_LIVE_SEND_MODE }
+  | { ok: false; error: string } {
+  if (raw === undefined || raw === null) {
+    return { ok: true, mode: SCHEDULED_RUNNER_DRY_RUN_MODE };
+  }
+
+  if (typeof raw !== "string" || !raw.trim()) {
+    return { ok: false, error: "invalid_mode" };
+  }
+
+  const mode = raw.trim();
+
+  if (mode === SCHEDULED_RUNNER_DRY_RUN_MODE) {
+    return { ok: true, mode: SCHEDULED_RUNNER_DRY_RUN_MODE };
+  }
+
+  if (mode === SCHEDULED_RUNNER_LIVE_SEND_MODE) {
+    return { ok: true, mode: SCHEDULED_RUNNER_LIVE_SEND_MODE };
+  }
+
+  return { ok: false, error: "invalid_mode" };
 }
 
 /**
@@ -721,6 +780,25 @@ Deno.serve(async (req) => {
   }
 
   const organisationId = String(validation.record.organisationId).trim();
+
+  const modeResult = normalizeRequestMode(validation.record.mode);
+
+  if (!modeResult.ok) {
+    return jsonResponse({ error: modeResult.error }, 400, corsHeaders);
+  }
+
+  if (modeResult.mode === SCHEDULED_RUNNER_LIVE_SEND_MODE) {
+    return jsonResponse(
+      {
+        status: "refused",
+        mode: SCHEDULED_RUNNER_LIVE_SEND_MODE,
+        reason: resolveLiveSendRefusalReason(),
+      },
+      409,
+      corsHeaders,
+    );
+  }
+
   const asOfDateInput =
     typeof validation.record.asOfDate === "string"
       ? validation.record.asOfDate.trim()

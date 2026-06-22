@@ -408,6 +408,8 @@ interface HealthCheckResult {
 | `npm run verify-send-test-email-live-staging` | Phase 57 — staging verification of one real allowlisted manual test email |
 | `npm run verify-send-test-email-delivery-log-audit` | Phase 58 — manual test-send delivery log audit static checks |
 | `npm run verify-send-test-email-delivery-log-audit-staging` | Phase 58 — staging verification of one manual test-send delivery log row |
+| `npm run verify-scheduled-runner-live-send-gate` | Phase 59 — scheduled runner live-send gate static checks |
+| `npm run verify-scheduled-runner-live-send-gate-staging` | Phase 59 — staging verification of live_send refusal + dry_run unchanged |
 | `npm run verify-browser-resend-provider-foundation` | Phase 20 — browser orchestrator; runs skeleton foundation + Resend plan + Resend provider in order, stop on first failure |
 | `npm run verify-delivery-operations-log-ui` | Phase 22 — Delivery Operations Log UI, CSV export, no execution hooks |
 | `npm run verify-delivery-worker` | Phase 24 — worker delivery execution engine (in-memory; no app wiring) |
@@ -1909,6 +1911,56 @@ Catalog/introspection queries are preferred; the script does not insert test del
 
 ---
 
+## Phase 59 — Scheduled runner live-send gate
+
+**Scope:** Explicit `mode` (`dry_run` | `live_send`) and `SCHEDULED_EMAIL_SENDING_ENABLED` config gate on `scheduled-reminder-runner`. **`live_send` refused by default** — no scheduled reminder emails, no Resend, no `sendReminderEmail`, no `mark_reminder_sent`, no compliance mutation, and no `sent_at` / `provider_message_id` writes from the runner. **`dry_run` unchanged** (Phase 52).
+
+### Phase 59 deliverables
+
+| Item | Location |
+|------|----------|
+| Mode + config gate | `supabase/functions/scheduled-reminder-runner/index.ts` |
+| Static verification gate | `scripts/verify-scheduled-runner-live-send-gate.mjs` |
+| Staging verification gate | `scripts/verify-scheduled-runner-live-send-gate-staging.mjs` |
+| Runner documentation | [`docs/v6-scheduled-runner.md`](v6-scheduled-runner.md) |
+
+**Script:** `scripts/verify-scheduled-runner-live-send-gate.mjs`
+
+`npm run verify-scheduled-runner-live-send-gate` verifies:
+
+1. `dry_run` default; `live_send` mode constant and refusal response (HTTP 409)
+2. `SCHEDULED_EMAIL_SENDING_ENABLED` gate — defaults false; only `true` / `1` / `yes` enable
+3. Refusal evaluated before `loadReminderSettings`, `automation_runs`, and `reminder_delivery_logs` inserts
+4. `dry_run` path still persists audit rows
+5. No `email-provider`, `sendReminderEmail`, Resend, or `mark_reminder_sent`
+
+**Script:** `scripts/verify-scheduled-runner-live-send-gate-staging.mjs`
+
+`npm run verify-scheduled-runner-live-send-gate-staging` verifies:
+
+1. Signs in as staging admin
+2. Baseline `automation_runs` and `reminder_delivery_logs` counts
+3. POST `mode: "live_send"` — HTTP 409, `status: "refused"`, reason `scheduled_live_send_not_enabled` or `scheduled_live_send_not_implemented`, counts unchanged
+4. POST `mode: "dry_run"` — HTTP 200, automation run + delivery logs created
+
+### Phase 59 configuration
+
+| Variable | Default | Notes |
+|----------|---------|-------|
+| `SCHEDULED_EMAIL_SENDING_ENABLED` | `false` | Edge secret on `scheduled-reminder-runner` |
+
+### Phase 59 constraints
+
+- Gate/config only — no live scheduled sends
+- Refused `live_send` creates no `automation_runs` or `reminder_delivery_logs` rows
+- `dry_run` behaviour identical to Phase 52
+
+**Phase 59 gate:** `npm run verify-scheduled-runner-live-send-gate` must pass; `npm run verify-scheduled-runner-live-send-gate-staging` must pass against staging.
+
+**Next slice:** TBD — implement scheduled `live_send` send path.
+
+---
+
 ## Phase 58 — Manual test-send delivery log audit
 
 **Scope:** When `send-test-email` successfully sends one manual test email, persist **one `reminder_delivery_logs` audit row** via service role. **Manual test-send audit only** — no `scheduled-reminder-runner` email sending, no compliance reminder sends, no `mark_reminder_sent`, no compliance record mutation, and **no `automation_runs` writes**.
@@ -1975,7 +2027,7 @@ supabase functions deploy send-test-email --project-ref vmrotpztwoeifbdjwdis
 
 **Phase 58 gate:** `npm run verify-send-test-email-delivery-log-audit` must pass; `npm run verify-send-test-email-delivery-log-audit-staging` must pass against staging with sending enabled.
 
-**Next slice:** TBD — wire provider into scheduled-reminder-runner send path.
+**Next slice:** V6 Phase 59 — scheduled runner live-send gate (complete).
 
 ---
 
